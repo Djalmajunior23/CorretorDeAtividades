@@ -1,0 +1,6 @@
+{
+  "name": "Sistema de Correção de Programação",
+  "description": "Sistema autônomo para correção automatizada de atividades de programação com análise de código e OCR.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

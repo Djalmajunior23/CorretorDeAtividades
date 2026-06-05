@@ -1,0 +1,8 @@
+fastapi
+sqlmodel
+pydantic
+sqlalchemy
+pytest
+flake8
+pylint
+docker
