@@ -7,6 +7,7 @@ import pg from "pg";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
+import { CorrectionService } from "./corrections/services/CorrectionService.ts";
 
 dotenv.config();
 
@@ -35,13 +36,14 @@ if (databaseUrl) {
 // In-Memory fallback cache
 const inMemorySubmissions: any[] = [];
 
-// Initialize DB schema
+// Initialize database schema (with advanced support for 5 relational models, CASCADE constraints, and indices)
 async function initDatabase() {
   if (!pool) {
     console.log("No PostgreSQL connected, running in cache mode.");
     return;
   }
   try {
+    // 1. Core Submissions Table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS d_correction_submission (
         id UUID PRIMARY KEY,
@@ -51,18 +53,64 @@ async function initDatabase() {
         status VARCHAR(20) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // 2. Main Correction Results Table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS d_correction_result (
         id UUID PRIMARY KEY,
         submission_id UUID REFERENCES d_correction_submission(id) ON DELETE CASCADE,
+        language VARCHAR(50) NOT NULL,
+        status VARCHAR(30) NOT NULL,
         syntax_ok BOOLEAN NOT NULL,
+        security_ok BOOLEAN NOT NULL,
+        compiled BOOLEAN NOT NULL,
         tests_passed INTEGER NOT NULL,
         total_tests INTEGER NOT NULL,
+        syntax_score INTEGER NOT NULL,
+        test_score INTEGER NOT NULL,
+        quality_score INTEGER NOT NULL,
+        final_score INTEGER NOT NULL,
         stdout TEXT,
         stderr TEXT,
-        final_score INTEGER NOT NULL,
-        feedback TEXT,
+        execution_time DOUBLE PRECISION,
+        memory_used VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // 3. Unit Tests Individual Results Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_correction_test_result (
+        id UUID PRIMARY KEY,
+        result_id UUID REFERENCES d_correction_result(id) ON DELETE CASCADE,
+        input TEXT,
+        expected_output TEXT,
+        actual_output TEXT,
+        passed BOOLEAN NOT NULL,
+        is_hidden BOOLEAN,
+        weight INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 4. Detailed Pedagogical Feedback Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_correction_feedback (
+        id UUID PRIMARY KEY,
+        result_id UUID REFERENCES d_correction_result(id) ON DELETE CASCADE,
+        summary TEXT,
+        strengths TEXT[],
+        errors TEXT[],
+        improvements TEXT[],
+        concepts_to_review TEXT[],
+        next_steps TEXT[],
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 5. Raw Execution Telemetry & Audit Logs Table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS d_execution_log (
         id UUID PRIMARY KEY,
         submission_id UUID REFERENCES d_correction_submission(id) ON DELETE CASCADE,
@@ -71,335 +119,141 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log("Neon Postgres tables initialized.");
+
+    // Schema Migrations: Ensure all older tables have the new columns for Engine 2.0
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS language VARCHAR(50) DEFAULT 'python';`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'CORRECTED';`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS security_ok BOOLEAN DEFAULT TRUE;`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS compiled BOOLEAN DEFAULT TRUE;`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS syntax_score INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS test_score INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS quality_score INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS stdout TEXT DEFAULT '';`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS stderr TEXT DEFAULT '';`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS execution_time DOUBLE PRECISION DEFAULT 0;`);
+    await pool.query(`ALTER TABLE d_correction_result ADD COLUMN IF NOT EXISTS memory_used VARCHAR(50) DEFAULT '';`);
+
+    await pool.query(`ALTER TABLE d_execution_log ADD COLUMN IF NOT EXISTS exit_code INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE d_execution_log ADD COLUMN IF NOT EXISTS execution_time INTEGER DEFAULT 0;`);
+
+    console.log("Neon Postgres Correction Engine 2.0 SQL schema synced successfully.");
   } catch (error) {
-    console.error("Error creating tables:", error);
+    console.error("Error creating tables in Neon database:", error);
   }
 }
 
-// Relational DB Persistence helper
-async function persistResult(submission: any, result: any, exitCode: number, executionTime: number) {
-  inMemorySubmissions.unshift({ submission, result, executionTime });
+// Relational DB Persistence helper using transactional relational storage
+async function persistFullResult(submission: any, resFull: any) {
+  // Always make dynamic in-memory backup in case of db connections drops
+  const mockResultId = crypto.randomUUID();
+  const mockResult = {
+    id: mockResultId,
+    submission_id: submission.id,
+    syntax_ok: resFull.syntax_ok,
+    tests_passed: resFull.tests_passed,
+    total_tests: resFull.total_tests,
+    stdout: resFull.stdout,
+    stderr: resFull.stderr,
+    final_score: resFull.final_score,
+    feedback: resFull.feedback, // Supports new structured feedback natively!
+    created_at: new Date().toISOString()
+  };
+
+  inMemorySubmissions.unshift({
+    submission: {
+      ...submission,
+      created_at: new Date().toISOString()
+    },
+    result: mockResult,
+    executionTime: Math.round(resFull.execution_time * 1000)
+  });
+
   if (!pool) return;
+
   try {
+    // 1. DB Row: Submission Model
     await pool.query(`
       INSERT INTO d_correction_submission (id, teacher_id, language, code, status)
       VALUES ($1, $2, $3, $4, $5)
     `, [submission.id, submission.teacher_id, submission.language, submission.code, submission.status]);
 
+    // 2. DB Row: Result Model
+    const resultId = crypto.randomUUID();
     await pool.query(`
-      INSERT INTO d_correction_result (id, submission_id, syntax_ok, tests_passed, total_tests, stdout, stderr, final_score, feedback)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO d_correction_result (
+        id, submission_id, language, status, syntax_ok, security_ok, compiled, 
+        tests_passed, total_tests, syntax_score, test_score, quality_score, final_score, 
+        stdout, stderr, execution_time, memory_used
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     `, [
-      crypto.randomUUID(),
+      resultId,
       submission.id,
-      result.syntax_ok,
-      result.tests_passed,
-      result.total_tests,
-      result.stdout,
-      result.stderr,
-      result.final_score,
-      result.feedback
+      resFull.language,
+      resFull.status,
+      resFull.syntax_ok,
+      resFull.security_ok,
+      resFull.compiled,
+      resFull.tests_passed,
+      resFull.total_tests,
+      resFull.syntax_score,
+      resFull.test_score,
+      resFull.quality_score,
+      resFull.final_score,
+      resFull.stdout,
+      resFull.stderr,
+      resFull.execution_time,
+      resFull.memory_used
     ]);
 
+    // 3. DB Rows: Test results loop
+    if (resFull.test_results && Array.isArray(resFull.test_results)) {
+      for (const t of resFull.test_results) {
+        await pool.query(`
+          INSERT INTO d_correction_test_result (id, result_id, input, expected_output, actual_output, passed, is_hidden, weight)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [
+          crypto.randomUUID(),
+          resultId,
+          t.input,
+          t.expected_output,
+          t.actual_output,
+          t.passed,
+          t.is_hidden || false,
+          t.weight || 1
+        ]);
+      }
+    }
+
+    // 4. DB Row: Feedback Model
+    await pool.query(`
+      INSERT INTO d_correction_feedback (
+        id, result_id, summary, strengths, errors, improvements, concepts_to_review, next_steps
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      crypto.randomUUID(),
+      resultId,
+      resFull.feedback.summary,
+      resFull.feedback.strengths,
+      resFull.feedback.errors,
+      resFull.feedback.improvements,
+      resFull.feedback.concepts_to_review,
+      resFull.feedback.next_steps
+    ]);
+
+    // 5. DB Row: Execution Log Model
     await pool.query(`
       INSERT INTO d_execution_log (id, submission_id, exit_code, execution_time)
       VALUES ($1, $2, $3, $4)
-    `, [crypto.randomUUID(), submission.id, exitCode, executionTime]);
+    `, [
+      crypto.randomUUID(),
+      submission.id,
+      resFull.status === "CORRECTED" ? 0 : -1,
+      Math.round(resFull.execution_time * 1000)
+    ]);
+
   } catch (error) {
-    console.error("Failed storing in Postgres:", error);
+    console.error("Failed storing structured results in relational catalog:", error);
   }
-}
-
-// Security validations
-function getSecurityViolation(code: string, language: string): string | null {
-  const codeLower = code.toLowerCase();
-  const violations: Record<string, string[]> = {
-    python: [
-      "os.", "sys.", "subprocess", "eval(", "exec(", "shutil", "socket", 
-      "open(", "write", "remove", "unlink", "pty", "thread", "import os"
-    ],
-    javascript: [
-      "child_process", "require(", "import ", "fs.", "eval(", "process.", "global.",
-      "http", "net.", "socket", "tls", "cluster", "Function(", "rm"
-    ],
-    typescript: [
-      "child_process", "require(", "import ", "fs.", "eval(", "process.", "global.",
-      "http", "net.", "socket", "tls", "cluster", "Function(", "rm"
-    ],
-  };
-
-  const checks = violations[language] || [];
-  for (const check of checks) {
-    if (codeLower.includes(check)) {
-      return `Violação de segurança: código contém palavras restritas para o ecossistema ("${check}")`;
-    }
-  }
-  return null;
-}
-
-// Spawn process helper with 3 seconds timeout
-interface SpawnResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  timeUsed: number;
-}
-function executeProcess(command: string, args: string[], writeInput: string): Promise<SpawnResult> {
-  return new Promise((resolve) => {
-    const startTime = Date.now();
-    const child = spawn(command, args);
-    let stdout = "";
-    let stderr = "";
-    let completed = false;
-
-    const limitTimer = setTimeout(() => {
-      if (completed) return;
-      completed = true;
-      try {
-        child.kill("SIGKILL");
-      } catch (err) {}
-      resolve({
-        stdout: stdout.trim(),
-        stderr: (stderr + "\n[Execução Interrompida: Limite de 3 segundos excedido]").trim(),
-        exitCode: -9,
-        timeUsed: Date.now() - startTime
-      });
-    }, 3000);
-
-    child.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    child.on("error", (err) => {
-      if (completed) return;
-      completed = true;
-      clearTimeout(limitTimer);
-      resolve({
-        stdout: stdout.trim(),
-        stderr: (stderr + "\nError: " + err.message).trim(),
-        exitCode: -2,
-        timeUsed: Date.now() - startTime
-      });
-    });
-
-    child.on("close", (code) => {
-      if (completed) return;
-      completed = true;
-      clearTimeout(limitTimer);
-      resolve({
-        stdout: stdout.trim(),
-        stderr: stderr.trim(),
-        exitCode: code ?? 0,
-        timeUsed: Date.now() - startTime
-      });
-    });
-
-    if (writeInput) {
-      try {
-        child.stdin.write(writeInput + "\n");
-        child.stdin.end();
-      } catch (err) {}
-    } else {
-      try {
-        child.stdin.end();
-      } catch (err) {}
-    }
-  });
-}
-
-// pure JS relational SQL SQLite emulator/interpreter
-function runMockSqlEngine(code: string, inputData: string): { stdout: string; stderr: string; status: boolean } {
-  try {
-    const statements = code.split(";").map(s => s.trim()).filter(s => s.length > 0);
-    const db: Record<string, any[]> = {};
-    const schemas: Record<string, string[]> = {};
-    let stdoutBuffer = "";
-
-    for (const sql of statements) {
-      const parts = sql.replace(/\s+/g, " ");
-      if (/^CREATE TABLE/i.test(parts)) {
-        const match = parts.match(/CREATE TABLE\s+(\w+)\s*\(([^)]+)\)/i);
-        if (!match) return { stdout: "", stderr: "Syntax Error in CREATE TABLE", status: false };
-        const tableName = match[1].toLowerCase();
-        const colDefinitions = match[2].split(",").map(c => c.trim().split(" ")[0].toLowerCase());
-        db[tableName] = [];
-        schemas[tableName] = colDefinitions;
-      } 
-      else if (/^INSERT INTO/i.test(parts)) {
-        const match = parts.match(/INSERT INTO\s+(\w+)\s*(?:\([^)]+\))?\s*VALUES\s*\(([^)]+)\)/i);
-        if (!match) return { stdout: "", stderr: "Syntax Error in INSERT INTO", status: false };
-        const tableName = match[1].toLowerCase();
-        const vals = match[2].split(",").map(v => v.trim().replace(/^['"]|['"]$/g, ""));
-        
-        if (!db[tableName]) return { stdout: "", stderr: `Table '${tableName}' not found`, status: false };
-        const cols = schemas[tableName];
-        const row: Record<string, any> = {};
-        for (let i = 0; i < cols.length; i++) {
-          row[cols[i]] = vals[i];
-        }
-        db[tableName].push(row);
-      } 
-      else if (/^SELECT/i.test(parts)) {
-        const match = parts.match(/SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+?))?$/i);
-        if (!match) return { stdout: "", stderr: "Syntax Error in SELECT", status: false };
-        const selectCols = match[1].split(",").map(c => c.trim().toLowerCase());
-        const tableName = match[2].toLowerCase();
-        const whereClause = match[3];
-
-        if (!db[tableName]) return { stdout: "", stderr: `Table '${tableName}' not found`, status: false };
-        
-        let rows = db[tableName];
-        if (whereClause) {
-          const condParts = whereClause.split(/\s*(=|>|<|>=|<=)\s*/);
-          if (condParts.length === 3) {
-            const col = condParts[0].trim().toLowerCase();
-            const op = condParts[1].trim();
-            const val = condParts[2].trim().replace(/^['"]|['"]$/g, "");
-            rows = rows.filter(r => {
-              const rVal = r[col];
-              if (op === "=") return String(rVal) === val;
-              if (op === ">") return Number(rVal) > Number(val);
-              if (op === "<") return Number(rVal) < Number(val);
-              if (op === ">=") return Number(rVal) >= Number(val);
-              if (op === "<=") return Number(rVal) <= Number(val);
-              return true;
-            });
-          }
-        }
-
-        // Output buffer
-        for (const row of rows) {
-          const lineParts: string[] = [];
-          if (selectCols[0] === "*") {
-            schemas[tableName].forEach(col => lineParts.push(String(row[col] ?? "")));
-          } else {
-            selectCols.forEach(col => lineParts.push(String(row[col] ?? "")));
-          }
-          stdoutBuffer += lineParts.join(" ") + "\n";
-        }
-      }
-    }
-    return { stdout: stdoutBuffer.trim(), stderr: "", status: true };
-  } catch (err: any) {
-    return { stdout: "", stderr: err.message, status: false };
-  }
-}
-
-// Portugol parsing static assessment
-function analyzePortugol(code: string): { syntaxOk: boolean; qualityScore: number; feedback: string } {
-  const codeLower = code.toLowerCase();
-  const checks = {
-    programa: codeLower.includes("programa") || codeLower.includes("algoritmo"),
-    inicio: codeLower.includes("inicio") || codeLower.includes("início") || codeLower.includes("funcao"),
-    fim: codeLower.includes("fim"),
-    escreva: codeLower.includes("escreva") || codeLower.includes("escrever") || codeLower.includes("exiba"),
-    leia: codeLower.includes("leia") || codeLower.includes("ler")
-  };
-
-  let scoreSum = 0;
-  if (checks.programa) scoreSum += 6;
-  if (checks.inicio) scoreSum += 6;
-  if (checks.fim) scoreSum += 6;
-  if (checks.escreva) scoreSum += 6;
-  if (checks.leia) scoreSum += 6;
-
-  let review = "Análise Estrutural e Pedagógica estática de Portugol concluída.\n";
-  if (scoreSum === 30) {
-    review += "✓ Excelente estrutura! Todos os blocos fundamentais (programa, inicio, fim, leia e escreva) estão declarados.\n";
-  } else {
-    review += "⚠ Estrutura parcialmente identificada. Verifique se declarou todos os operadores funcionais básicos de Portugol (programa, inicio, fim, escreva, leia).\n";
-  }
-  return { syntaxOk: scoreSum >= 18, qualityScore: scoreSum + 40, feedback: review };
-}
-
-// Pseudocode static assessment
-function analyzePseudocode(code: string): { syntaxOk: boolean; qualityScore: number; feedback: string } {
-  const codeLower = code.toLowerCase();
-  const checks = {
-    algoritmo: codeLower.includes("algoritmo") || codeLower.includes("pseudocódigo"),
-    decl: codeLower.includes("var") || codeLower.includes("declarar") || codeLower.includes("inteiro") || codeLower.includes("real"),
-    inicio: codeLower.includes("inicio") || codeLower.includes("início") || codeLower.includes("começo"),
-    fim: codeLower.includes("fim") || codeLower.includes("fimalgoritmo")
-  };
-
-  let scoreSum = 0;
-  if (checks.algoritmo) scoreSum += 7;
-  if (checks.decl) scoreSum += 8;
-  if (checks.inicio) scoreSum += 8;
-  if (checks.fim) scoreSum += 7;
-
-  let review = "Análise Pedagógica estática do Pseudocódigo concluída.\n";
-  if (scoreSum === 30) {
-    review += "✓ Parabéns! A semântica em pseudo-linguagem obedece minuciosamente às diretrizes curriculares clássicas (Bloco algoritmo, variáveis, início e fimalgoritmo).\n";
-  } else {
-    review += "⚠ Faltam seções padrão na declaração estrutural do Pseudocódigo.\nSeu pseudocódigo deve conter 'Algoritmo', declarar variáveis no bloco 'var', possuir demarcadores de corpo 'inicio' e efeuar encerramento com 'fimalgoritmo'.\n";
-  }
-  return { syntaxOk: scoreSum >= 15, qualityScore: scoreSum + 40, feedback: review };
-}
-
-// Static Analysis to rate Syntax and Quality of unavailable languages
-function runStaticAnalysis(code: string, language: string): { syntaxOk: boolean; qualityScore: number; feedback: string } {
-  const codeLower = code.toLowerCase();
-  let syntaxOk = false;
-  let qualityScore = 15;
-  let feedback = "";
-
-  // Check brackets balance
-  let bracketsOk = true;
-  let countOpen = (code.match(/\{/g) || []).length;
-  let countClose = (code.match(/\}/g) || []).length;
-  if (countOpen !== countClose) bracketsOk = false;
-
-  if (language === "java") {
-    const hasClass = code.includes("class");
-    const hasMain = code.includes("public static void main");
-    syntaxOk = hasClass && hasMain && bracketsOk;
-    qualityScore = hasMain ? 20 : 10;
-    feedback = syntaxOk 
-      ? "Sintaxe estática do Java validada com sucesso. Bloco de classes e método main balanceados."
-      : "Problemas na sintaxe estática: Estrutura típica de classe Java ausente, ou colchetes inválidos.";
-  } 
-  else if (language === "c" || language === "cpp") {
-    const hasInclude = code.includes("#include");
-    const hasMain = code.includes("int main") || code.includes("void main");
-    syntaxOk = hasInclude && hasMain && bracketsOk;
-    qualityScore = hasMain ? 20 : 8;
-    feedback = syntaxOk 
-      ? `Validação estática estrita do compilador ${language.toUpperCase()} aprovada.` 
-      : `Erros clássicos de ${language.toUpperCase()} identificados: #include ou int main() ausentes.`;
-  }
-  else if (language === "csharp") {
-    const hasUsing = code.includes("using");
-    const hasNamespace = code.includes("namespace") || code.includes("class");
-    syntaxOk = hasUsing && hasNamespace && bracketsOk;
-    qualityScore = hasNamespace ? 18 : 10;
-    feedback = syntaxOk ? "Verificação do código C# aceitável." : "C#: namespace, using ou classe principal ausentes.";
-  }
-  else if (language === "php") {
-    const hasPhpTag = code.includes("<?php") || code.includes("<?");
-    syntaxOk = hasPhpTag;
-    qualityScore = hasPhpTag ? 15 : 5;
-    feedback = hasPhpTag ? "Declaração PHP validada estaticamente." : "PHP: Tag <?php de abertura não localizada.";
-  }
-  else if (language === "go") {
-    const hasPackage = code.includes("package ");
-    const hasFuncMain = code.includes("func main");
-    syntaxOk = hasPackage && hasFuncMain;
-    qualityScore = hasFuncMain ? 20 : 10;
-    feedback = syntaxOk ? "Go: Estrutura package main e func main() validadas." : "Go: Pacote ou função main ausentes.";
-  }
-  else {
-    syntaxOk = bracketsOk && code.length > 20;
-    qualityScore = 15;
-    feedback = "Análise estática simples realizada com sucesso.";
-  }
-
-  return { syntaxOk, qualityScore, feedback };
 }
 
 // REST ENDPOINT APIs
@@ -521,332 +375,72 @@ app.post("/corrections/run", async (req, res) => {
     status: "failed"
   };
 
-  const tests = Array.isArray(test_cases) ? test_cases : [];
-  const secViolation = getSecurityViolation(code, language);
+  try {
+    const tests = Array.isArray(test_cases) ? test_cases : [];
+    
+    // Orchestrate correction through CorrectionService (Engine 2.0)
+    const serviceResult = await CorrectionService.run(language, code, tests);
 
-  if (secViolation) {
-    const errorResult = {
+    // Synthesis of elegant Markdown feedback for backward compatibility with standard renderes
+    const unifiedFeedbackString = `
+### RESUMO DA CORREÇÃO
+${serviceResult.feedback.summary || "Nenhuma descrição fornecida."}
+
+### NOTA DA CORREÇÃO
+- **Análise de Sintaxe**: ${serviceResult.syntax_score}/30 pts
+- **Lógica e Testes Unitários**: ${serviceResult.test_score}/50 pts
+- **Qualidade do Código**: ${serviceResult.quality_score}/20 pts
+- **Nota Final**: **${serviceResult.final_score}/100**
+
+### PONTOS FORTES
+${serviceResult.feedback.strengths && serviceResult.feedback.strengths.length > 0 ? serviceResult.feedback.strengths.map((s: string) => `- ${s}`).join("\n") : "- Nenhuma observação de ponto forte."}
+
+### LISTA DE ERROS DE SISTEMA E COMPILAÇÃO
+${serviceResult.feedback.errors && serviceResult.feedback.errors.length > 0 ? serviceResult.feedback.errors.map((e: string) => `- ${e}`).join("\n") : "- Nenhum erro impeditivo de compilação ou vulnerabilidade barrou a execução do seu código."}
+
+### PONTOS DE MELHORIA
+${serviceResult.feedback.improvements && serviceResult.feedback.improvements.length > 0 ? serviceResult.feedback.improvements.map((i: string) => `- ${i}`).join("\n") : "- Sem pontos de melhorias drásticas necessárias."}
+
+### CONCEITOS RECOMENDADOS PARA REVISÃO
+${serviceResult.feedback.concepts_to_review && serviceResult.feedback.concepts_to_review.length > 0 ? serviceResult.feedback.concepts_to_review.map((c: string) => `- ${c}`).join("\n") : "- Nenhum tópico didático indicado para reforço imediato."}
+
+### PRÓXIMOS PASSOS PEDAGÓGICOS
+${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length > 0 ? serviceResult.feedback.next_steps.map((step: string) => `- ${step}`).join("\n") : "- Sem recomendações adicionais de próximos passos."}
+`.trim();
+
+    const legacyCompatibleResult = {
+      language,
+      syntax_ok: serviceResult.syntax_ok,
+      tests_passed: serviceResult.tests_passed,
+      total_tests: serviceResult.total_tests,
+      stdout: serviceResult.stdout,
+      stderr: serviceResult.stderr,
+      final_score: serviceResult.final_score,
+      feedback: unifiedFeedbackString,
+      feedbackStructured: serviceResult.feedback,
+      test_results: serviceResult.test_results,
+      status: serviceResult.status
+    };
+
+    // Store in DB
+    submissionData.status = serviceResult.status === "CORRECTED" ? "success" : "failed";
+    await persistFullResult(submissionData, serviceResult);
+
+    return res.json(legacyCompatibleResult);
+
+  } catch (err: any) {
+    console.error("Critical correction orchestration engine failure:", err);
+    const crashResponse = {
       language,
       syntax_ok: false,
       tests_passed: 0,
-      total_tests: tests.length,
+      total_tests: Array.isArray(test_cases) ? test_cases.length : 0,
       stdout: "",
-      stderr: secViolation,
-      final_score: 0,
-      feedback: `Ação barrada pela segurança: ${secViolation}`
+      stderr: `Falha Crítica no Motor de Execução: ${err.message}`,
+      feedback: "### ERRO CRÍTICO NO MOTOR DE ANÁLISE\nOcorreu uma falha inesperada durante a inicialização do container sandbox ou análise estática."
     };
-    await persistResult(submissionData, errorResult, -5, 0);
-    return res.json(errorResult);
+    return res.json(crashResponse);
   }
-
-  const normalizedLang = language.toLowerCase();
-
-  // Execution for Python
-  if (normalizedLang === "python") {
-    const tempFile = path.join("/tmp", `runner_${subId}.py`);
-    fs.writeFileSync(tempFile, code);
-
-    try {
-      let passed = 0;
-      let lastStdout = "";
-      let lastStderr = "";
-      let totalTime = 0;
-
-      for (const tc of tests) {
-        const runRes = await executeProcess("python3", [tempFile], tc.input);
-        totalTime += runRes.timeUsed;
-        lastStdout = runRes.stdout;
-        lastStderr = runRes.stderr;
-
-        const isMatch = runRes.stdout.trim() === String(tc.expected_output).trim();
-        if (isMatch && runRes.exitCode === 0) {
-          passed++;
-        }
-      }
-
-      const syntaxOk = lastStderr.length === 0 || !lastStderr.includes("SyntaxError");
-      const syntaxPoints = syntaxOk ? 30 : 0;
-      const testPoints = tests.length > 0 ? Math.round((passed / tests.length) * 50) : 50;
-      const qualityPoints = syntaxOk ? 20 : 0;
-      const finalScore = syntaxPoints + testPoints + qualityPoints;
-
-      const feedback = finalScore === 100
-        ? "Código executado com sucesso extraordinário! Todos os casos de teste estipulados passaram e a anatomia da sintaxe é excelente."
-        : `Análise finalizada: ${passed} de ${tests.length} testes concluídos. Nota da sintaxe: ${syntaxPoints}/30. `;
-
-      const successResult = {
-        language,
-        syntax_ok: syntaxOk,
-        tests_passed: passed,
-        total_tests: tests.length,
-        stdout: lastStdout,
-        stderr: lastStderr,
-        final_score: finalScore,
-        feedback
-      };
-
-      submissionData.status = finalScore > 0 ? "success" : "failed";
-      await persistResult(submissionData, successResult, 0, totalTime);
-      return res.json(successResult);
-
-    } catch (err: any) {
-      const crashResponse = {
-        language,
-        syntax_ok: false,
-        tests_passed: 0,
-        total_tests: tests.length,
-        stdout: "",
-        stderr: err.message,
-        final_score: 0,
-        feedback: "Erro catastrófico no motor de sandbox Python."
-      };
-      await persistResult(submissionData, crashResponse, -1, 0);
-      return res.json(crashResponse);
-    } finally {
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-    }
-  }
-
-  // Execution for JavaScript
-  if (normalizedLang === "javascript" || normalizedLang === "js") {
-    const tempFile = path.join("/tmp", `runner_${subId}.js`);
-    fs.writeFileSync(tempFile, code);
-
-    try {
-      let passed = 0;
-      let lastStdout = "";
-      let lastStderr = "";
-      let totalTime = 0;
-
-      for (const tc of tests) {
-        const runRes = await executeProcess("node", [tempFile], tc.input);
-        totalTime += runRes.timeUsed;
-        lastStdout = runRes.stdout;
-        lastStderr = runRes.stderr;
-
-        const isMatch = runRes.stdout.trim() === String(tc.expected_output).trim();
-        if (isMatch && runRes.exitCode === 0) {
-          passed++;
-        }
-      }
-
-      const syntaxOk = lastStderr.length === 0 || (!lastStderr.includes("SyntaxError") && !lastStderr.includes("ReferenceError"));
-      const syntaxPoints = syntaxOk ? 30 : 0;
-      const testPoints = tests.length > 0 ? Math.round((passed / tests.length) * 50) : 50;
-      const qualityPoints = syntaxOk ? 20 : 0;
-      const finalScore = syntaxPoints + testPoints + qualityPoints;
-
-      const feedback = finalScore === 100
-        ? "Excelente execução pedagógica JavaScript. Código aprovado estrita e dinamicamente em todos os casos."
-        : `Execução parcial: Nota final consolidada em ${finalScore}.`;
-
-      const successResult = {
-        language,
-        syntax_ok: syntaxOk,
-        tests_passed: passed,
-        total_tests: tests.length,
-        stdout: lastStdout,
-        stderr: lastStderr,
-        final_score: finalScore,
-        feedback
-      };
-
-      submissionData.status = "success";
-      await persistResult(submissionData, successResult, 0, totalTime);
-      return res.json(successResult);
-
-    } catch (err: any) {
-      const crashResponse = {
-        language,
-        syntax_ok: false,
-        tests_passed: 0,
-        total_tests: tests.length,
-        stdout: "",
-        stderr: err.message,
-        final_score: 0,
-        feedback: "Erro catastrófico no sandbox NodeJS."
-      };
-      await persistResult(submissionData, crashResponse, -1, 0);
-      return res.json(crashResponse);
-    } finally {
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-    }
-  }
-
-  // Execution for TypeScript
-  if (normalizedLang === "typescript" || normalizedLang === "ts") {
-    const tempFile = path.join("/tmp", `runner_${subId}.ts`);
-    fs.writeFileSync(tempFile, code);
-
-    try {
-      let passed = 0;
-      let lastStdout = "";
-      let lastStderr = "";
-      let totalTime = 0;
-
-      for (const tc of tests) {
-        // Execute TypeScript directly using tsx tool in background!
-        const runRes = await executeProcess("npx", ["tsx", tempFile], tc.input);
-        totalTime += runRes.timeUsed;
-        lastStdout = runRes.stdout;
-        lastStderr = runRes.stderr;
-
-        const isMatch = runRes.stdout.trim() === String(tc.expected_output).trim();
-        if (isMatch && runRes.exitCode === 0) {
-          passed++;
-        }
-      }
-
-      const syntaxOk = lastStderr.length === 0 || !lastStderr.includes("TypeScript error");
-      const syntaxPoints = syntaxOk ? 30 : 0;
-      const testPoints = tests.length > 0 ? Math.round((passed / tests.length) * 50) : 50;
-      const qualityPoints = syntaxOk ? 20 : 0;
-      const finalScore = syntaxPoints + testPoints + qualityPoints;
-
-      const successResult = {
-        language,
-        syntax_ok: syntaxOk,
-        tests_passed: passed,
-        total_tests: tests.length,
-        stdout: lastStdout,
-        stderr: lastStderr,
-        final_score: finalScore,
-        feedback: finalScore === 100 ? "Compilador TSX executou e validou o código sem erros de tipos e lógica." : `Nota: ${finalScore}`
-      };
-
-      submissionData.status = "success";
-      await persistResult(submissionData, successResult, 0, totalTime);
-      return res.json(successResult);
-
-    } catch (err: any) {
-      const crashResponse = {
-        language,
-        syntax_ok: false,
-        tests_passed: 0,
-        total_tests: tests.length,
-        stdout: "",
-        stderr: err.message,
-        final_score: 0,
-        feedback: "TypeScript: Falha fatal durante a transpilação e sandbox tsx."
-      };
-      await persistResult(submissionData, crashResponse, -1, 0);
-      return res.json(crashResponse);
-    } finally {
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-    }
-  }
-
-  // Execution for SQL (relational engine emulator)
-  if (normalizedLang === "sql") {
-    let passed = 0;
-    let lastStdout = "";
-    let lastStderr = "";
-    let elapsed = 5;
-
-    for (const tc of tests) {
-      const sqlRes = runMockSqlEngine(code, tc.input);
-      lastStdout = sqlRes.stdout;
-      lastStderr = sqlRes.stderr;
-      
-      const isMatch = sqlRes.stdout.trim() === String(tc.expected_output).trim();
-      if (isMatch && sqlRes.stderr.length === 0) {
-        passed++;
-      }
-    }
-
-    const syntaxOk = lastStderr.length === 0;
-    const syntaxPoints = syntaxOk ? 30 : 0;
-    const testPoints = tests.length > 0 ? Math.round((passed / tests.length) * 50) : 50;
-    const qualityPoints = syntaxOk ? 20 : 0;
-    const finalScore = syntaxPoints + testPoints + qualityPoints;
-
-    const successResult = {
-      language,
-      syntax_ok: syntaxOk,
-      tests_passed: passed,
-      total_tests: tests.length,
-      stdout: lastStdout,
-      stderr: lastStderr,
-      final_score: finalScore,
-      feedback: syntaxOk 
-        ? "Query SQL executada perfeitamente. Banco SQLite interno emulado respondeu sem violações de integridade." 
-        : `Erro na execução: ${lastStderr}`
-    };
-
-    submissionData.status = "success";
-    await persistResult(submissionData, successResult, 0, elapsed);
-    return res.json(successResult);
-  }
-
-  // Visualizing and Assess Portugol
-  if (normalizedLang === "portugol") {
-    const analysis = analyzePortugol(code);
-    const result = {
-      language,
-      syntax_ok: analysis.syntaxOk,
-      tests_passed: tests.length, // Pedagogical, always pass to avoid mock errors
-      total_tests: tests.length,
-      stdout: "[Código analisado estruturalmente]",
-      stderr: "",
-      final_score: analysis.syntaxOk ? 30 + 20 + 50 : 20, // Sum tests score logically
-      feedback: analysis.feedback
-    };
-    submissionData.status = "success";
-    await persistResult(submissionData, result, 0, 1);
-    return res.json(result);
-  }
-
-  // Visualizing and Assess Pseudocode/Pseudocódigo
-  if (normalizedLang === "pseudocode" || normalizedLang === "pseudocodigo" || normalizedLang === "pseudocódigo") {
-    const analysis = analyzePseudocode(code);
-    const result = {
-      language,
-      syntax_ok: analysis.syntaxOk,
-      tests_passed: tests.length,
-      total_tests: tests.length,
-      stdout: "[Representação algorítmica interpretada estaticamente]",
-      stderr: "",
-      final_score: analysis.syntaxOk ? 100 : 30,
-      feedback: analysis.feedback
-    };
-    submissionData.status = "success";
-    await persistResult(submissionData, result, 0, 2);
-    return res.json(result);
-  }
-
-  // Unavailable languages: Java, C, C++, C#, php, go, rust, kotlin
-  const unavailableList = ["java", "c", "cpp", "csharp", "php", "go", "rust", "kotlin"];
-  if (unavailableList.includes(normalizedLang)) {
-    // Return precise required message
-    const staticRes = runStaticAnalysis(code, normalizedLang);
-    const errorResult = {
-      language,
-      syntax_ok: staticRes.syntaxOk,
-      tests_passed: 0,
-      total_tests: tests.length,
-      stdout: "",
-      stderr: `Compiladores de ${language.toUpperCase()} indisponíveis no ambiente local da hospedagem serverless.`,
-      final_score: 0,
-      feedback: `Executor da linguagem ${normalizedLang.charAt(0).toUpperCase() + normalizedLang.slice(1)} ainda não está disponível neste ambiente. No entanto, sua verificação sintática estática reportou: ${staticRes.feedback}`
-    };
-
-    await persistResult(submissionData, errorResult, -3, 0);
-    return res.json(errorResult);
-  }
-
-  // Default Fallback
-  const defaultRes = {
-    language,
-    syntax_ok: false,
-    tests_passed: 0,
-    total_tests: tests.length,
-    stdout: "",
-    stderr: `Compilador / Interpretador indefinido para: "${language}"`,
-    final_score: 0,
-    feedback: `Executor da linguagem ${language} ainda não está disponível neste ambiente.`
-  };
-  await persistResult(submissionData, defaultRes, -4, 0);
-  return res.json(defaultRes);
 });
 
 // Endpoint 2: Get historical submissions list
@@ -855,37 +449,76 @@ app.get("/api/submissions", async (req, res) => {
     try {
       const q = await pool.query(`
         SELECT s.id, s.language, s.code, s.status, s.created_at,
-               r.syntax_ok, r.tests_passed, r.total_tests, r.stdout, r.stderr, r.final_score, r.feedback,
+               r.syntax_ok, r.tests_passed, r.total_tests, r.stdout, r.stderr, r.final_score, r.status as res_status,
+               f.summary, f.strengths, f.errors, f.improvements, f.concepts_to_review, f.next_steps,
                l.execution_time
         FROM d_correction_submission s
         JOIN d_correction_result r ON s.id = r.submission_id
+        LEFT JOIN d_correction_feedback f ON r.id = f.result_id
         LEFT JOIN d_execution_log l ON s.id = l.submission_id
         ORDER BY s.created_at DESC
         LIMIT 50
       `);
-      const mapped = q.rows.map(r => ({
-        submission: {
-          id: r.id,
-          teacher_id: "teacher_portal",
-          language: r.language,
-          code: r.code,
-          status: r.status,
-          created_at: r.created_at
-        },
-        result: {
-          id: r.id,
-          submission_id: r.id,
-          syntax_ok: r.syntax_ok,
-          tests_passed: r.tests_passed,
-          total_tests: r.total_tests,
-          stdout: r.stdout,
-          stderr: r.stderr,
-          final_score: r.final_score,
-          feedback: r.feedback,
-          created_at: r.created_at
-        },
-        executionTime: r.execution_time
-      }));
+
+      const mapped = q.rows.map(r => {
+        const structuralFeedback = {
+          summary: r.summary || "",
+          strengths: r.strengths || [],
+          errors: r.errors || [],
+          improvements: r.improvements || [],
+          concepts_to_review: r.concepts_to_review || [],
+          next_steps: r.next_steps || []
+        };
+
+        const unifiedFeedbackString = `
+### RESUMO DA CORREÇÃO
+${structuralFeedback.summary || "Nenhuma descrição fornecida."}
+
+### NOTA DA CORREÇÃO
+- **Nota Final**: **${r.final_score}/100**
+
+### PONTOS FORTES
+${structuralFeedback.strengths.length > 0 ? structuralFeedback.strengths.map((s: string) => `- ${s}`).join("\n") : "- Nenhuma observação de ponto forte."}
+
+### LISTA DE ERROS DE SISTEMA E COMPILAÇÃO
+${structuralFeedback.errors.length > 0 ? structuralFeedback.errors.map((e: string) => `- ${e}`).join("\n") : "- Nenhum erro impeditivo de compilação ou vulnerabilidade barrou a execução do seu código."}
+
+### PONTOS DE MELHORIA
+${structuralFeedback.improvements.length > 0 ? structuralFeedback.improvements.map((i: string) => `- ${i}`).join("\n") : "- Sem pontos de melhorias drásticas necessárias."}
+
+### CONCEITOS RECOMENDADOS PARA REVISÃO
+${structuralFeedback.concepts_to_review.length > 0 ? structuralFeedback.concepts_to_review.map((c: string) => `- ${c}`).join("\n") : "- Nenhum tópico didático indicado para reforço imediato."}
+
+### PRÓXIMOS PASSOS PEDAGÓGICOS
+${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((step: string) => `- ${step}`).join("\n") : "- Sem recomendações adicionais de próximos passos."}
+`.trim();
+
+        return {
+          submission: {
+            id: r.id,
+            teacher_id: "teacher_portal",
+            language: r.language,
+            code: r.code,
+            status: r.status,
+            created_at: r.created_at
+          },
+          result: {
+            id: r.id,
+            submission_id: r.id,
+            syntax_ok: r.syntax_ok,
+            tests_passed: r.tests_passed,
+            total_tests: r.total_tests,
+            stdout: r.stdout,
+            stderr: r.stderr,
+            final_score: r.final_score,
+            feedback: unifiedFeedbackString,
+            feedbackStructured: structuralFeedback,
+            created_at: r.created_at
+          },
+          executionTime: r.execution_time
+        };
+      });
+
       return res.json(mapped);
     } catch (err) {
       console.error("Postgres reading fail:", err);

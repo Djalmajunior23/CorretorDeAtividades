@@ -132,6 +132,7 @@ export default function App() {
   
   // Correction responses
   const [correcting, setCorrecting] = useState<boolean>(false);
+  const [currentStage, setCurrentStage] = useState<string>("idle");
   const [result, setResult] = useState<CorrectionResult | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionLog[]>([]);
   const [dbConnected, setDbConnected] = useState<boolean>(false);
@@ -261,6 +262,19 @@ export default function App() {
   const handleRunCorrection = async () => {
     setCorrecting(true);
     setResult(null);
+    setCurrentStage("security");
+
+    // Simulating progress step transitions for perfect user experience
+    const steps = ["security", "tests", "quality", "feedback"];
+    let stepIndex = 0;
+
+    const progressInterval = setInterval(() => {
+      if (stepIndex < steps.length - 1) {
+        stepIndex++;
+        setCurrentStage(steps[stepIndex]);
+      }
+    }, 600);
+
     try {
       const response = await fetch("/corrections/run", {
         method: "POST",
@@ -274,18 +288,23 @@ export default function App() {
         })
       });
 
+      clearInterval(progressInterval);
+
       if (response.ok) {
+        setCurrentStage("completed");
         const evalResult = await response.json();
         setResult(evalResult);
         fetchSubmissions(); // reload logs list
       } else {
         const errText = await response.text();
-        alert(`Error executing endpoint: ${errText}`);
+        alert(`Erro ao executar endpoint: ${errText}`);
       }
     } catch (err: any) {
-      alert(`Network request failed: ${err.message}`);
+      clearInterval(progressInterval);
+      alert(`Falha na requisição de rede: ${err.message}`);
     } finally {
       setCorrecting(false);
+      setCurrentStage("idle");
     }
   };
 
@@ -349,7 +368,7 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 
                 {/* Left panel edit */}
-                <div className="lg:col-span-7 flex flex-col gap-6">
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
                   
                   {/* Select options */}
                   <div className="p-5 rounded-2xl bg-[#0f172a] border border-[#1e295b]/30">
@@ -621,7 +640,7 @@ export default function App() {
                 </div>
 
                 {/* Right panel result outputs */}
-                <div className="lg:col-span-5 flex flex-col gap-6">
+                <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
                   
                   {/* Title */}
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 min-h-[400px] flex flex-col justify-between">
@@ -692,6 +711,124 @@ export default function App() {
                             <p className="whitespace-pre-line">{result.feedback}</p>
                           </div>
 
+                        </div>
+                      ) : correcting ? (
+                        <div className="flex-1 flex flex-col gap-6 py-4 font-sans animate-fade-in">
+                          {/* Heading tracker */}
+                          <div className="flex flex-col gap-1 border-b border-[#1e295b]/30 pb-4">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-300 font-bold uppercase tracking-wider font-mono text-[11px] flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block shrink-0" />
+                                Correction Engine 2.0 Ativo
+                              </span>
+                              <span className="text-emerald-400 font-mono font-bold animate-pulse text-[11px]">SANDBOX SECURE RUN</span>
+                            </div>
+                            
+                            {/* Linear progress loading indicator */}
+                            <div className="w-full h-1.5 bg-[#030712] rounded-full mt-3.5 overflow-hidden border border-[#1e295b]/30">
+                              <div className="h-full bg-gradient-to-r from-teal-500 via-emerald-400 to-[#10b981] animate-pulse w-full rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
+                            </div>
+                          </div>
+
+                          {/* Individual processing pipeline step items */}
+                          <div className="flex flex-col gap-4">
+                            
+                            {/* Stage 1: Security Audit */}
+                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
+                              <div className="mt-0.5">
+                                {currentStage === "security" ? (
+                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                ) : (
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-xs font-bold text-white font-mono">1. AUDITORIA PREVENTIVA DE SEGURANÇA IMEDIATA</h4>
+                                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                  {currentStage === "security" 
+                                    ? "Examinando script em busca de chamadas de system, hacks, loops infinitos de escape ou memory exhaustion..."
+                                    : "Validação estática de ameaça concluída sob isolamento rigoroso de sandbox de container."}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Stage 2: Unit test cases suite execution */}
+                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
+                              <div className="mt-0.5">
+                                {currentStage === "security" ? (
+                                  <Clock className="w-5 h-5 text-slate-600 shrink-0" />
+                                ) : currentStage === "tests" ? (
+                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                ) : (
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-xs font-bold text-white font-mono">2. EXECUÇÃO DOS CASOS DE TESTES UNITÁRIOS ({testCases.length} INTÂNCIAST)</h4>
+                                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                  {currentStage === "security" 
+                                    ? "No aguardo da liberação estática..." 
+                                    : currentStage === "tests"
+                                      ? "Injetando entradas no terminal redirecionado de stdin d_correction. Medindo tempos de resposta..."
+                                      : "Simulações de pipeline de testes executadas sob tolerância float/espaço."}
+                                </p>
+                                
+                                {currentStage === "tests" && (
+                                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                    {testCases.map((_, i) => (
+                                      <span key={i} className="px-2.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 animate-pulse flex items-center gap-1.5 shadow-[0_0_8px_rgba(16,185,129,0.05)]">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                                        Teste #{i + 1} Rodando...
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Stage 3: Static rules analyzer */}
+                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
+                              <div className="mt-0.5">
+                                {["security", "tests"].includes(currentStage) ? (
+                                  <Clock className="w-5 h-5 text-slate-600 shrink-0" />
+                                ) : currentStage === "quality" ? (
+                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                ) : (
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-xs font-bold text-white font-mono">3. AVALIAÇÃO DE COMPONENTES DE QUALIDADE</h4>
+                                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                  {["security", "tests"].includes(currentStage)
+                                    ? "Pendente da conclusão da suite dinâmica..."
+                                    : currentStage === "quality"
+                                      ? "Examinando complexidade lógica, DRY, acoplamentos estruturais, variáveis não utilizadas..."
+                                      : "Estudos de arquitetura e cobertura sintática finalizados."}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Stage 4: Generative Pedagogical Feedback synthesis with Gemini AI */}
+                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
+                              <div className="mt-0.5">
+                                {["security", "tests", "quality"].includes(currentStage) ? (
+                                  <Clock className="w-5 h-5 text-slate-600 shrink-0" />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-xs font-bold text-white font-mono">4. SÍNTESE DE FEEDBACK PEDAGÓGICO DE APRENDIZAGEM</h4>
+                                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                  {["security", "tests", "quality"].includes(currentStage)
+                                    ? "Aguardando geração do scorecard..."
+                                    : "Acionando barramento de IA do Gemini para gerar orientações construtivas baseadas no erro do discente..."}
+                                </p>
+                              </div>
+                            </div>
+
+                          </div>
                         </div>
                       ) : (
                         <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
