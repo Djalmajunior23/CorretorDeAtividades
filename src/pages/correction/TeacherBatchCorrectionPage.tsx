@@ -44,7 +44,7 @@ export default function TeacherBatchCorrectionPage() {
   // Fetch Jobs
   const fetchJobs = async () => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseUrl = import.meta.env.VITE_API_BASE_URL ;
       const res = await fetch(`${baseUrl}/batch-correction/jobs`);
       if (res.ok) {
         const data = await res.json();
@@ -58,7 +58,7 @@ export default function TeacherBatchCorrectionPage() {
   // Fetch Job details
   const fetchJobDetails = async (jobId: number) => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseUrl = import.meta.env.VITE_API_BASE_URL ;
       const res = await fetch(`${baseUrl}/batch-correction/jobs/${jobId}`);
       if (res.ok) {
         const data = await res.json();
@@ -88,7 +88,7 @@ export default function TeacherBatchCorrectionPage() {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseUrl = import.meta.env.VITE_API_BASE_URL ;
       const res = await fetch(`${baseUrl}/batch-correction/upload`, {
         method: 'POST',
         body: formData,
@@ -108,7 +108,7 @@ export default function TeacherBatchCorrectionPage() {
 
   const handleExport = async (jobId: number) => {
     try {
-       const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+       const baseUrl = import.meta.env.VITE_API_BASE_URL ;
        const res = await fetch(`${baseUrl}/batch-correction/export/${jobId}`, {
            method: 'POST'
        });

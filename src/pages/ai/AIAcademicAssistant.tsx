@@ -6,7 +6,7 @@ export default function AIAcademicAssistant() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/ai-academic-assistant/dashboard`)
+    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/ai-academic-assistant/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

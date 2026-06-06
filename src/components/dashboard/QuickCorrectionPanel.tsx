@@ -11,13 +11,13 @@ export default function QuickCorrectionPanel() {
   const handleCorrection = async () => {
     setLoading(true);
     try {
-        const subRes = await fetch('/api/submissions/', {
+        const subRes = await fetch('/submissions/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ code_content: code, user_id: 1, activity_id: 1 })
         });
         const subData = await subRes.json();
-        const corrRes = await fetch(`/api/corrections/${subData.submission_id}/run`, { method: 'POST' });
+        const corrRes = await fetch(`/corrections/${subData.submission_id}/run`, { method: 'POST' });
         const corrData = await corrRes.json();
         setResult(corrData);
     } catch (e) {

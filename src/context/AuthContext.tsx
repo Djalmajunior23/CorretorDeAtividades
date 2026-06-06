@@ -24,8 +24,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const storedToken = localStorage.getItem("token");
       if (storedToken) {
         try {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
-          const url = baseUrl.endsWith("/auth/me") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/auth/me`;
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+          const url = API_BASE_URL.endsWith("/auth/me") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/me`;
 
           const response = await fetch(url, {
             headers: {

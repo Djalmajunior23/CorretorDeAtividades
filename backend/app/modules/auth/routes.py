@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from pydantic import BaseModel
 from app.database.session import get_session
 from app.models.user import User
@@ -55,7 +55,8 @@ def login(data: AuthLogin, session: Session = Depends(get_session)):
     
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return {
-        "token": token,
+        "access_token": token,
+        "token_type": "bearer",
         "user": {
             "id": user.id,
             "name": user.name,
@@ -65,6 +66,29 @@ def login(data: AuthLogin, session: Session = Depends(get_session)):
     }
 
 @router.get("/me")
-def me(session: Session = Depends(get_session)):
-    # Fallback to a single user for safety in emergency, since no middleware is enforced here yet.
-    return {"id": 1, "name": "Teacher", "email": "me@example.com", "role": "PROFESSOR"}
+def me(authorization: str = Header(None), session: Session = Depends(get_session)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+            
+        stmt = select(User).where(User.id == int(user_id))
+        user = session.exec(stmt).first()
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+            
+        return {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")

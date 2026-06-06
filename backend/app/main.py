@@ -15,18 +15,21 @@ import os
 
 app = FastAPI(title="CodeCheck AI API")
 
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://corretordeatividades.fly.dev"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "*"
-    ],
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.run\.app|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 @app.get("/health")

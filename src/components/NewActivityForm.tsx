@@ -15,7 +15,7 @@ export default function NewActivityForm() {
     // Na prática, deve haver uma base_url configurada nas variáveis de ambiente.
     // Usando endpoint simulado que refletirá a estrutura criada no backend.
     try {
-      const response = await fetch('/api/submissions/', {
+      const response = await fetch('/submissions/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

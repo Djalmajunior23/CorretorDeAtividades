@@ -29,8 +29,12 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
-      const url = baseUrl.endsWith("/auth/login") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/auth/login`;
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const url = API_BASE_URL.endsWith("/auth/login") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/login`;
+
+      console.log("LOGIN REQUEST");
+      console.log(email);
+      console.log("API URL:", API_BASE_URL);
 
       const response = await fetch(url, {
         method: "POST",
@@ -39,6 +43,7 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
+      console.log("LOGIN RESPONSE:", data);
 
       if (response.ok) {
         data.user.role = normalizeRole(data.user.role);

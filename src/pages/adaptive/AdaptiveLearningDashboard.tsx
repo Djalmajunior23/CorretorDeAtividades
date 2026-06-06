@@ -8,7 +8,7 @@ export default function AdaptiveLearningDashboard() {
 
   useEffect(() => {
     // mock teacher dashboard fetch
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/adaptive-learning/teacher/analytics`)
+    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/adaptive-learning/teacher/analytics`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

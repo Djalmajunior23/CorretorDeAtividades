@@ -84,10 +84,10 @@ export default function PedagogicalReportsPage() {
             <p className="text-slate-400 mt-2">Visão analítica de desempenho e IA preditiva da turma.</p>
           </div>
           <div className="flex gap-3">
-             <button onClick={() => window.open(`/api/pedagogical-reports/${report.id}/export-csv`)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+             <button onClick={() => window.open(`/pedagogical-reports/${report.id}/export-csv`)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
                <Download className="w-4 h-4" /> Exportar CSV
              </button>
-             <button onClick={() => window.open(`/api/pedagogical-reports/${report.id}/export-pdf`)} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors text-white">
+             <button onClick={() => window.open(`/pedagogical-reports/${report.id}/export-pdf`)} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors text-white">
                <Download className="w-4 h-4" /> Exportar PDF
              </button>
           </div>

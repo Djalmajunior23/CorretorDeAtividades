@@ -7,7 +7,7 @@ export default function AcademicCommandCenter() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/academic-command-center/dashboard`)
+    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/academic-command-center/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

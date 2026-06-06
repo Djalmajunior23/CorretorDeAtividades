@@ -6,7 +6,7 @@ export default function ContentFactoryDashboard() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/content-factory/dashboard`)
+    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/content-factory/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

@@ -66,8 +66,8 @@ export default function SmartCorrectionLab() {
     });
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
-      const url = baseUrl.endsWith("/corrections/run") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/corrections/run`;
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const url = API_BASE_URL.endsWith("/corrections/run") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/corrections/run`;
 
       const response = await fetch(url, {
         method: "POST",

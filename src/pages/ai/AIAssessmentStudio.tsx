@@ -6,7 +6,7 @@ export default function AIAssessmentStudio() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/assessment-studio/dashboard`)
+    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/assessment-studio/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));
