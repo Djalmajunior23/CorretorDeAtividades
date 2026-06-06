@@ -14,6 +14,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     if (user.role === 'ALUNO') return <Navigate to="/student/dashboard" replace />;
+    if (user.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
     return <Navigate to="/teacher/dashboard" replace />;
   }
   

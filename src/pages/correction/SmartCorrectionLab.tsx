@@ -66,12 +66,16 @@ export default function SmartCorrectionLab() {
     });
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "/api"}/corrections/run`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+      const url = baseUrl.endsWith("/corrections/run") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/corrections/run`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...(localStorage.getItem("token") ? { "Authorization": `Bearer ${localStorage.getItem("token")}` } : {})
+        },
+        body: JSON.stringify({
             code: code,
             language: language.id,
             test_cases: [{ input: "", expected_output: "" }], // Mock test case

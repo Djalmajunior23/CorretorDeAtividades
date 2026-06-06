@@ -12,6 +12,7 @@ import LoginPage from "./pages/LoginPage";
 import StudentDashboardPage from "./pages/StudentDashboardPage";
 import SmartCorrectionLab from "./pages/correction/SmartCorrectionLab";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import TeacherImageCorrectionPage from "./pages/teacher/TeacherImageCorrectionPage";
 import TeacherBatchCorrectionPage from "./pages/correction/TeacherBatchCorrectionPage";
 import PlagiarismDashboard from "./pages/plagiarism/PlagiarismDashboard";
@@ -25,8 +26,10 @@ function DashboardRouter() {
 
   if (user.role === "ALUNO")
     return <Navigate to="/student/dashboard" replace />;
-  if (user.role === "PROFESSOR" || user.role === "ADMIN")
+  if (user.role === "PROFESSOR")
     return <Navigate to="/teacher/dashboard" replace />;
+  if (user.role === "ADMIN")
+    return <Navigate to="/admin/dashboard" replace />;
 
   return <Navigate to="/login" replace />;
 }
@@ -49,6 +52,10 @@ export default function App() {
                 path="/student/dashboard"
                 element={<StudentDashboardPage />}
               />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
             </Route>
 
             <Route

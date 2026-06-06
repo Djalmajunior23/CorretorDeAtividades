@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { User, AuthContextType } from "../types";
+import { normalizeRole } from "../utils/roles";
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -8,15 +9,6 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   isLoading: true,
 });
-
-const normalizeRole = (role: string): "ADMIN" | "PROFESSOR" | "ALUNO" => {
-  const r = role.toUpperCase();
-  if (["ADMIN", "PROFESSOR", "ALUNO"].includes(r))
-    return r as "ADMIN" | "PROFESSOR" | "ALUNO";
-  if (r === "TEACHER") return "PROFESSOR";
-  if (r === "STUDENT") return "ALUNO";
-  return "ALUNO";
-};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,

@@ -2,7 +2,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: 'ADMIN' | 'PROFESSOR' | 'ALUNO';
+  role: string;
 }
 
 export interface AuthContextType {

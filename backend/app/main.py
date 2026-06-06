@@ -17,15 +17,24 @@ app = FastAPI(title="CodeCheck AI API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # TODO: Restrict in production
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "*"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.get("/health")
-def health_check():
-    return {"status": "ok"}
+def health():
+    return {
+        "status": "ok",
+        "service": "CodeCheck AI Backend"
+    }
 
 class RunCorrectionRequest(BaseModel):
     code: str

@@ -2,15 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Code, LogIn } from "lucide-react";
-
-const normalizeRole = (role: string): "ADMIN" | "PROFESSOR" | "ALUNO" => {
-  const r = role.toUpperCase();
-  if (["ADMIN", "PROFESSOR", "ALUNO"].includes(r))
-    return r as "ADMIN" | "PROFESSOR" | "ALUNO";
-  if (r === "TEACHER") return "PROFESSOR";
-  if (r === "STUDENT") return "ALUNO";
-  return "ALUNO";
-};
+import { normalizeRole } from "../utils/roles";
 
 export default function LoginPage() {
   const { login, user } = useAuth();
@@ -24,6 +16,9 @@ export default function LoginPage() {
   if (user) {
     if (user.role === "ALUNO") {
       return <Navigate to="/student/dashboard" replace />;
+    }
+    if (user.role === "ADMIN") {
+      return <Navigate to="/admin/dashboard" replace />;
     }
     return <Navigate to="/teacher/dashboard" replace />;
   }
@@ -48,7 +43,9 @@ export default function LoginPage() {
       if (response.ok) {
         data.user.role = normalizeRole(data.user.role);
         login(data.token || data.access_token, data.user);
-        if (data.user.role === "PROFESSOR" || data.user.role === "ADMIN") {
+        if (data.user.role === "ADMIN") {
+          navigate("/admin/dashboard");
+        } else if (data.user.role === "PROFESSOR") {
           navigate("/teacher/dashboard");
         } else if (data.user.role === "ALUNO") {
           navigate("/student/dashboard");
