@@ -1,6 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .execution-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .execution-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .execution-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(71, 85, 105, 0.4);
+    border-radius: 4px;
+  }
+}
+
+
 @theme {
   --font-sans: "Inter", sans-serif;
   --font-mono: "JetBrains Mono", monospace;

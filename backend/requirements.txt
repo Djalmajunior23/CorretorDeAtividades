@@ -6,3 +6,11 @@ pytest
 flake8
 pylint
 docker
+uvicorn
+psycopg2-binary
+python-dotenv
+pyjwt
+passlib[bcrypt]
+pytesseract
+Pillow
+python-multipart

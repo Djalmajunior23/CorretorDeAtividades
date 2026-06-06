@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from database.models import Attempt, Activity, Submission, CorrectionResult
+from app.models import Attempt, Activity, Submission, CorrectionResult
 from sqlalchemy import func
 
 class ProgressService:

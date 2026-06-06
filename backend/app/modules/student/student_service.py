@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from database.models import User, Activity
+from app.models import User, Activity
 
 class StudentService:
     @staticmethod

@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from database.models import Attempt
+from app.models import Attempt
 
 class AttemptsService:
     @staticmethod

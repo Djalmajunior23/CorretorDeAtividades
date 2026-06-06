@@ -27,6 +27,14 @@ apiService.interceptors.response.use(
       // Handle unauthorized (redirect to login)
       localStorage.removeItem('token');
       window.location.href = '/login';
+    } else if (error.message === 'Network Error' || !error.response) {
+      console.error('API is offline or unresponsive. Make sure the Python backend is running.');
+      // Avoid white screen, maybe dispatch a global event or simply alert
+      // In a real app we'd use a toast context.
+      if (!window.sessionStorage.getItem('network_error_shown')) {
+        alert('O servidor está offline. Por favor, certifique-se de que o backend (uvicorn app.main:app) está rodando localmente.');
+        window.sessionStorage.setItem('network_error_shown', 'true');
+      }
     }
     return Promise.reject(error);
   }
