@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Code, LogIn } from "lucide-react";
 import { normalizeRole } from "../utils/roles";
+import { getApiBaseUrl } from "../services/apiService";
 
 export default function LoginPage() {
   const { login, user } = useAuth();
@@ -29,7 +30,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const API_BASE_URL = getApiBaseUrl();
       const url = API_BASE_URL.endsWith("/auth/login") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/login`;
 
       console.log("LOGIN REQUEST");

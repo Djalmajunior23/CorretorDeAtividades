@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+export const getApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (!envUrl) return "/api";
+  
+  if (typeof window !== "undefined" && !window.location.hostname.includes("fly.dev")) {
+    return "/api";
+  }
+  return envUrl;
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 const apiService = axios.create({
   baseURL: API_BASE_URL,

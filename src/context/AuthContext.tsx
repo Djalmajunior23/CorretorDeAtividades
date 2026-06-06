@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { User, AuthContextType } from "../types";
 import { normalizeRole } from "../utils/roles";
+import { getApiBaseUrl } from "../services/apiService";
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -24,7 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const storedToken = localStorage.getItem("token");
       if (storedToken) {
         try {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+          const API_BASE_URL = getApiBaseUrl();
           const url = API_BASE_URL.endsWith("/auth/me") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/me`;
 
           const response = await fetch(url, {
