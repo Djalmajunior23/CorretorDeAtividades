@@ -20,7 +20,10 @@ origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://corretordeatividades.fly.dev"
+    "https://corretordeatividades.fly.dev",
+    "https://corretor-de-atividades.vercel.app",
+    "https://corretor-de-atividades-frontend.vercel.app",
+    "https://corretordeatividades.vercel.app"
 ]
 
 app.add_middleware(

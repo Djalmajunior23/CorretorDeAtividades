@@ -6,7 +6,7 @@ import { normalizeRole } from "../utils/roles";
 import { getApiBaseUrl } from "../services/apiService";
 
 export default function LoginPage() {
-  const { login, user } = useAuth();
+  const { login, user, diagnoseResponse } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,15 +29,16 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    try {
-      const API_BASE_URL = getApiBaseUrl();
-      const url = API_BASE_URL.endsWith("/auth/login") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/login`;
+    let response: Response | null = null;
+    const API_BASE_URL = getApiBaseUrl();
+    const url = API_BASE_URL.endsWith("/auth/login") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/login`;
 
+    try {
       console.log("LOGIN REQUEST");
       console.log(email);
       console.log("API URL:", API_BASE_URL);
 
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -60,9 +61,12 @@ export default function LoginPage() {
         }
       } else {
         setError(data.detail || "Falha no login");
+        await diagnoseResponse(response, null, url, "POST");
       }
     } catch (err) {
+      console.error("Login caught error:", err);
       setError("Erro na comunicação com servidor");
+      await diagnoseResponse(response, err, url, "POST");
     } finally {
       setLoading(false);
     }

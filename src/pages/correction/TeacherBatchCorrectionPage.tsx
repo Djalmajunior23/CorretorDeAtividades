@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Upload, FileText, CheckCircle2, XCircle, Clock, Search, ExternalLink, Download, FileArchive } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Link } from 'react-router-dom';
+import { getApiBaseUrl } from '../../services/apiService';
 
 function Placeholder({ text }: { text: string }) {
   return (
@@ -44,7 +45,7 @@ export default function TeacherBatchCorrectionPage() {
   // Fetch Jobs
   const fetchJobs = async () => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL ;
+      const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/batch-correction/jobs`);
       if (res.ok) {
         const data = await res.json();
@@ -58,7 +59,7 @@ export default function TeacherBatchCorrectionPage() {
   // Fetch Job details
   const fetchJobDetails = async (jobId: number) => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL ;
+      const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/batch-correction/jobs/${jobId}`);
       if (res.ok) {
         const data = await res.json();
@@ -88,7 +89,7 @@ export default function TeacherBatchCorrectionPage() {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL ;
+      const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/batch-correction/upload`, {
         method: 'POST',
         body: formData,
@@ -108,7 +109,7 @@ export default function TeacherBatchCorrectionPage() {
 
   const handleExport = async (jobId: number) => {
     try {
-       const baseUrl = import.meta.env.VITE_API_BASE_URL ;
+       const baseUrl = getApiBaseUrl();
        const res = await fetch(`${baseUrl}/batch-correction/export/${jobId}`, {
            method: 'POST'
        });

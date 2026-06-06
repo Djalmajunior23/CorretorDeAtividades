@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PenTool, Library, FileText, Blocks, LayoutTemplate, Plus } from 'lucide-react';
+import { getApiBaseUrl } from '../../services/apiService';
 
 export default function ContentFactoryDashboard() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/content-factory/dashboard`)
+    fetch(`${getApiBaseUrl()}/content-factory/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

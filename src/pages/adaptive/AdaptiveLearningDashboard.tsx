@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Target, TrendingUp, CheckCircle, BrainCircuit } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { getApiBaseUrl } from '../../services/apiService';
 
 export default function AdaptiveLearningDashboard() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
     // mock teacher dashboard fetch
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/adaptive-learning/teacher/analytics`)
+    fetch(`${getApiBaseUrl()}/adaptive-learning/teacher/analytics`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

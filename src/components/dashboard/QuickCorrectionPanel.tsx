@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Play } from 'lucide-react';
+import { getApiBaseUrl } from '../../services/apiService';
 
 export default function QuickCorrectionPanel() {
   const [activeTab, setActiveTab] = useState('code');
@@ -11,13 +12,14 @@ export default function QuickCorrectionPanel() {
   const handleCorrection = async () => {
     setLoading(true);
     try {
-        const subRes = await fetch('/submissions/', {
+        const baseUrl = getApiBaseUrl().replace(/\/+$/, "");
+        const subRes = await fetch(`${baseUrl}/submissions/`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ code_content: code, user_id: 1, activity_id: 1 })
         });
         const subData = await subRes.json();
-        const corrRes = await fetch(`/corrections/${subData.submission_id}/run`, { method: 'POST' });
+        const corrRes = await fetch(`${baseUrl}/corrections/${subData.submission_id}/run`, { method: 'POST' });
         const corrData = await corrRes.json();
         setResult(corrData);
     } catch (e) {

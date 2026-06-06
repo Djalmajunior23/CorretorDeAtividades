@@ -1,6 +1,11 @@
 {
-  "name": "Sistema de Correção de Programação",
-  "description": "Sistema autônomo para correção automatizada de atividades de programação com análise de código e OCR.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "CodeCheck AI",
+  "description": "Corretor e executor multilíngue de exercícios de programação para professores e turmas acadêmicas.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

@@ -1,13 +1,17 @@
 import axios from 'axios';
 
 export const getApiBaseUrl = (): string => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL;
-  if (!envUrl) return "/api";
-  
-  if (typeof window !== "undefined" && !window.location.hostname.includes("fly.dev")) {
-    return "/api";
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.includes(".run.app")
+    ) {
+      return "/api";
+    }
   }
-  return envUrl;
+  return import.meta.env.VITE_API_BASE_URL || "/api";
 };
 
 export const API_BASE_URL = getApiBaseUrl();

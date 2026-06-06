@@ -2,34 +2,38 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, TrendingUp, AlertTriangle, BarChart4, Users } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { getApiBaseUrl } from '../../services/apiService';
+import Sidebar from '../../components/layout/Sidebar';
 
 export default function AcademicCommandCenter() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/academic-command-center/dashboard`)
+    fetch(`${getApiBaseUrl()}/academic-command-center/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0E0E14] text-slate-200 flex flex-col items-center">
-      <header className="h-16 px-6 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#0E0E14]/80 backdrop-blur sticky top-0 z-10 w-full">
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-3">
-             <Building2 className="w-6 h-6 text-blue-500" />
-             <h1 className="text-xl font-bold">Academic Performance Command Center</h1>
+    <div className="flex h-screen bg-[#0E0E14] text-slate-200 overflow-hidden">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-y-auto">
+        <header className="h-16 px-6 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#0E0E14]/80 backdrop-blur sticky top-0 z-10 w-full">
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-3">
+               <Building2 className="w-6 h-6 text-blue-500" />
+               <h1 className="text-xl font-bold">Academic Performance Command Center</h1>
+            </div>
+            <nav className="flex space-x-4">
+              <Link to="/teacher/saep" className="text-sm text-slate-400 hover:text-blue-400 transition-colors">SAEP</Link>
+              <Link to="/teacher/curriculum" className="text-sm text-slate-400 hover:text-blue-400 transition-colors">Currículo</Link>
+              <Link to="/teacher/academic-center" className="text-sm text-blue-400 font-medium transition-colors">Command Center</Link>
+            </nav>
           </div>
-          <nav className="flex space-x-4">
-            <Link to="/teacher/saep" className="text-sm text-slate-400 hover:text-blue-400 transition-colors">SAEP</Link>
-            <Link to="/teacher/curriculum" className="text-sm text-slate-400 hover:text-blue-400 transition-colors">Currículo</Link>
-            <Link to="/teacher/academic-command-center" className="text-sm text-blue-400 font-medium transition-colors">Command Center</Link>
-          </nav>
-        </div>
-      </header>
-      
-      <div className="max-w-7xl w-full p-6 space-y-8">
+        </header>
+        
+        <div className="max-w-7xl w-full p-6 space-y-8 mx-auto">
          {data ? (
             <>
               <div className="grid grid-cols-4 gap-6">
@@ -97,6 +101,7 @@ export default function AcademicCommandCenter() {
          ) : (
             <div className="text-slate-500 flex justify-center items-center h-48">Carregando indicadores...</div>
          )}
+        </div>
       </div>
     </div>
   );
