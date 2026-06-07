@@ -16,7 +16,7 @@ export default function SAEPDashboard() {
 
   return (
     <div className="flex h-screen bg-[#0E0E14] text-slate-200 overflow-hidden">
-      <Sidebar />
+      <Sidebar currentTab="analytics" setTab={() => {}} dbConnected={true} />
       <div className="flex-1 flex flex-col overflow-y-auto">
         <header className="h-16 px-6 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#0E0E14]/80 backdrop-blur sticky top-0 w-full">
           <div className="flex items-center space-x-6">
@@ -97,6 +97,7 @@ export default function SAEPDashboard() {
          ) : (
              <div className="text-slate-500 flex justify-center items-center h-48">Carregando SAEP Intelligence...</div>
          )}
+        </div>
       </div>
     </div>
   );

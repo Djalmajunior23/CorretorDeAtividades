@@ -7,18 +7,28 @@ import {
   Database, 
   CheckCircle, 
   XOctagon, 
-  Layers 
+  Layers,
+  Activity,
+  BookOpen,
+  BarChart3
 } from "lucide-react";
 
 interface SidebarProps {
-  currentTab: string;
-  setTab: (tab: string) => void;
-  dbConnected: boolean;
+  currentTab?: string;
+  setTab?: (tab: string) => void;
+  dbConnected?: boolean;
 }
 
-export default function Sidebar({ currentTab, setTab, dbConnected }: SidebarProps) {
+export default function Sidebar({ 
+  currentTab = "corrector", 
+  setTab = () => {}, 
+  dbConnected = true 
+}: SidebarProps) {
   const menuItems = [
     { id: "corrector", label: "Correção Interativa", icon: Terminal, desc: "Playground de Execução" },
+    { id: "questions", label: "Banco de Questões", icon: BookOpen, desc: "Syllabus Técnico SENAI" },
+    { id: "analytics", label: "Performance da Turma", icon: BarChart3, desc: "Mapeamento Pedagógico" },
+    { id: "health", label: "Saúde do Sistema", icon: Activity, desc: "Observabilidade & Sandbox" },
     { id: "history", label: "Histórico de Envios", icon: History, desc: "Resultados da Turma" },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves" },
   ];

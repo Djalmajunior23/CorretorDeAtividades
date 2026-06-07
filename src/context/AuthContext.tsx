@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const login = (token: string, user: User) => {
-    user.role = normalizeRole(user.role);
+    user.role = normalizeRole(user.role) || "ALUNO";
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(user));
     setToken(token);

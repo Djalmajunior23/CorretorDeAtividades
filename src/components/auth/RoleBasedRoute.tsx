@@ -9,7 +9,7 @@ interface RoleBasedRouteProps {
 export const RoleBasedRoute: React.FC<RoleBasedRouteProps> = ({ allowedRoles }) => {
   const { user } = useAuth();
   
-  if (!user || !allowedRoles.includes(user.role)) {
+  if (!user || !allowedRoles.includes(user.role as any)) {
     return <Navigate to="/dashboard" replace />;
   }
   

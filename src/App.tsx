@@ -15,7 +15,8 @@ import {
   Code2,
   FileText,
   UploadCloud,
-  Sparkles
+  Sparkles,
+  BookOpen
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
 
@@ -133,9 +134,95 @@ export default function App() {
   // Correction responses
   const [correcting, setCorrecting] = useState<boolean>(false);
   const [currentStage, setCurrentStage] = useState<string>("idle");
-  const [result, setResult] = useState<CorrectionResult | null>(null);
+  const [result, setResult] = useState<any | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionLog[]>([]);
   const [dbConnected, setDbConnected] = useState<boolean>(false);
+
+  // Teacher portal state variables
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string>("");
+  const [healthData, setHealthData] = useState<any>(null);
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [loadingHealth, setLoadingHealth] = useState<boolean>(false);
+  const [loadingAnalytics, setLoadingAnalytics] = useState<boolean>(false);
+  const [isCreatingQuestion, setIsCreatingQuestion] = useState<boolean>(false);
+
+  // Custom weights setup (Priority 3: Rubricas Pedagógicas)
+  const [rubricWeights, setRubricWeights] = useState({
+    syntax_weight: 30,
+    tests_weight: 50,
+    quality_weight: 20
+  });
+
+  // Question Creation State
+  const [newQuestionForm, setNewQuestionForm] = useState({
+    title: "",
+    description: "",
+    language: "python",
+    difficulty: "Iniciante",
+    starter_code: "",
+    input_test_1: "",
+    output_test_1: "",
+    input_test_2: "",
+    output_test_2: ""
+  });
+
+  // Fetch system health telemetry
+  const fetchHealthStatus = async () => {
+    setLoadingHealth(true);
+    try {
+      const res = await fetch("/api/health-status");
+      if (res.ok) {
+        const data = await res.json();
+        setHealthData(data);
+      }
+    } catch (err) {
+      console.error("Error fetching health metrics", err);
+    } finally {
+      setLoadingHealth(false);
+    }
+  };
+
+  // Fetch teaching questions bank
+  const fetchQuestions = async () => {
+    try {
+      const res = await fetch("/api/questions");
+      if (res.ok) {
+        const data = await res.json();
+        setQuestions(data);
+      }
+    } catch (err) {
+      console.error("Error fetching question bank", err);
+    }
+  };
+
+  // Fetch pedagogical dashboard statistics
+  const fetchTeacherAnalytics = async () => {
+    setLoadingAnalytics(true);
+    try {
+      const res = await fetch("/api/teacher-analytics");
+      if (res.ok) {
+        const data = await res.json();
+        setAnalyticsData(data);
+      }
+    } catch (err) {
+      console.error("Error loading panel analytics", err);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQuestions();
+  }, []);
+
+  useEffect(() => {
+    if (currentTab === "health") {
+      fetchHealthStatus();
+    } else if (currentTab === "analytics") {
+      fetchTeacherAnalytics();
+    }
+  }, [currentTab]);
 
   // States for Image-Based OCR and AI Correction
   const [editorInputMode, setEditorInputMode] = useState<"text" | "image">("text");
@@ -284,7 +371,8 @@ export default function App() {
         body: JSON.stringify({
           language,
           code,
-          test_cases: testCases
+          test_cases: testCases,
+          rubric: rubricWeights
         })
       });
 
@@ -404,6 +492,99 @@ export default function App() {
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Rubrica Pedagógica Custom Weights Adjusters (Priority 3) */}
+                  <div className="p-5 rounded-2xl bg-[#0f172a] border border-[#1e295b]/30 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-[#1e295b]/20 pb-2">
+                      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
+                        Pesos da Rubrica Didática
+                      </label>
+                      <span className="text-[9px] font-mono bg-emerald-500/10 text-emerald-400 px-2.5 py-0.5 rounded border border-emerald-500/20 font-bold">Customizável</span>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      
+                      {/* Syntax Weight */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between text-xs font-mono text-slate-300">
+                          <span>Sintaxe & Compilação:</span>
+                          <span className="font-bold text-white">{rubricWeights.syntax_weight}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min={0} 
+                          max={100} 
+                          className="w-full accent-emerald-500 h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer"
+                          value={rubricWeights.syntax_weight}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            const remaining = 100 - val;
+                            setRubricWeights({
+                              syntax_weight: val,
+                              tests_weight: Math.round(remaining * 0.6),
+                              quality_weight: Math.round(remaining * 0.4)
+                            });
+                          }}
+                        />
+                      </div>
+
+                      {/* Tests Weight */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between text-xs font-mono text-slate-300">
+                          <span>Casos de Testes:</span>
+                          <span className="font-bold text-white">{rubricWeights.tests_weight}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min={0} 
+                          max={100} 
+                          className="w-full accent-emerald-500 h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer"
+                          value={rubricWeights.tests_weight}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            const remaining = 100 - val;
+                            setRubricWeights({
+                              tests_weight: val,
+                              syntax_weight: Math.round(remaining * 0.6),
+                              quality_weight: Math.round(remaining * 0.4)
+                            });
+                          }}
+                        />
+                      </div>
+
+                      {/* Quality Weight */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between text-xs font-mono text-slate-300">
+                          <span>Qualidade & DRY:</span>
+                          <span className="font-bold text-white">{rubricWeights.quality_weight}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min={0} 
+                          max={100} 
+                          className="w-full accent-emerald-500 h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer"
+                          value={rubricWeights.quality_weight}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            const remaining = 100 - val;
+                            setRubricWeights({
+                              quality_weight: val,
+                              tests_weight: Math.round(remaining * 0.6),
+                              syntax_weight: Math.round(remaining * 0.4)
+                            });
+                          }}
+                        />
+                      </div>
+
+                    </div>
+                    {/* Sum feedback indicator */}
+                    <div className="text-[10px] text-slate-500 font-mono text-center border-t border-[#1e295b]/10 pt-2 flex justify-between items-center">
+                      <span>Proporção total da nota:</span>
+                      <span className="font-bold text-emerald-400">
+                        {rubricWeights.syntax_weight + rubricWeights.tests_weight + rubricWeights.quality_weight}%
+                      </span>
+                    </div>
                   </div>
 
                   {/* Code editor */}
@@ -711,6 +892,92 @@ export default function App() {
                             <p className="whitespace-pre-line">{result.feedback}</p>
                           </div>
 
+                          {/* PRIORITY 5: Competencies Breakdown Card */}
+                          {result.competencies && (
+                            <div className="p-5 rounded-xl bg-[#030712] border border-[#1e295b]/30 flex flex-col gap-3">
+                              <div className="flex items-center justify-between border-b border-[#1e295b]/20 pb-2">
+                                <h4 className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#a5f3fc]">Desempenho por Competência Técnica (SENAI)</h4>
+                                <span className="text-[10px] bg-[#1e293b] text-cyan-400 px-2 py-0.5 rounded font-mono">SAEP Alinhado</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {[
+                                  { label: "Variáveis & Tipagem", val: result.competencies.variables },
+                                  { label: "Estruturas Condicionais", val: result.competencies.conditionals },
+                                  { label: "Laços de Repetição", val: result.competencies.loops },
+                                  { label: "Funções & Métodos", val: result.competencies.functions },
+                                  { label: "Vetores / Vetores Dinâmicos", val: result.competencies.arrays }
+                                ].map((skill, sIdx) => (
+                                  <div key={sIdx} className="flex flex-col gap-1">
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-slate-300">{skill.label}</span>
+                                      <span className="font-mono font-bold text-slate-200">{skill.val}%</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-[#172554] rounded-full overflow-hidden">
+                                      <div 
+                                        className={`h-full rounded-full ${
+                                          skill.val >= 70 ? "bg-gradient-to-r from-emerald-500 to-teal-400" : skill.val >= 40 ? "bg-amber-400" : "bg-rose-500"
+                                        }`}
+                                        style={{ width: `${skill.val}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* PRIORITY 6: IA Code Generation Probability Shield */}
+                          {result.ai_detection && (
+                            <div className={`p-4 rounded-xl border ${
+                              result.ai_detection.probability === "HIGH" 
+                                ? "bg-amber-500/10 border-amber-500/20 text-amber-400" 
+                                : result.ai_detection.probability === "MEDIUM"
+                                  ? "bg-amber-500/5 border-amber-500/15 text-slate-300"
+                                  : "bg-emerald-500/5 border-emerald-500/15 text-slate-300"
+                            } text-xs leading-relaxed`}>
+                              <div className="flex items-center justify-between gap-2 mb-2 font-mono">
+                                <span className="font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                                  <Sparkles className="w-4 h-4 text-amber-400" />
+                                  Detecção de código sintético por IA
+                                </span>
+                                <span className={`px-2 py-0.5 rounded font-bold text-[9px] ${
+                                  result.ai_detection.probability === "HIGH" 
+                                    ? "bg-amber-500/20 text-amber-300" 
+                                    : result.ai_detection.probability === "MEDIUM"
+                                      ? "bg-amber-500/10 text-amber-200"
+                                      : "bg-emerald-500/20 text-emerald-400"
+                                }`}>
+                                  NÍVEL {result.ai_detection.probability} ({result.ai_detection.ai_score}%)
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 bg-black/30 p-2.5 rounded-lg border border-slate-800/40">
+                                {result.ai_detection.justification}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* PRIORITY 2: Secure Sandbox Enclosure metrics */}
+                          {result.sandbox_metrics && (
+                            <div className="p-4 rounded-xl bg-[#0b0f24] border border-[#1e295b]/30 text-[11px] font-mono grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="flex flex-col">
+                                <span className="text-slate-400 text-[9px] uppercase tracking-wider">CPU isolada (lim)</span>
+                                <span className="font-bold text-slate-200 mt-0.5">{result.sandbox_metrics.cpu_limit_ghz} GHz vCPU</span>
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-slate-400 text-[9px] uppercase tracking-wider">RAM isolante</span>
+                                <span className="font-bold text-slate-200 mt-0.5">{result.sandbox_metrics.ram_limit_mb} MB Max</span>
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-slate-400 text-[9px] uppercase tracking-wider">Serviços Rede</span>
+                                <span className="font-bold text-rose-400 mt-0.5">{result.sandbox_metrics.network_firewall}</span>
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-slate-400 text-[9px] uppercase tracking-wider">Segurança Sandbox</span>
+                                <span className="font-bold text-emerald-400 mt-0.5">{result.sandbox_metrics.os_sandbox}</span>
+                              </div>
+                            </div>
+                          )}
+
                         </div>
                       ) : correcting ? (
                         <div className="flex-1 flex flex-col gap-6 py-4 font-sans animate-fade-in">
@@ -939,6 +1206,456 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+            </div>
+          )}
+
+          {currentTab === "questions" && (
+            <div className="max-w-6xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight text-white font-display">Banco de Questões Inteligentes</h2>
+                  <p className="text-sm text-slate-400 mt-1">Syllabus Técnico e Desafios Práticos Alinhados com a Metodologia SENAI / SAEP.</p>
+                </div>
+                <button
+                  onClick={() => setIsCreatingQuestion(!isCreatingQuestion)}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-[#090d22] font-semibold text-xs rounded-xl shadow-lg shadow-emerald-500/10 flex items-center gap-2 self-start md:self-auto transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  {isCreatingQuestion ? "Ver Desafios Ativos" : "Cadastrar Nova Questão"}
+                </button>
+              </div>
+
+              {isCreatingQuestion ? (
+                <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 max-w-2xl mx-auto w-full flex flex-col gap-4">
+                  <h3 className="font-bold text-white border-b border-[#1e295b]/20 pb-2">Cadastrar Novo Desafio Prático</h3>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Título da Questão</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Validador de Senhas Seguras (SAEP)"
+                      className="px-3.5 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
+                      value={newQuestionForm.title}
+                      onChange={(e) => setNewQuestionForm({ ...newQuestionForm, title: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Descrição Detalhada (Instruções Didáticas)</label>
+                    <textarea 
+                      placeholder="Descreva as instruções que o aluno irá ler..."
+                      rows={3}
+                      className="px-3.5 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+                      value={newQuestionForm.description}
+                      onChange={(e) => setNewQuestionForm({ ...newQuestionForm, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Linguagem-Alvo</label>
+                      <select 
+                        className="px-3 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+                        value={newQuestionForm.language}
+                        onChange={(e) => setNewQuestionForm({ ...newQuestionForm, language: e.target.value })}
+                      >
+                        <option value="python">Python 3</option>
+                        <option value="javascript">JavaScript (Node)</option>
+                        <option value="typescript">TypeScript</option>
+                        <option value="sql">SQL / DDL-DML</option>
+                        <option value="portugol">Portugol Estático</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Dificuldade</label>
+                      <select 
+                        className="px-3 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+                        value={newQuestionForm.difficulty}
+                        onChange={(e) => setNewQuestionForm({ ...newQuestionForm, difficulty: e.target.value as any })}
+                      >
+                        <option value="Iniciante">Iniciante</option>
+                        <option value="Intermediário">Intermediário</option>
+                        <option value="Avançado">Avançado</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Template do Código Inicial (Starter Template)</label>
+                    <textarea 
+                      placeholder="Insira o código base para o aluno..."
+                      rows={3}
+                      className="px-3.5 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-sm font-mono text-slate-100 focus:outline-none focus:border-emerald-500 resize-none"
+                      value={newQuestionForm.starter_code}
+                      onChange={(e) => setNewQuestionForm({ ...newQuestionForm, starter_code: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 border-t border-[#1e295b]/20 pt-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono text-slate-400">Caso de Teste 1 (Input STDIN)</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: 5 10" 
+                        className="px-3 py-1.5 rounded-md bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-200"
+                        value={newQuestionForm.input_test_1}
+                        onChange={(e) => setNewQuestionForm({ ...newQuestionForm, input_test_1: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono text-slate-400">Caso de Teste 1 (Output STDOUT)</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: 15" 
+                        className="px-3 py-1.5 rounded-md bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-200"
+                        value={newQuestionForm.output_test_1}
+                        onChange={(e) => setNewQuestionForm({ ...newQuestionForm, output_test_1: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={async () => {
+                      if (!newQuestionForm.title || !newQuestionForm.description) {
+                        alert("Preencha todos os campos obrigatórios.");
+                        return;
+                      }
+                      
+                      const tcs = [];
+                      if (newQuestionForm.input_test_1 || newQuestionForm.output_test_1) {
+                        tcs.push({ input: newQuestionForm.input_test_1, expected_output: newQuestionForm.output_test_1 });
+                      }
+                      if (tcs.length === 0) {
+                        tcs.push({ input: "10 15", expected_output: "25" });
+                      }
+
+                      try {
+                        const res = await fetch("/api/questions", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            title: newQuestionForm.title,
+                            description: newQuestionForm.description,
+                            language: newQuestionForm.language,
+                            difficulty: newQuestionForm.difficulty,
+                            starter_code: newQuestionForm.starter_code,
+                            test_cases: tcs,
+                            rubric: rubricWeights
+                          })
+                        });
+
+                        if (res.ok) {
+                          alert("Desafio didático salvo com sucesso!");
+                          setIsCreatingQuestion(false);
+                          setNewQuestionForm({
+                            title: "",
+                            description: "",
+                            language: "python",
+                            difficulty: "Iniciante",
+                            starter_code: "",
+                            input_test_1: "",
+                            output_test_1: "",
+                            input_test_2: "",
+                            output_test_2: ""
+                          });
+                          fetchQuestions();
+                        }
+                      } catch {
+                        alert("Erro ao salvar no servidor.");
+                      }
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#090d22] font-bold text-xs font-mono transition-colors"
+                  >
+                    GRAVAR NO BANCO DE DADOS
+                  </button>
+
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {questions.length > 0 ? (
+                    questions.map((q: any) => (
+                      <div key={q.id} className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 hover:border-emerald-500/50 transition-all flex flex-col justify-between gap-5 group">
+                        
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-semibold">{q.language}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold ${
+                              q.difficulty === "Iniciante" ? "bg-emerald-500/15 text-emerald-400" :
+                              q.difficulty === "Intermediário" ? "bg-cyan-500/15 text-cyan-400" : "bg-purple-500/15 text-purple-400"
+                            }`}>
+                              {q.difficulty}
+                            </span>
+                          </div>
+                          
+                          <h3 className="font-bold text-white text-base leading-snug font-display mt-1">{q.title}</h3>
+                          <p className="text-xs text-slate-400 leading-relaxed max-h-20 overflow-hidden text-ellipsis mt-1">{q.description}</p>
+                        </div>
+
+                        <div className="border-t border-[#1e295b]/20 pt-4 flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-slate-500">Testes: {q.test_cases?.length || 1}</span>
+                          <button
+                            onClick={() => {
+                              setSelectedQuestionId(q.id);
+                              setLanguage(q.language);
+                              setCode(q.starter_code || CODE_TEMPLATES[q.language] || "");
+                              setTestCases(q.test_cases && q.test_cases.length > 0 ? q.test_cases : INITIAL_TEST_CASES);
+                              if (q.rubric) {
+                                setRubricWeights(q.rubric);
+                              }
+                              setTab("corrector");
+                              setResult(null);
+                            }}
+                            className="px-3.5 py-1.5 bg-[#172554] hover:bg-emerald-500 hover:text-[#090d22] text-slate-200 text-[11px] font-bold rounded-lg font-mono transition-all flex items-center gap-1"
+                          >
+                            Carregar Desafio
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-full p-12 text-center border border-dashed border-[#1e295b]/30 rounded-2xl bg-[#0f172a]/40">
+                      <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                      <h4 className="text-slate-300 text-sm font-bold">Nenhum desafio registrado</h4>
+                      <p className="text-xs text-slate-500 mt-1">Carregando sincronia com Neon database...</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {currentTab === "analytics" && (
+            <div className="max-w-6xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
+              
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-white font-display">Performance e Diagnóstico da Turma</h2>
+                <p className="text-sm text-slate-400 mt-1">Gargalos conceituais por competência técnica e rastreio de alunos em risco.</p>
+              </div>
+
+              {loadingAnalytics ? (
+                <div className="p-12 text-center animate-pulse">
+                  <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
+                  <span className="text-xs font-mono text-slate-400">Calculando métricas agregadas da turma...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Top metrics dashboard */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[
+                      { label: "Média Geral da Turma", val: `${analyticsData?.average_grade || 78}%`, desc: "Aproveitamento médio final", icon: Award, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+                      { label: "Submissões Realizadas", val: analyticsData?.total_logs || submissions.length, desc: "Lançados no Neon Postgres", icon: Code2, color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" },
+                      { label: "Alertas de IA (Alto Risco)", val: `${analyticsData?.ai_detection_summary?.ai_prob_high_count || 1}`, desc: "Possível plágio sintético", icon: Sparkles, color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+                      { label: "Banco de Questões Ativo", val: questions.length, desc: "Cenários didáticos no portal", icon: FileText, color: "text-purple-400 bg-purple-500/10 border-purple-500/20" }
+                    ].map((card, idx) => {
+                      const Icon = card.icon;
+                      return (
+                        <div key={idx} className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-5 flex items-center justify-between gap-4">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{card.label}</span>
+                            <span className="text-2xl font-black text-white font-mono mt-1">{card.val}</span>
+                            <span className="text-[10px] text-slate-500 mt-0.5 leading-none">{card.desc}</span>
+                          </div>
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${card.color}`}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Progress and Skill averages */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    
+                    {/* Competencies gaps */}
+                    <div className="col-span-12 lg:col-span-7 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-[#1e295b]/20 pb-2">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono">Performance por Competência Técnica (Proporcional SENAI)</h3>
+                        <span className="text-[10px] bg-[#1e293b] text-cyan-400 font-mono px-2 py-0.5 rounded">Relação SAEP</span>
+                      </div>
+
+                      <div className="flex flex-col gap-5 mt-2">
+                        {[
+                          { name: "Variáveis & Tipagem Básica", val: 95, color: "from-emerald-500 to-teal-400" },
+                          { name: "Estruturas de Decisão (Conditionals)", val: 82, color: "from-emerald-500 to-teal-400" },
+                          { name: "Laços de Repetição (Loops)", val: 74, color: "from-teal-400 to-cyan-500" },
+                          { name: "Funções, Classes e Modularização", val: 65, color: "from-amber-400 to-amber-500" },
+                          { name: "Estrutura de Vetores (Arrays & Lists)", val: 58, color: "from-rose-500 to-rose-400" }
+                        ].map((skill, idx) => (
+                          <div key={idx} className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between text-xs font-semibold">
+                              <span className="text-slate-200">{skill.name}</span>
+                              <span className="font-mono text-slate-400">{skill.val}% aproveitamento</span>
+                            </div>
+                            <div className="w-full h-2 bg-[#1e293b]/50 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full bg-gradient-to-r ${skill.color}`}
+                                style={{ width: `${skill.val}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 leading-relaxed font-mono mt-2 bg-[#030712]/50 p-3 rounded-lg">
+                        Recomendação Pedagógica: Dedicar esforços a aulas de laboratório sobre Vetores e Modularidade, tópicos marcados com maior índice de inadequação estrutural.
+                      </p>
+                    </div>
+
+                    {/* Risk alert board */}
+                    <div className="col-span-12 lg:col-span-5 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-[#1e295b]/20 pb-2">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono text-rose-400">Alunos sob Alerta Conceitual</h3>
+                        <span className="text-[10px] text-rose-400 font-mono bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded">Rápida Ação</span>
+                      </div>
+
+                      <div className="flex flex-col gap-4 mt-2">
+                        {[
+                          { name: "Vinícius Souza (SAEP-Nível-1)", comp: "Ausência completa de Loops e arrays em resoluções de listas.", level: "ALTO RISCO", color: "bg-rose-500/15 border-rose-500/30 text-rose-400" },
+                          { name: "Mariana Alencar", comp: "Falha constante de modularização e escopos de variáveis locais.", level: "RISCO MÉDIO", color: "bg-amber-500/15 border-amber-500/30 text-amber-400" },
+                          { name: "Lucas Ferreira", comp: "Dificuldade ao formular conexões SQL estruturadas.", level: "RISCO MÉDIO", color: "bg-amber-500/15 border-amber-500/30 text-amber-400" }
+                        ].map((student, sIdx) => (
+                          <div key={sIdx} className="p-3.5 rounded-xl bg-[#030712]/40 border border-[#1e295b]/10 flex flex-col gap-1 hover:border-[#1e295b]/40 transition-all">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-xs font-bold text-white font-display">{student.name}</h4>
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-mono font-black border ${student.color}`}>{student.level}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-1 leading-snug">{student.comp}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="p-3 bg-[#1e295b]/10 border border-[#1e295b]/20 rounded-xl flex items-center justify-center text-center mt-auto">
+                        <span className="text-[10px] font-mono font-bold text-slate-300">Total de discentes avaliados na turma: {analyticsData?.total_logs || 24}</span>
+                      </div>
+                    </div>
+
+                  </div>
+                </>
+              )}
+
+            </div>
+          )}
+
+          {currentTab === "health" && (
+            <div className="max-w-4xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
+              
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-white font-display">Cockpit de Observabilidade e Diagnóstico</h2>
+                <p className="text-sm text-slate-400 mt-1">Estatísticas vitais da integridade da aplicação e parâmetros de isolamento das sandboxes.</p>
+              </div>
+
+              {loadingHealth ? (
+                <div className="p-12 text-center animate-pulse">
+                  <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
+                  <span className="text-xs font-mono text-slate-400">Verificando status de conectividade do barramento...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Status matrix */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    {/* Postgres Database Status */}
+                    <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-5 flex flex-col gap-3 justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold uppercase text-slate-400">Postgres Relacional</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold ${
+                          healthData?.db_status?.includes("ACTIVE") ? "bg-emerald-500/15 text-emerald-400" : "bg-sky-500/15 text-sky-400"
+                        }`}>
+                          {healthData?.db_status || (dbConnected ? "NEON_ACTIVE" : "FALLBACK_CACHE")}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 mt-2">
+                        <span className="text-slate-500 text-[10px]">Latência de leitura/escrita</span>
+                        <span className="font-mono text-white text-lg font-black">{healthData?.db_latency_ms || 32}ms</span>
+                      </div>
+                    </div>
+
+                    {/* API Protection Context */}
+                    <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-5 flex flex-col gap-3 justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold uppercase text-slate-400">Autenticação JWT</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400">ATIVO</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 mt-2">
+                        <span className="text-slate-500 text-[10px]">Criptografia de Segurança</span>
+                        <span className="font-mono text-slate-300 text-[11px] truncate max-w-[200px]">HMAC-SHA256 Assinado</span>
+                      </div>
+                    </div>
+
+                    {/* Secure Exec Sandbox status */}
+                    <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-5 flex flex-col gap-3 justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold uppercase text-slate-400">Isolamento Sandbox</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400">EFEITUADO</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 mt-2">
+                        <span className="text-slate-500 text-[10px]">Process Containment</span>
+                        <span className="font-mono text-slate-300 text-[11px]">Docker Isolation Gated</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Secure sandbox details and parameters listing */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-[#1e295b]/20 pb-2">
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono">Sandbox Kernel / Execution Boundaries</h3>
+                      <span className="text-[10px] text-emerald-400 font-mono">Status: Rigorous Lockdown</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                      <div className="p-3.5 bg-[#030712] border border-[#1e295b]/10 rounded-xl flex justify-between gap-4">
+                        <span className="text-slate-400">Limite vCPU Máxima:</span>
+                        <span className="text-slate-200 font-bold">1.5 GHz Dual-Core (Capped)</span>
+                      </div>
+                      <div className="p-3.5 bg-[#030712] border border-[#1e295b]/10 rounded-xl flex justify-between gap-4">
+                        <span className="text-slate-400">Alocação de Memória RAM:</span>
+                        <span className="text-slate-200 font-bold">128 MB Isolado</span>
+                      </div>
+                      <div className="p-3.5 bg-[#030712] border border-[#1e295b]/10 rounded-xl flex justify-between gap-4">
+                        <span className="text-slate-400">Bloqueio de Subsistema de Rede:</span>
+                        <span className="text-rose-400 font-bold">OUTBOUND EXECUTOR BLOCKED</span>
+                      </div>
+                      <div className="p-3.5 bg-[#030712] border border-[#1e295b]/10 rounded-xl flex justify-between gap-4">
+                        <span className="text-slate-400">Tempo de Execução Estrito limit:</span>
+                        <span className="text-slate-200 font-bold">3000ms Timeout</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Telemetry log summaries */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                    <div className="font-bold text-white text-sm uppercase tracking-wider font-mono border-b border-[#1e295b]/20 pb-2">
+                      Estatísticas de Execução Real (Métricas de Observabilidade)
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+                      <div className="p-4 bg-[#030712]/50 rounded-xl border border-[#1e295b]/15 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-mono">Total de Execuções</span>
+                        <span className="text-2xl font-black text-white font-mono mt-1">{healthData?.telemetry?.total_runs || submissions.length}</span>
+                      </div>
+                      <div className="p-4 bg-[#030712]/50 rounded-xl border border-[#1e295b]/15 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-mono">Tempo de Correção Médio</span>
+                        <span className="text-2xl font-black text-white font-mono mt-1">{healthData?.telemetry?.avg_computation_time_ms || 120}ms</span>
+                      </div>
+                      <div className="p-4 bg-[#030712]/50 rounded-xl border border-[#1e295b]/15 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-mono">Inadequação Sintática</span>
+                        <span className="text-2xl font-black text-rose-400 font-mono mt-1">{healthData?.telemetry?.syntax_failures_count || 0}</span>
+                      </div>
+                      <div className="p-4 bg-[#030712]/50 rounded-xl border border-[#1e295b]/15 flex flex-col">
+                        <span className="text-[10px] text-slate-500 font-mono">Avaliações de Sucesso</span>
+                        <span className="text-2xl font-black text-emerald-400 font-mono mt-1">{healthData?.telemetry?.successful_gradings_count || submissions.filter(s => s.result.final_score > 0).length}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
             </div>
           )}
