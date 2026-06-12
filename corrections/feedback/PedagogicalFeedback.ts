@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { aiService } from "../../src/ai/services/AIService";
 
 export interface FeedbackStructure {
   summary: string;
@@ -40,26 +40,24 @@ export class PedagogicalFeedback {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
       try {
-        const ai = new GoogleGenAI({ apiKey });
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          config: {
-            systemInstruction: "Você é um professor tutor de algoritmos e programação sênior, super carinhoso, didático e motivador. Seu papel é corrigir e explicar trechos de códigos estudantis sem entregar a resposta final de bandeja.",
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                summary: { type: "STRING", description: "Resumo pedagógico geral da resolução do aluno." },
-                strengths: { type: "ARRAY", items: { type: "STRING" }, description: "Lista de 1 a 3 pontos fortes do código escrito pelo aluno." },
-                errors: { type: "ARRAY", items: { type: "STRING" }, description: "O erro principal observado ou potenciais falhas em testes." },
-                improvements: { type: "ARRAY", items: { type: "STRING" }, description: "Melhorias de legibilidade, indentação ou nomes sugeridas." },
-                concepts_to_review: { type: "ARRAY", items: { type: "STRING" }, description: "Quais tópicos acadêmicos o aluno deve estudar para dominar isso." },
-                next_steps: { type: "ARRAY", items: { type: "STRING" }, description: "Próximos passos imediatos sugeridos (ex: testar caso limite)." }
-              },
-              required: ["summary", "strengths", "errors", "improvements", "concepts_to_review", "next_steps"]
-            }
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            summary: { type: "STRING", description: "Resumo pedagógico geral da resolução do aluno." },
+            strengths: { type: "ARRAY", items: { type: "STRING" }, description: "Lista de 1 a 3 pontos fortes do código escrito pelo aluno." },
+            errors: { type: "ARRAY", items: { type: "STRING" }, description: "O erro principal observado ou potenciais falhas em testes." },
+            improvements: { type: "ARRAY", items: { type: "STRING" }, description: "Melhorias de legibilidade, indentação ou nomes sugeridas." },
+            concepts_to_review: { type: "ARRAY", items: { type: "STRING" }, description: "Quais tópicos acadêmicos o aluno deve estudar para dominar isso." },
+            next_steps: { type: "ARRAY", items: { type: "STRING" }, description: "Próximos passos imediatos sugeridos (ex: testar caso limite)." }
           },
-          contents: `Analise as seguintes métricas de correção de código e gere o feedback pedagógico estruturado:
+          required: ["summary", "strengths", "errors", "improvements", "concepts_to_review", "next_steps"]
+        };
+
+        const optConfig = {
+          systemInstruction: "Você é um professor tutor de algoritmos e programação sênior, super carinhoso, didático e motivador. Seu papel é corrigir e explicar trechos de códigos estudantis sem entregar a resposta final de bandeja."
+        };
+
+        const promptText = `Analise as seguintes métricas de correção de código e gere o feedback pedagógico estruturado:
 Linguagem: ${language}
 Sintaxe OK: ${syntaxOk}
 Métricas de testes: passou em ${testsPassed} de ${totalTests} testes unitários.
@@ -69,11 +67,11 @@ Mensagem de erro de compilação/execução (stderr): ${stderr}
 Código submetido pelo discente:
 \`\`\`
 ${code}
-\`\`\``
-        });
+\`\`\``;
 
-        if (response.text) {
-          const payload = JSON.parse(response.text);
+        const payload = await aiService.generateStructuredWithRetry<any>(promptText, schema, optConfig);
+        
+        if (payload) {
           return {
             summary: payload.summary || "Revisão gerada com sucesso pela IA de Ensino.",
             strengths: payload.strengths || [],
@@ -83,8 +81,8 @@ ${code}
             next_steps: payload.next_steps || []
           };
         }
-      } catch (err) {
-        console.warn("Failing over to rule-based feedback generator due to Gemini API issue:", err);
+      } catch (err: any) {
+        console.warn("Failing over to rule-based feedback generator due to AI service issue:", err.message);
       }
     }
 

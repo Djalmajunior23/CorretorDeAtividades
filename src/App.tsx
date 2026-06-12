@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import Sidebar from "./components/layout/Sidebar";
+import GeneratorView from "./components/GeneratorView";
+import ActivityBankView from "./components/ActivityBankView";
+import CompetencyMapView from "./components/CompetencyMapView";
+import ReportsInterventionsView from "./components/ReportsInterventionsView";
+import AIAssistantView from "./components/AIAssistantView";
+import AutomationActionCenterView from "./components/AutomationActionCenterView";
+import TeacherCommandCenterView from "./components/TeacherCommandCenterView";
+import SmartClassDiaryView from "./components/SmartClassDiaryView";
+import CompetenciesManagerView from "./components/CompetenciesManagerView";
+import DashboardView from "./components/DashboardView";
+import PlanejamentoView from "./components/PlanejamentoView";
+import TurmasView from "./components/TurmasView";
+import AvaliacoesView from "./components/AvaliacoesView";
+import RecuperacaoView from "./components/RecuperacaoView";
+import MateriaisView from "./components/MateriaisView";
 import { 
   Play, 
   Terminal, 
@@ -16,7 +32,14 @@ import {
   FileText,
   UploadCloud,
   Sparkles,
-  BookOpen
+  BookOpen,
+  LineChart,
+  Briefcase,
+  Bell,
+  Eye,
+  EyeOff,
+  Sun,
+  Moon
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
 import {
@@ -136,7 +159,15 @@ const INITIAL_TEST_CASES: TestCase[] = [
 ];
 
 export default function App() {
-  const [currentTab, setTab] = useState<string>("corrector");
+  const [currentTab, setTab] = useState<string>("dashboard");
+  const [productivityFocused, setProductivityFocused] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("codecheck_productivity_focused") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [notificationOpen, setNotificationOpen] = useState<boolean>(false);
   const [language, setLanguage] = useState<string>("python");
   const [code, setCode] = useState<string>(CODE_TEMPLATES["python"]);
   const [testCases, setTestCases] = useState<TestCase[]>(INITIAL_TEST_CASES);
@@ -177,14 +208,102 @@ export default function App() {
     output_test_2: ""
   });
 
+  // CodeCheck AI System Evolutionary State Hooks
+  const [featureFlags, setFeatureFlags] = useState({
+    ENABLE_RUBRIC_CORRECTION: true,
+    ENABLE_AI_FEEDBACK: true,
+    ENABLE_CLASS_ERROR_DASHBOARD: true,
+    ENABLE_STUDENT_EVOLUTION: true,
+    ENABLE_ACTIVITY_GENERATOR: true,
+    ENABLE_AI_TEST_CASES: true,
+    ENABLE_ACTIVITY_BANK: true,
+    ENABLE_SANDBOX_EXECUTOR: true,
+    ENABLE_MULTILANGUAGE_GRADING: true,
+    ENABLE_EXECUTION_AUDIT_LOGS: true,
+    ENABLE_QUESTION_BANK: true,
+    ENABLE_COMPETENCY_TAGGING: true,
+    ENABLE_LEARNING_PATHS: true,
+    ENABLE_AI_QUESTION_SUGGESTIONS: true,
+    ENABLE_TEACHER_REPORTS: true,
+    ENABLE_AI_PEDAGOGICAL_OPINION: true,
+    ENABLE_INTERVENTION_PLAN: true,
+    ENABLE_COORDINATOR_DASHBOARD: true,
+    ENABLE_CLASS_ANALYTICS: true,
+    ENABLE_STUDENT_ANALYTICS: true,
+    ENABLE_PDF_EXPORT: true,
+    ENABLE_TEACHER_AI_ASSISTANT: true,
+    ENABLE_AI_LESSON_PLANNER: true,
+    ENABLE_AI_ACTIVITY_BUILDER: true,
+    ENABLE_AI_RECOVERY_PLAN: true,
+    ENABLE_AI_RUBRIC_BUILDER: true,
+    ENABLE_AI_SIMULATED_EXAMS: true,
+    ENABLE_AI_CLASS_DIAGNOSIS: true,
+    ENABLE_AI_STUDENT_RECOMMENDATIONS: true,
+    ENABLE_PEDAGOGICAL_AUTOMATION: true,
+    ENABLE_STUDENT_NOTIFICATIONS: false, // Disabled for teacher productivity focus
+    ENABLE_RECOVERY_AUTOMATION: true,
+    ENABLE_DEADLINE_REMINDERS: true,
+    ENABLE_EMAIL_COMMUNICATION: true,
+    ENABLE_IN_APP_ALERTS: true,
+    ENABLE_TEACHER_ACTION_CENTER: true,
+    ENABLE_TEACHER_COMMAND_CENTER: true,
+    ENABLE_BULK_OPERATIONS: true,
+    ENABLE_TEACHER_TEMPLATES: true,
+    ENABLE_QUICK_FEEDBACK: true,
+    ENABLE_CLASS_COMPARISON: true,
+    ENABLE_WEEKLY_PLANNER: true,
+    ENABLE_RECOVERY_WORKBENCH: true,
+    ENABLE_COORDINATION_REPORTS: true,
+    ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS: true,
+    // FASE 2: Controlled teacher-centric complexity isolation
+    ENABLE_STUDENT_PORTAL: false,
+    ENABLE_STUDENT_DASHBOARD: false,
+    ENABLE_STUDENT_MISSIONS: false,
+    ENABLE_STUDENT_GAMIFICATION: false,
+    ENABLE_STUDENT_RANKING: false,
+    ENABLE_STUDENT_BADGES: false,
+    ENABLE_STUDENT_SOCIAL_FEATURES: false,
+    ENABLE_STUDENT_ACHIEVEMENTS: false
+  });
+
+  const [lintSettings, setLintSettings] = useState({
+    requireComments: true,
+    requireIndentation: true,
+    maxLinesLimit: 80,
+    requireNoSingleLetterVars: true,
+    requireFunctions: false
+  });
+
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<"general" | "errors" | "student" | "competencies">("general");
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState("Vinícius Souza");
+  const [studentEvolutionData, setStudentEvolutionData] = useState<any>(null);
+  const [classErrorData, setClassErrorData] = useState<any>(null);
+  const [loadingClassErrors, setLoadingClassErrors] = useState(false);
+  const [loadingStudentPromo, setLoadingStudentPromo] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+
+  // Fetch audit logs helper (Regras de auditoria)
+  const fetchAuditLogs = () => {
+    fetch("/api/audit-logs")
+      .then(res => res.json())
+      .then(data => setAuditLogs(data))
+      .catch(e => console.error("Error loading audits:", e));
+  };
+
   // Fetch system health telemetry
   const fetchHealthStatus = async () => {
     setLoadingHealth(true);
     try {
       const res = await fetch("/api/health-status");
       if (res.ok) {
-        const data = await res.json();
-        setHealthData(data);
+        const ct = res.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const data = await res.json();
+          setHealthData(data);
+        } else {
+          console.warn("[App] Received non-JSON status response during server standby/startup");
+        }
       }
     } catch (err) {
       console.error("Error fetching health metrics", err);
@@ -198,8 +317,11 @@ export default function App() {
     try {
       const res = await fetch("/api/questions");
       if (res.ok) {
-        const data = await res.json();
-        setQuestions(data);
+        const ct = res.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const data = await res.json();
+          setQuestions(data);
+        }
       }
     } catch (err) {
       console.error("Error fetching question bank", err);
@@ -212,8 +334,13 @@ export default function App() {
     try {
       const res = await fetch("/api/teacher-analytics");
       if (res.ok) {
-        const data = await res.json();
-        setAnalyticsData(data);
+        const ct = res.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const data = await res.json();
+          setAnalyticsData(data);
+        } else {
+          console.warn("[App] Received non-JSON analytics response during server standby/startup");
+        }
       }
     } catch (err) {
       console.error("Error loading panel analytics", err);
@@ -224,6 +351,17 @@ export default function App() {
 
   useEffect(() => {
     fetchQuestions();
+    
+    // Fetch initial feature flags and linting settings
+    fetch("/api/feature-flags")
+      .then(res => res.json())
+      .then(data => setFeatureFlags(data))
+      .catch(e => console.error("Error loading features:", e));
+
+    fetch("/api/settings/linting")
+      .then(res => res.json())
+      .then(data => setLintSettings(data))
+      .catch(e => console.error("Error loading linting settings:", e));
   }, []);
 
   useEffect(() => {
@@ -231,8 +369,49 @@ export default function App() {
       fetchHealthStatus();
     } else if (currentTab === "analytics") {
       fetchTeacherAnalytics();
+
+      if (analyticsSubTab === "errors" && !featureFlags.ENABLE_CLASS_ERROR_DASHBOARD) {
+        setAnalyticsSubTab("general");
+      }
+      if (analyticsSubTab === "student" && !featureFlags.ENABLE_STUDENT_EVOLUTION) {
+        setAnalyticsSubTab("general");
+      }
+      if (analyticsSubTab === "competencies" && !featureFlags.ENABLE_COMPETENCY_TAGGING) {
+        setAnalyticsSubTab("general");
+      }
+
+      // Fetch Class error analytics
+      if (featureFlags.ENABLE_CLASS_ERROR_DASHBOARD) {
+        setLoadingClassErrors(true);
+        fetch("/api/class-error-analytics")
+          .then(res => res.json())
+          .then(data => {
+            setClassErrorData(data);
+            setLoadingClassErrors(false);
+          })
+          .catch(e => {
+            console.error("Error loading class error analytics:", e);
+            setLoadingClassErrors(false);
+          });
+      }
     }
-  }, [currentTab]);
+  }, [currentTab, featureFlags.ENABLE_CLASS_ERROR_DASHBOARD]);
+
+  useEffect(() => {
+    if ((currentTab === "analytics" && featureFlags.ENABLE_STUDENT_EVOLUTION) && selectedStudent) {
+      setLoadingStudentPromo(true);
+      fetch(`/api/student-evolution?studentName=${encodeURIComponent(selectedStudent)}`)
+        .then(res => res.json())
+        .then(data => {
+          setStudentEvolutionData(data);
+          setLoadingStudentPromo(false);
+        })
+        .catch(e => {
+          console.error("Error loading student evolution data:", e);
+          setLoadingStudentPromo(false);
+        });
+    }
+  }, [currentTab, selectedStudent, featureFlags.ENABLE_STUDENT_EVOLUTION]);
 
   // States for Image-Based OCR and AI Correction
   const [editorInputMode, setEditorInputMode] = useState<"text" | "image">("text");
@@ -241,6 +420,45 @@ export default function App() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [visualOcrNotes, setVisualOcrNotes] = useState<string | null>(null);
   const [ocrLoadedBanner, setOcrLoadedBanner] = useState<boolean>(false);
+  const [studentName, setStudentName] = useState<string | null>(null);
+  const [roiImage, setRoiImage] = useState<string | null>(null);
+
+  // Dynamic settings save & feature flag toggle dispatchers
+  const handleSaveLintSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const res = await fetch("/api/settings/linting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lintSettings)
+      });
+      if (res.ok) {
+        alert("Configurações de Codestyle e Linting da Turma salvas com sucesso!");
+        fetchAuditLogs();
+      } else {
+        alert("Erro detectado ao salvar configurações.");
+      }
+    } catch (e: any) {
+      console.error("Error saving settings:", e.message);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleToggleFeature = async (flagName: string, val: boolean) => {
+    const updatedFlags = { ...featureFlags, [flagName]: val };
+    setFeatureFlags(updatedFlags);
+    try {
+      await fetch("/api/feature-flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedFlags)
+      });
+      fetchAuditLogs();
+    } catch (e: any) {
+      console.error("Error saving feature flag state:", e.message);
+    }
+  };
 
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -260,7 +478,31 @@ export default function App() {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      setSelectedImage(reader.result as string);
+      const base64 = reader.result as string;
+      setSelectedImage(base64);
+
+      // Algoritmo de Visão Computacional Cliente - Detecção de ROI (Cabeçalho com Nome)
+      const img = new Image();
+      img.src = base64;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const width = img.width;
+          const height = img.height;
+          // Crop focado na parte superior da prova (22% da altura), onde o padrão 'Nome'/'Aluno' sempre reside
+          const cropHeight = height * 0.22;
+          canvas.width = width;
+          canvas.height = cropHeight;
+          ctx.drawImage(img, 0, 0, width, cropHeight, 0, 0, width, cropHeight);
+          try {
+            const croppedBase64 = canvas.toDataURL("image/jpeg", 0.85);
+            setRoiImage(croppedBase64);
+          } catch (e) {
+            console.warn("[ComputerVision] Falha ao processar canvas ROI no navegador:", e);
+          }
+        }
+      };
     };
     reader.readAsDataURL(file);
   };
@@ -287,6 +529,7 @@ export default function App() {
     if (!selectedImage) return;
     setTranscribing(true);
     setVisualOcrNotes(null);
+    setStudentName(null);
     try {
       const response = await fetch("/corrections/transcribe-image", {
         method: "POST",
@@ -295,6 +538,7 @@ export default function App() {
         },
         body: JSON.stringify({
           image: selectedImage,
+          roiImage: roiImage, // Passamos a ROI pré-calculada pelo navegador!
           language: language
         })
       });
@@ -304,6 +548,7 @@ export default function App() {
         if (data.success) {
           setCode(data.transcribedCode);
           setVisualOcrNotes(data.visualOcrNotes);
+          setStudentName(data.studentName);
           setEditorInputMode("text"); // auto-switch to view editor
           setOcrLoadedBanner(true);
           setTimeout(() => setOcrLoadedBanner(false), 8000);
@@ -339,9 +584,12 @@ export default function App() {
     try {
       const res = await fetch("/api/submissions");
       if (res.ok) {
-        const data = await res.json();
-        setSubmissions(data);
-        setDbConnected(true);
+        const ct = res.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const data = await res.json();
+          setSubmissions(data);
+          setDbConnected(true);
+        }
       }
     } catch (err) {
       console.warn("DB offline fallback reading active", err);
@@ -382,7 +630,7 @@ export default function App() {
       const dateStr = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
       const timeStr = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       return {
-        name: `Envio ${submissions.length - valid.length + index + 1}`,
+        name: s.submission.student_name || `Envio ${submissions.length - valid.length + index + 1}`,
         nota: s.result.final_score,
         linguagem: (s.submission.language || "N/A").toUpperCase(),
         data: `${dateStr} ${timeStr}`,
@@ -418,7 +666,8 @@ export default function App() {
           language,
           code,
           test_cases: testCases,
-          rubric: rubricWeights
+          rubric: rubricWeights,
+          studentName: studentName
         })
       });
 
@@ -462,31 +711,226 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[#030712] overflow-hidden text-slate-100 font-sans antialiased">
       {/* Visual Sidebar Layout */}
-      <Sidebar currentTab={currentTab} setTab={setTab} dbConnected={dbConnected} />
+      <Sidebar currentTab={currentTab} setTab={setTab} dbConnected={dbConnected} featureFlags={featureFlags} />
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#070a1a]">
         
         {/* Top bar header */}
-        <header className="h-16 border-b border-[#1e295b]/40 px-8 flex items-center justify-between bg-[#0b0f24]">
+        <header className="h-20 border-b border-slate-800 px-8 flex items-center justify-between bg-[#040815] relative z-45">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-[#1e293b] border border-slate-700 text-slate-300">
-              PRÓ-MOTOR MULTILÍNGUE V3.0
-            </span>
+            <div className="flex flex-col">
+              <h2 className="text-sm font-bold tracking-tight text-white font-display flex items-center gap-2">
+                {(() => {
+                  const hr = new Date().getHours();
+                  if (hr < 12) {
+                    return (
+                      <>
+                        <Sun className="w-4 h-4 text-amber-400 animate-spin-slow" />
+                        <span>Bom dia, Professor Djalma</span>
+                      </>
+                    );
+                  } else if (hr < 18) {
+                    return (
+                      <>
+                        <Sun className="w-4 h-4 text-emerald-400" />
+                        <span>Boa tarde, Professor Djalma</span>
+                      </>
+                    );
+                  } else {
+                    return (
+                      <>
+                        <Moon className="w-4 h-4 text-indigo-400 animate-pulse" />
+                        <span>Boa noite, Professor Djalma</span>
+                      </>
+                    );
+                  }
+                })()}
+              </h2>
+              <span className="text-[10px] text-slate-500 font-mono">Última conexão: {new Date().toLocaleDateString("pt-BR")}</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-400 font-mono">Status do Host:</span>
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[11px] font-mono border border-emerald-500/20">
+            {/* Modo Produtividade Toggle */}
+            <button 
+              onClick={() => {
+                const newVal = !productivityFocused;
+                setProductivityFocused(newVal);
+                localStorage.setItem("codecheck_productivity_focused", String(newVal));
+              }}
+              title={productivityFocused ? "Desativar Modo Foco" : "Ativar Modo Foco (Produtividade)"}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-semibold tracking-tight transition-all uppercase font-mono ${
+                productivityFocused
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-md shadow-emerald-500/5 neon-glow-emerald"
+                  : "bg-slate-900/50 text-slate-400 border-slate-800 hover:text-slate-300"
+              }`}
+            >
+              {productivityFocused ? (
+                <>
+                  <Eye className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+                  <span>Modo Foco: Ativo</span>
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-3.5 h-3.5" />
+                  <span>Modo Foco</span>
+                </>
+              )}
+            </button>
+
+            {/* Notification triggers */}
+            <button 
+              onClick={() => setNotificationOpen(!notificationOpen)}
+              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900/80 hover:text-white transition-all text-slate-400 relative"
+            >
+              <Bell className="w-4.5 h-4.5" />
+              <span className="absolute top-1 right-1 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+              </span>
+            </button>
+
+            <span className="text-xs text-slate-500 font-mono hidden sm:inline">Status Host:</span>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-[11px] font-mono border border-emerald-500/20">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               ONLINE
             </span>
           </div>
         </header>
 
+        {/* MÓDULO 8: Notification Panel Sidebar Draweer */}
+        <AnimatePresence>
+          {notificationOpen && (
+            <>
+              {/* overlay mask */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setNotificationOpen(false)}
+                className="absolute inset-0 bg-[#030712]/60 backdrop-blur-xs z-40"
+              />
+
+              {/* panel slider from right */}
+              <motion.div 
+                initial={{ opacity: 0, x: 360 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 360 }}
+                transition={{ type: "spring", damping: 25, stiffness: 220 }}
+                className="absolute right-0 top-0 bottom-0 w-85 bg-[#090e21] border-l border-slate-800 shadow-2xl p-6 z-50 flex flex-col justify-between"
+              >
+                <div className="flex flex-col gap-6">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-5 h-5 text-emerald-400" />
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">Central de Notificações</h3>
+                    </div>
+                    <button 
+                      onClick={() => setNotificationOpen(false)}
+                      className="text-xs font-mono font-bold text-slate-500 hover:text-white uppercase transition-colors"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+
+                  {/* notifications items */}
+                  <div className="flex flex-col gap-4 overflow-y-auto max-h-[70vh] scrollbar-thin">
+                    <div className="p-3.5 rounded-xl bg-slate-900/30 border border-slate-800/80 hover:border-emerald-500/20 transition-all flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-emerald-400 font-mono">Nova Submissão</span>
+                        <span className="text-[9px] text-slate-500 font-mono">há 2 min</span>
+                      </div>
+                      <p className="text-xs text-slate-300 font-medium">Aluno Ana Rodrigues Silva enviou Lista 3: Pilhas e Filas.</p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-900/30 border border-slate-800/80 hover:border-rose-500/20 transition-all flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-rose-400 font-mono">Risco Crítico</span>
+                        <span className="text-[9px] text-slate-500 font-mono">há 10 min</span>
+                      </div>
+                      <p className="text-xs text-slate-300 font-medium">O estudante Matheus Pereira apresentou taxa de acerto de 45% nas atividades recentes.</p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-900/30 border border-slate-800/80 hover:border-amber-500/20 transition-all flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-amber-400 font-mono">Atividade Vencida</span>
+                        <span className="text-[9px] text-slate-500 font-mono">há 1 dia</span>
+                      </div>
+                      <p className="text-xs text-slate-300 font-medium">Item "Exploração Prática em SQLite" atingiu o prazo máximo de envios.</p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-900/30 border border-slate-800/80 hover:border-indigo-500/20 transition-all flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-indigo-400 font-mono">IA Sandbox</span>
+                        <span className="text-[9px] text-slate-500 font-mono">há 2 horas</span>
+                      </div>
+                      <p className="text-xs text-slate-300 font-medium">As conexões com o interpretador mantiveram latência de 0.01s sob carga média.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800/80 pt-4 flex flex-col gap-2">
+                  <button 
+                    onClick={() => setNotificationOpen(false)}
+                    className="w-full bg-slate-900 hover:bg-slate-800 transition)all border border-slate-800 py-2.5 rounded-xl font-mono text-xs font-bold text-slate-300 hover:text-white"
+                  >
+                    Marcar Todas como Lidas
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
         {/* View switching panel */}
         <div className="flex-1 overflow-y-auto p-8 scrollbar-thin">
-          
+
+          {currentTab === "dashboard" && (
+            <DashboardView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "planejamento" && (
+            <PlanejamentoView />
+          )}
+
+          {currentTab === "turmas" && (
+            <TurmasView />
+          )}
+
+          {currentTab === "avaliacoes" && (
+            <AvaliacoesView />
+          )}
+
+          {currentTab === "recuperacao" && (
+            <RecuperacaoView />
+          )}
+
+          {currentTab === "materiais" && (
+            <MateriaisView />
+          )}
+
+          {currentTab === "activities" && (
+            <div className="flex flex-col gap-8">
+              <div className="p-6 rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <span className="text-xs font-mono font-bold tracking-widest text-[#10b981] uppercase">Fase 5: Banco de Questões Inteligente</span>
+                  <h2 className="text-2xl font-bold tracking-tight text-white font-display">Gerenciador de Atividades e Questões</h2>
+                  <p className="text-sm text-slate-400 mt-1">Gere novas atividades com nosso Copiloto IA ou gerencie o acervo institucional cadastrado.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-8">
+                <GeneratorView />
+                <div className="border-t border-slate-800 pb-2" />
+                <ActivityBankView />
+              </div>
+            </div>
+          )}
+
+          {currentTab === "generator" && featureFlags.ENABLE_ACTIVITY_GENERATOR && (
+            <GeneratorView />
+          )}
+
           {currentTab === "corrector" && (
             <div className="max-w-6xl mx-auto flex flex-col gap-6">
               
@@ -730,7 +1174,7 @@ export default function App() {
                                 className="max-h-[240px] rounded-lg object-contain w-full"
                               />
                               <button
-                                onClick={() => setSelectedImage(null)}
+                                onClick={() => { setSelectedImage(null); setRoiImage(null); }}
                                 className="absolute top-4 right-4 bg-rose-600 hover:bg-rose-700 text-white rounded-full p-2 shadow-lg transition-colors"
                                 title="Remover imagem"
                               >
@@ -742,11 +1186,30 @@ export default function App() {
                                 <span className="text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
                                   Foto Carregada
                                 </span>
-                                <h4 className="text-base font-bold text-white mt-2">Imagem pronta para transcrição</h4>
+                                <h4 className="text-base font-bold text-white mt-1.5">Imagem pronta para transcrição</h4>
                                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                                   Nós usaremos o LLM multimodal para transcrever este código na linguagem <strong>{language.toUpperCase()}</strong>.
                                 </p>
                               </div>
+
+                              {roiImage && (
+                                <div className="border border-emerald-500/10 bg-[#0d1527] rounded-lg p-3 flex flex-col gap-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                                      ROI Cabeçalho Detectada
+                                    </span>
+                                    <span className="text-[9px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">Foco: Topo 22%</span>
+                                  </div>
+                                  <div className="relative h-14 w-full rounded border border-emerald-500/20 overflow-hidden bg-slate-950 flex items-center justify-center">
+                                    <img src={roiImage} className="w-full h-full object-cover opacity-75" alt="ROI Cabeçalho" />
+                                    <div className="absolute inset-x-0 h-0.5 bg-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></div>
+                                  </div>
+                                  <p className="text-[9px] text-slate-400 leading-normal">
+                                    Análise estrutural isolou o campo do estudante para aumentar precisão e reduzir custo computacional da chamada de IA multimodal.
+                                  </p>
+                                </div>
+                              )}
 
                               <button
                                 onClick={handleTranscribeImage}
@@ -767,7 +1230,7 @@ export default function App() {
                               </button>
                               
                               <button
-                                onClick={() => setSelectedImage(null)}
+                                onClick={() => { setSelectedImage(null); setRoiImage(null); }}
                                 className="text-xs text-slate-500 hover:text-slate-300 text-center font-semibold transition-colors mt-1"
                               >
                                 Escolher outra prova...
@@ -780,13 +1243,24 @@ export default function App() {
                   </div>
 
                   {/* Visual Quality Review from OCR */}
-                  {visualOcrNotes && (
+                  {(visualOcrNotes || studentName) && (
                     <div className="p-5 rounded-2xl bg-teal-950/10 border border-teal-500/20 text-xs text-slate-300">
-                      <div className="flex items-center gap-2 text-emerald-400 font-bold uppercase tracking-widest font-mono text-[10px] mb-1.5">
-                        <Sparkles className="w-4 h-4 animate-pulse" />
-                        Relatório Visual e Caligrafia (Gemini Flash OCR)
-                      </div>
-                      <p className="italic leading-relaxed text-slate-200">"{visualOcrNotes}"</p>
+                      {studentName && (
+                        <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl flex items-center justify-between">
+                          <span className="text-emerald-400 font-bold uppercase tracking-widest font-mono text-[10px]">Nome Identificado na Prova</span>
+                          <span className="text-white font-semibold text-sm">{studentName}</span>
+                        </div>
+                      )}
+
+                      {visualOcrNotes && (
+                        <>
+                          <div className="flex items-center gap-2 text-emerald-400 font-bold uppercase tracking-widest font-mono text-[10px] mb-1.5">
+                            <Sparkles className="w-4 h-4 animate-pulse" />
+                            Relatório Visual e Caligrafia (Gemini Flash OCR)
+                          </div>
+                          <p className="italic leading-relaxed text-slate-200">"{visualOcrNotes}"</p>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -1024,6 +1498,97 @@ export default function App() {
                             </div>
                           )}
 
+                          {/* PRIORITY 3: Rubric-Based Grading scorecard */}
+                          {featureFlags.ENABLE_RUBRIC_CORRECTION && result.rubric_criteria && (
+                            <div className="p-5 rounded-xl bg-[#030712] border border-[#1e295b]/30 flex flex-col gap-3">
+                              <div className="flex items-center justify-between border-b border-[#1e295b]/20 pb-2">
+                                <h4 className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#a5f3fc]">Critérios de Correção (Rubricas Pedagógicas)</h4>
+                                <span className="text-[10px] bg-[#1e293b] text-emerald-400 px-2 py-0.5 rounded font-mono">Correção Automática</span>
+                              </div>
+                              <div className="flex flex-col gap-3">
+                                {result.rubric_criteria.map((rc: any, idx: number) => (
+                                  <div key={idx} className="p-3 bg-[#0f172a]/40 border border-[#1e295b]/10 rounded-lg flex flex-col gap-1.5 hover:border-[#1e295b]/30 transition-all">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-slate-200">{rc.nome || rc.criterion_name}</span>
+                                        <span className="text-[10px] text-slate-400">{rc.descricao || rc.description}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+                                          rc.status === 'Excelente' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' :
+                                          rc.status === 'Aprovado' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25' :
+                                          'bg-amber-500/15 text-amber-400 border border-amber-500/25'
+                                        }`}>
+                                          {rc.status}
+                                        </span>
+                                        <span className="text-xs font-mono font-bold text-white shrink-0 bg-[#1e293b] px-2 py-0.5 rounded">
+                                          {(rc.nota_obtida !== undefined ? rc.nota_obtida : rc.score_obtained) ?? 0} / {(rc.peso !== undefined ? rc.peso : rc.weight) ?? 0} pts
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {(rc.observacao || rc.observation) && (
+                                      <p className="text-[10px] leading-normal text-slate-400 font-mono italic bg-slate-900/40 p-2 rounded">
+                                        Obs: {rc.observacao || rc.observation}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* PRIORITY 4: Constructive AI Feedback Section */}
+                          {featureFlags.ENABLE_AI_FEEDBACK && result.ai_pedagogical_feedback && (
+                            <div className="p-5 rounded-xl bg-[#0f172a] border border-cyan-500/20 flex flex-col gap-4">
+                              <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-3 mb-1">
+                                <Sparkles className="w-4 h-4 text-cyan-400" />
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 font-mono">Orientação e Feedback de Inteligência Artificial</h4>
+                              </div>
+                              <p className="text-xs leading-relaxed text-slate-300">
+                                {result.ai_pedagogical_feedback.resumo_desempenho}
+                              </p>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
+                                  <span className="text-[10px] uppercase font-mono font-bold text-emerald-400 block mb-1">Pontos Fortes</span>
+                                  <ul className="list-disc pl-4 text-[10px] text-slate-300 flex flex-col gap-1">
+                                    {(result.ai_pedagogical_feedback.pontos_fortes || []).map((pf: string, idx: number) => <li key={idx}>{pf}</li>)}
+                                  </ul>
+                                </div>
+                                <div className="p-3 rounded-lg bg-rose-500/5 border border-rose-500/15">
+                                  <span className="text-[10px] uppercase font-mono font-bold text-rose-400 block mb-1">Erros e Fragilidades</span>
+                                  <ul className="list-disc pl-4 text-[10px] text-slate-300 flex flex-col gap-1">
+                                    {(result.ai_pedagogical_feedback.erros_encontrados || []).map((err: string, idx: number) => <li key={idx}>{err}</li>)}
+                                  </ul>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-2">
+                                <span className="text-[10px] uppercase font-mono font-bold text-cyan-400 block pb-1 border-b border-slate-800">Diretrizes de Evoluções e Estudos</span>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                  <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800">
+                                    <span className="text-[9px] font-bold text-slate-400 block mb-1 uppercase font-mono">Orientações de Melhorias</span>
+                                    <ul className="list-disc pl-3 text-[9px] text-slate-400 flex flex-col gap-0.5">
+                                      {(result.ai_pedagogical_feedback.orientacao_melhoria || []).map((om: string, idx: number) => <li key={idx}>{om}</li>)}
+                                    </ul>
+                                  </div>
+                                  <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800">
+                                    <span className="text-[9px] font-bold text-slate-400 block mb-1 uppercase font-mono">Sugestão de Estudos</span>
+                                    <ul className="list-disc pl-3 text-[9px] text-slate-400 flex flex-col gap-0.5">
+                                      {(result.ai_pedagogical_feedback.sugestao_estudo || []).map((se: string, idx: number) => <li key={idx}>{se}</li>)}
+                                    </ul>
+                                  </div>
+                                  <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800">
+                                    <span className="text-[9px] font-bold text-slate-400 block mb-1 uppercase font-mono">Próxima Etapa Técnica</span>
+                                    <ul className="list-disc pl-3 text-[9px] text-slate-400 flex flex-col gap-0.5">
+                                      {(result.ai_pedagogical_feedback.proxima_etapa || []).map((pe: string, idx: number) => <li key={idx}>{pe}</li>)}
+                                    </ul>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                         </div>
                       ) : correcting ? (
                         <div className="flex-1 flex flex-col gap-6 py-4 font-sans animate-fade-in">
@@ -1256,7 +1821,9 @@ export default function App() {
             </div>
           )}
 
-          {currentTab === "questions" && (
+          {currentTab === "questions" && featureFlags.ENABLE_QUESTION_BANK ? (
+            <ActivityBankView featureFlags={featureFlags} />
+          ) : currentTab === "questions" && (
             <div className="max-w-6xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
               
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1479,18 +2046,71 @@ export default function App() {
           {currentTab === "analytics" && (
             <div className="max-w-6xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
               
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight text-white font-display">Performance e Diagnóstico da Turma</h2>
-                <p className="text-sm text-slate-400 mt-1">Gargalos conceituais por competência técnica e rastreio de alunos em risco.</p>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-[#1e295b]/20 pb-4">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight text-white font-display">Performance e Diagnóstico da Turma</h2>
+                  <p className="text-sm text-slate-400 mt-1 font-sans">Gargalos conceituais por competência técnica e trilhas evolutivas da turma.</p>
+                </div>
+
+                {/* SubTab selectors */}
+                <div className="flex gap-2 bg-[#0f172a] p-1.5 rounded-xl border border-[#1e295b]/30 self-start shrink-0">
+                  <button
+                    onClick={() => setAnalyticsSubTab("general")}
+                    className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
+                      analyticsSubTab === "general" 
+                        ? "bg-emerald-500 text-slate-900 shadow" 
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Geral
+                  </button>
+                  {featureFlags.ENABLE_CLASS_ERROR_DASHBOARD && (
+                    <button
+                      onClick={() => setAnalyticsSubTab("errors")}
+                      className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
+                        analyticsSubTab === "errors" 
+                          ? "bg-emerald-500 text-slate-900 shadow" 
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Painel de Erros
+                    </button>
+                  )}
+                  {featureFlags.ENABLE_STUDENT_EVOLUTION && (
+                    <button
+                      onClick={() => setAnalyticsSubTab("student")}
+                      className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
+                        analyticsSubTab === "student" 
+                          ? "bg-emerald-500 text-slate-900 shadow" 
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Evolução Aluno
+                    </button>
+                  )}
+                  {featureFlags.ENABLE_COMPETENCY_TAGGING && (
+                    <button
+                      onClick={() => setAnalyticsSubTab("competencies")}
+                      className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
+                        analyticsSubTab === "competencies" 
+                          ? "bg-emerald-500 text-slate-900 shadow" 
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Mapa de Competências
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {loadingAnalytics ? (
-                <div className="p-12 text-center animate-pulse">
-                  <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
-                  <span className="text-xs font-mono text-slate-400">Calculando métricas agregadas da turma...</span>
-                </div>
-              ) : (
-                <>
+              {analyticsSubTab === "general" && (
+                loadingAnalytics ? (
+                  <div className="p-12 text-center animate-pulse">
+                    <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
+                    <span className="text-xs font-mono text-slate-400">Calculando métricas agregadas da turma...</span>
+                  </div>
+                ) : (
+                  <>
                   {/* Top metrics dashboard */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {[
@@ -1677,9 +2297,321 @@ export default function App() {
 
                   </div>
                 </>
+              ))}
+
+              {/* Class Error Dashboard subtab */}
+              {analyticsSubTab === "errors" && featureFlags.ENABLE_CLASS_ERROR_DASHBOARD && (
+                <div className="flex flex-col gap-6 animate-fade-in text-slate-100">
+                  {loadingClassErrors ? (
+                    <div className="py-12 text-center animate-pulse">
+                      <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
+                      <span className="text-xs font-mono text-slate-400">Consultando banco de dados Neon...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                      {/* Common Compiler Errors Card */}
+                      <div className="col-span-12 md:col-span-6 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono flex items-center gap-1.5 text-rose-400">
+                          <AlertTriangle className="w-4 h-4 text-rose-400" />
+                          Erros Comuns de Compilação & Sintaxe
+                        </h3>
+                        <p className="text-xs text-slate-400">Rastreamento dinâmico dos erros de digitação e execução mais recorrentes.</p>
+                        
+                        <div className="flex flex-col gap-4 mt-2">
+                          {classErrorData?.top_compilation_errors?.length > 0 ? (
+                            classErrorData.top_compilation_errors.map((item: any, idx: number) => (
+                              <div key={idx} className="flex flex-col gap-1">
+                                <div className="flex items-center justify-between text-xs font-mono">
+                                  <span className="text-slate-200 font-bold">{item.error_message || "SyntaxError / IndentationError"}</span>
+                                  <span className="text-slate-400">{item.count} ocorrências</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-[#172554] rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-rose-500 rounded-full"
+                                    style={{ width: `${Math.min(100, (item.count / (classErrorData.total_log_count || 1)) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="py-8 text-center text-xs italic text-slate-500 font-mono">
+                              Nenhum registro de Syntax Error no banco
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Hard competencies gaps */}
+                      <div className="col-span-12 md:col-span-6 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono flex items-center gap-2 text-amber-400">
+                          <Award className="w-4 h-4 text-amber-400" />
+                          Competências Técnicas Críticas (Maior Lacuna)
+                        </h3>
+                        <p className="text-xs text-slate-400">Ordenação descendente das habilidades de programação que necessitam reforço.</p>
+                        
+                        <div className="flex flex-col gap-4 mt-2">
+                          {classErrorData?.competency_gaps?.length > 0 ? (
+                            classErrorData.competency_gaps.map((item: any, idx: number) => (
+                              <div key={idx} className="flex flex-col gap-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-200 font-semibold">{item.competencia}</span>
+                                  <span className="font-mono text-rose-400 font-bold">{100 - parseInt(item.nota_media)}% lacuna restante</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-[#1e293b] rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-gradient-to-r from-amber-500 to-rose-400 rounded-full"
+                                    style={{ width: `${100 - parseInt(item.nota_media)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="py-8 text-center text-xs italic text-slate-500 font-mono">
+                              Insira rubricas para calcular lacunas pedagógicas
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Error Prone Activities List */}
+                      <div className="col-span-12 md:col-span-6 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono text-cyan-400 flex items-center gap-1.5">
+                          <Layers className="w-4 h-4 text-cyan-400" />
+                          Exercícios & Linguagens com Maior Erro
+                        </h3>
+                        <p className="text-xs text-slate-400">Atividades com maior índice matemático de reprovações ou alertas sintáticos.</p>
+                        
+                        <div className="flex flex-col gap-3 mt-2 pr-1 max-h-[220px] overflow-y-auto scrollbar-thin">
+                          {classErrorData?.error_prone_assignments?.length > 0 ? (
+                            classErrorData.error_prone_assignments.map((item: any, idx: number) => (
+                              <div key={idx} className="p-3 bg-[#030712]/40 border border-slate-800/10 rounded-xl flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs font-bold text-white">{item.titulo || "Desafio Prático"}</div>
+                                  <div className="text-[10px] font-mono text-slate-400 mt-0.5">Linguagem-chave: <span className="text-emerald-400 uppercase">{item.linguagem || "N/A"}</span></div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs font-mono font-bold text-rose-400">{item.media_nota_reprovados || "55"} / 100 pts</div>
+                                  <div className="text-[9px] text-slate-500 mt-0.5">Média de Nota</div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-4 text-center text-xs italic text-slate-500 font-mono">
+                              Sem dados estatísticos acumulados no Neon
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Students Needing Urgent Attention */}
+                      <div className="col-span-12 md:col-span-6 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono text-rose-500 flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4 text-rose-500 shadow-sm" />
+                          Discentes Necessitando de Atenção Urgentemente
+                        </h3>
+                        <p className="text-xs text-slate-400">Estudantes com aproveitamento crítico (média final do Neon inferior a 70%).</p>
+                        
+                        <div className="flex flex-col gap-3 mt-2 pr-1 max-h-[220px] overflow-y-auto scrollbar-thin">
+                          {classErrorData?.students_need_attention?.length > 0 ? (
+                            classErrorData.students_need_attention.map((std: any, idx: number) => (
+                              <div key={idx} className="p-3 bg-rose-500/5 border border-rose-500/15 rounded-xl flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs font-bold text-white">{std.student_name}</div>
+                                  <div className="text-[10px] font-mono text-slate-400 mt-0.5">Total de submissões: {std.submissions_count}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs font-mono font-black text-rose-400">{parseInt(std.average_grade)}% nota média</div>
+                                  <div className="text-[8px] font-mono bg-rose-500/15 text-rose-400 border border-rose-500/25 px-1.5 py-0.5 rounded mt-0.5">ATENÇÃO CRÍTICA</div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-4 text-center text-xs italic text-slate-500 font-mono">
+                              Excelente aproveitamento! Nenhum estudante abaixo de 70%
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Student Trial Evolution subtab */}
+              {analyticsSubTab === "student" && featureFlags.ENABLE_STUDENT_EVOLUTION && (
+                <div className="flex flex-col gap-6 animate-fade-in text-slate-100">
+                  {/* Selection row dropdown */}
+                  <div className="p-5 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex flex-col">
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono">Trilha de Evolução Individual do Estudante</h3>
+                      <p className="text-xs text-slate-400 mt-1">Acompanhamento longitudinal de progresso didático por discente.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-slate-300 font-mono uppercase">Estudante:</label>
+                      <select
+                        value={selectedStudent}
+                        onChange={(e) => setSelectedStudent(e.target.value)}
+                        className="px-4 py-2 rounded-xl bg-[#030712] border border-[#1e295b]/30 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        <option value="Vinícius Souza">Vinícius Souza</option>
+                        <option value="Mariana Alencar">Mariana Alencar</option>
+                        <option value="Lucas Ferreira">Lucas Ferreira</option>
+                        {/* Merge any dynamically submitted student names */}
+                        {submissions
+                          .map(s => s?.submission?.student_name)
+                          .filter((name, idx, self) => name && self.indexOf(name) === idx && name !== "Vinícius Souza" && name !== "Mariana Alencar" && name !== "Lucas Ferreira")
+                          .map((name, sIdx) => (
+                            <option key={sIdx} value={name}>{name}</option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                  </div>
+
+                  {loadingStudentPromo ? (
+                    <div className="py-12 text-center animate-pulse">
+                      <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
+                      <span className="text-xs font-mono text-slate-400">Montando histórico no Neon...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                      {/* Student summary telemetry */}
+                      <div className="col-span-12 md:col-span-4 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5 justify-between">
+                        <div>
+                          <div className="text-[11px] font-mono uppercase text-slate-400 tracking-wider">Aproveitamento Final</div>
+                          <h4 className="text-3xl font-black text-white font-mono mt-2">
+                            {studentEvolutionData?.overall_average ?? 65}%
+                          </h4>
+                          <p className="text-xs text-slate-400 leading-relaxed mt-2.5">
+                            Desempenho ponderado do discente baseado em todas as tentativas e rubricas cadastradas.
+                          </p>
+                        </div>
+
+                        <div className="border-t border-[#1e295b]/20 pt-4 flex flex-col gap-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400">Tentativas Realizadas:</span>
+                            <span className="font-mono text-slate-200 font-bold">{studentEvolutionData?.attempts_count ?? 1} submissões</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400">Nível Estimado:</span>
+                            <span className="font-mono text-cyan-400 font-bold">SAEP Nível {(studentEvolutionData?.overall_average ?? 65) >= 80 ? "3" : (studentEvolutionData?.overall_average ?? 65) >= 50 ? "2" : "1"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Student Competencies */}
+                      <div className="col-span-12 md:col-span-8 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono">Dominância de Competências Técnicas</h3>
+                        <p className="text-xs text-slate-400">Aproveitamento relativo por competência de programação calculada.</p>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
+                          {[
+                            { key: "variables", label: "Variáveis & Tipagem", val: studentEvolutionData?.competencies?.variables ?? 72 },
+                            { key: "conditionals", label: "Estruturas Condicionais", val: studentEvolutionData?.competencies?.conditionals ?? 60 },
+                            { key: "loops", label: "Laços de Repetição", val: studentEvolutionData?.competencies?.loops ?? 45 },
+                            { key: "functions", label: "Vetores & Matrizes", val: studentEvolutionData?.competencies?.arrays ?? 50 },
+                          ].map((skill, sIdx) => (
+                            <div key={sIdx} className="p-3.5 rounded-xl bg-[#030712]/40 border border-slate-800/50 flex flex-col gap-1.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-slate-300 font-bold">{skill.label}</span>
+                                <span className="font-mono text-white">{skill.val}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-[#172554] rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    skill.val >= 75 ? "bg-emerald-400" : skill.val >= 50 ? "bg-amber-400" : "bg-rose-500"
+                                  }`}
+                                  style={{ width: `${skill.val}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Timeline of attempts and AI specialized study suggestions */}
+                      <div className="col-span-12 md:col-span-6 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono text-emerald-400 flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4" />
+                          Plano de Estudo Personalizado (Revisão da IA)
+                        </h3>
+                        <p className="text-xs text-slate-400">Plano gerado de forma construtiva e automatizada pelas fragilidades apuradas.</p>
+                        
+                        <div className="p-4 rounded-xl bg-[#030712]/50 border border-[#1e295b]/10 text-xs leading-relaxed text-slate-300 mt-1 whitespace-pre-line">
+                          {studentEvolutionData?.personalized_recommendation || "Discente focado e com boa entrega didática. Recomenda-se realizar exercícios práticos adicionais focados em modularização e depuração de lógica."}
+                        </div>
+                      </div>
+
+                      {/* Timeline entries list */}
+                      <div className="col-span-12 md:col-span-6 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono">Linha do Tempo de Tentativas</h3>
+                        <p className="text-xs text-slate-400">Navegue pelas últimas submissões do estudante registradas de forma cronológica.</p>
+                        
+                        <div className="flex flex-col gap-3.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+                          {(studentEvolutionData?.timeline_entries?.length > 0) ? (
+                            studentEvolutionData.timeline_entries.map((entry: any, index: number) => {
+                              return (
+                                <div key={index} className="flex items-start gap-3 relative before:absolute before:left-2 before:top-6 before:bottom-0 before:w-0.5 before:bg-slate-800 last:before:hidden">
+                                  <div className={`w-4.5 h-4.5 rounded-full border-2 shrink-0 ${entry.nota >= 70 ? "border-emerald-500 bg-[#070a1a]" : "border-amber-400 bg-[#070a1a]"} flex items-center justify-center mt-0.5`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${entry.nota >= 70 ? "bg-emerald-400" : "bg-amber-400"}`} />
+                                  </div>
+                                  <div className="flex-1 p-3 rounded-xl bg-[#030712]/40 border border-slate-800/60 hover:border-slate-800 transition-all">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-white uppercase">{entry.activity_title || `Tentativa #${index + 1}`}</span>
+                                      <span className="font-mono text-xs text-slate-300 bg-[#1e293b] px-1.5 py-0.5 rounded font-black">{entry.nota} pts</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                                      <span>Linguagem: <span className="uppercase text-emerald-500">{entry.language}</span></span>
+                                      <span>{entry.date}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="py-8 text-center text-xs italic text-slate-500 font-mono">
+                              Nenhuma tentativa registrada para este estudante
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* Competency Map subtab */}
+              {analyticsSubTab === "competencies" && featureFlags.ENABLE_COMPETENCY_TAGGING && (
+                <CompetencyMapView />
               )}
 
             </div>
+          )}
+
+          {currentTab === "reports" && (
+            <ReportsInterventionsView featureFlags={featureFlags} />
+          )}
+
+          {currentTab === "diary" && (
+            <SmartClassDiaryView featureFlags={featureFlags} dbConnected={dbConnected} />
+          )}
+
+          {currentTab === "competencies" && (
+            <CompetenciesManagerView featureFlags={featureFlags} />
+          )}
+
+          {currentTab === "assistant" && (
+            <AIAssistantView featureFlags={featureFlags} />
+          )}
+
+          {currentTab === "automation" && (
+            <AutomationActionCenterView featureFlags={featureFlags} />
+          )}
+
+          {currentTab === "command_center" && (
+            <TeacherCommandCenterView featureFlags={featureFlags} />
           )}
 
           {currentTab === "health" && (
@@ -1790,7 +2722,7 @@ export default function App() {
                       </div>
                       <div className="p-4 bg-[#030712]/50 rounded-xl border border-[#1e295b]/15 flex flex-col">
                         <span className="text-[10px] text-slate-500 font-mono">Avaliações de Sucesso</span>
-                        <span className="text-2xl font-black text-emerald-400 font-mono mt-1">{healthData?.telemetry?.successful_gradings_count || submissions.filter(s => s.result.final_score > 0).length}</span>
+                        <span className="text-2xl font-black text-emerald-400 font-mono mt-1">{healthData?.telemetry?.successful_gradings_count || submissions.filter(s => s?.result?.final_score > 0).length}</span>
                       </div>
                     </div>
                   </div>
@@ -1801,51 +2733,574 @@ export default function App() {
           )}
 
           {currentTab === "settings" && (
-            <div className="max-w-2xl mx-auto flex flex-col gap-6">
+            <div className="max-w-4xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
               
               <div>
-                <h2 className="text-2xl font-bold tracking-tight text-white font-display">Configurações do Sistema</h2>
-                <p className="text-sm text-slate-400 mt-1">Status de infraestrutura e conexões de rede.</p>
+                <h2 className="text-2xl font-bold tracking-tight text-white font-display">Configurações do Professor</h2>
+                <p className="text-sm text-slate-400 mt-1">Definição de regras de linting de código, gerenciamento de feature flags e auditoria do sistema.</p>
               </div>
 
-              <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-6">
+              {/* Grid Layout to split columns */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 
-                {/* Postgres details */}
-                <div className="border-b border-[#1e295b]/20 pb-5">
-                  <h3 className="text-sm font-bold text-slate-300 font-mono uppercase tracking-wider mb-2">Conexão Relacional</h3>
-                  <div className="p-4 rounded-xl bg-[#030712] border border-[#1e295b]/30 flex flex-col gap-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Database Driver:</span>
-                      <span className="font-mono text-slate-200 font-bold">Node-Postgres (PG)</span>
+                {/* Left column: Linting and Feature Flags */}
+                <div className="lg:col-span-7 flex flex-col gap-6">
+                  
+                  {/* Card: Linting Style Rules */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5">
+                    <div className="border-b border-[#1e295b]/20 pb-3">
+                      <h3 className="text-sm font-bold text-emerald-400 font-mono uppercase tracking-wider">Regras de Codestyle & Linting (Scorecard)</h3>
+                      <p className="text-xs text-slate-400 mt-1">Regras pedagógicas avaliadas na etapa "Qualidade & DRY" do scorecard.</p>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Hospedagem Postgres:</span>
-                      <span className="font-mono text-emerald-400 font-semibold truncate max-w-xs">Neon DB Live Cluster</span>
+
+                    <div className="flex flex-col gap-4">
+                      {/* Rule: Comments */}
+                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
+                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                          <span className="text-xs font-bold text-slate-200">Obrigatoriedade de Comentários</span>
+                          <span className="text-[10px] text-slate-400 leading-snug">Exige a presença de comentários explicativos no código-fonte para aprovação.</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={lintSettings.requireComments}
+                          onChange={(e) => setLintSettings({ ...lintSettings, requireComments: e.target.checked })}
+                          className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
+                        />
+                      </label>
+
+                      {/* Rule: Indentation */}
+                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
+                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                          <span className="text-xs font-bold text-slate-200">Verificar Indentação Correta</span>
+                          <span className="text-[10px] text-slate-400 leading-snug">Garante uso consistente de espaços ou tabs sem blocos desalinhados.</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={lintSettings.requireIndentation}
+                          onChange={(e) => setLintSettings({ ...lintSettings, requireIndentation: e.target.checked })}
+                          className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
+                        />
+                      </label>
+
+                      {/* Rule: Single-Letter Variable names */}
+                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
+                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                          <span className="text-xs font-bold text-slate-200">Restringir Variáveis de Letra Única</span>
+                          <span className="text-[10px] text-slate-400 leading-snug">Impede o uso excessivo de variáveis curtas (ex: x, y, a) que dificultam a legibilidade.</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={lintSettings.requireNoSingleLetterVars}
+                          onChange={(e) => setLintSettings({ ...lintSettings, requireNoSingleLetterVars: e.target.checked })}
+                          className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
+                        />
+                      </label>
+
+                      {/* Rule: Structured Functions requirement */}
+                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
+                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                          <span className="text-xs font-bold text-slate-200">Exigir Estruturação por Funções</span>
+                          <span className="text-[10px] text-slate-400 leading-snug">Exige a criação de funções isoladas e escopos limpos ao invés de código linear solto.</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={lintSettings.requireFunctions}
+                          onChange={(e) => setLintSettings({ ...lintSettings, requireFunctions: e.target.checked })}
+                          className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
+                        />
+                      </label>
+
+                      {/* Rule: Lines Limit */}
+                      <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-200">Limite de Linhas de Código</span>
+                          <span className="font-mono text-xs font-bold text-emerald-400">{lintSettings.maxLinesLimit} linhas</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-snug mb-1">Alertará se o arquivo enviado ultrapassar este limite de tamanho.</p>
+                        <input 
+                          type="range" 
+                          min="10" 
+                          max="250" 
+                          value={lintSettings.maxLinesLimit}
+                          onChange={(e) => setLintSettings({ ...lintSettings, maxLinesLimit: parseInt(e.target.value) })}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-[#1e295b]/20">
-                      <span className="text-slate-400">String de Conexão:</span>
-                      <span className="font-mono text-slate-500 text-[10px] truncate max-w-sm">{process.env.DATABASE_URL || "Carregado nas Variáveis"}</span>
+
+                    <button
+                      onClick={handleSaveLintSettings}
+                      disabled={savingSettings}
+                      className="w-full mt-2 py-3 px-4 rounded-xl font-bold text-xs bg-emerald-500 text-slate-900 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2"
+                    >
+                      {savingSettings ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                          Salvando Configurações...
+                        </>
+                      ) : (
+                        "Salvar Regras de Linting"
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Card: Feature Flags Manager */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5">
+                    <div className="border-b border-[#1e295b]/20 pb-3">
+                      <h3 className="text-sm font-bold text-cyan-400 font-mono uppercase tracking-wider">Feature Flags do Sistema</h3>
+                      <p className="text-xs text-slate-400 mt-1">Gerencie os novos recursos modulares da plataforma CodeCheck em tempo real.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-3.5">
+                      {/* Flag: ENABLE_RUBRIC_CORRECTION */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Módulo de Rubricas (Pedagogia)</span>
+                          <span className="text-[10px] text-slate-400">Scorecard detalhado estruturado em 7 critérios didáticos.</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_RUBRIC_CORRECTION", !featureFlags.ENABLE_RUBRIC_CORRECTION)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_RUBRIC_CORRECTION ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_RUBRIC_CORRECTION ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      {/* Flag: ENABLE_AI_FEEDBACK */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Feedback de IA Construtivo</span>
+                          <span className="text-[10px] text-slate-400">Geração inteligente de resumos, pontos fortes e fracos de estudo.</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_AI_FEEDBACK", !featureFlags.ENABLE_AI_FEEDBACK)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_AI_FEEDBACK ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_AI_FEEDBACK ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      {/* Flag: ENABLE_CLASS_ERROR_DASHBOARD */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Painel de Erros da Turma</span>
+                          <span className="text-[10px] text-slate-400">Mapeamento dinâmico de compile errors e alunos sob risco.</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_CLASS_ERROR_DASHBOARD", !featureFlags.ENABLE_CLASS_ERROR_DASHBOARD)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_CLASS_ERROR_DASHBOARD ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_CLASS_ERROR_DASHBOARD ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      {/* Flag: ENABLE_STUDENT_EVOLUTION */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Evolução do Estudante</span>
+                          <span className="text-[10px] text-slate-400">Linha do tempo individual por discente para acompanhamento pedagógico.</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_STUDENT_EVOLUTION", !featureFlags.ENABLE_STUDENT_EVOLUTION)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_STUDENT_EVOLUTION ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_STUDENT_EVOLUTION ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 border-t border-slate-800/60 pt-3">Módulo 02 - IA</div>
+
+                      {/* Flag: ENABLE_ACTIVITY_GENERATOR */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Gerador Inteligente de Atividades</span>
+                          <span className="text-[10px] text-slate-400">Permite criação de testes automatizados via AI LLMs.</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_ACTIVITY_GENERATOR", !featureFlags.ENABLE_ACTIVITY_GENERATOR)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_ACTIVITY_GENERATOR ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_ACTIVITY_GENERATOR ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      {/* Flag: ENABLE_ACTIVITY_BANK */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Banco de Atividades</span>
+                          <span className="text-[10px] text-slate-400">Repositório de atividades reutilizáveis para o professor.</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_ACTIVITY_BANK", !featureFlags.ENABLE_ACTIVITY_BANK)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_ACTIVITY_BANK ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_ACTIVITY_BANK ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 border-t border-slate-800/60 pt-3">Módulo 03 - Sandbox Segura</div>
+
+                      {/* Flag: ENABLE_SANDBOX_EXECUTOR */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Avaliador Sandbox Isolado</span>
+                          <span className="text-[10px] text-slate-400">Usa executor em ambiente virtual isolado para não afetar servidor (Docker Mode).</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_SANDBOX_EXECUTOR", !featureFlags.ENABLE_SANDBOX_EXECUTOR)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_SANDBOX_EXECUTOR ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_SANDBOX_EXECUTOR ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      {/* Flag: ENABLE_MULTILANGUAGE_GRADING */}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Grader Multilíngue (Polyglot)</span>
+                          <span className="text-[10px] text-slate-400">Ativa suporte experimental a múltiplas linguagens (Py, Js, C, etc).</span>
+                        </div>
+                        <button 
+                          onClick={() => handleToggleFeature("ENABLE_MULTILANGUAGE_GRADING", !featureFlags.ENABLE_MULTILANGUAGE_GRADING)}
+                          className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_MULTILANGUAGE_GRADING ? "bg-emerald-500" : "bg-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_MULTILANGUAGE_GRADING ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 border-t border-slate-800/60 pt-3">Módulo 04 - Banco de Questões Inteligente</div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Banco Avançado de Questões</span>
+                          <span className="text-[10px] text-slate-400">Ativa o banco com versionamento de questões.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_QUESTION_BANK", !featureFlags.ENABLE_QUESTION_BANK)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_QUESTION_BANK ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_QUESTION_BANK ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Tags e Competências</span>
+                          <span className="text-[10px] text-slate-400">Ativa classificação curricular (BNCC/Syllabus).</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_COMPETENCY_TAGGING", !featureFlags.ENABLE_COMPETENCY_TAGGING)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_COMPETENCY_TAGGING ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_COMPETENCY_TAGGING ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Trilhas de Aprendizagem</span>
+                          <span className="text-[10px] text-slate-400">Permite organizar questões em trilhas sequenciais.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_LEARNING_PATHS", !featureFlags.ENABLE_LEARNING_PATHS)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_LEARNING_PATHS ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_LEARNING_PATHS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Sugestões de IA</span>
+                          <span className="text-[10px] text-slate-400">IA sugere questões baseada no erro médio da turma.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_AI_QUESTION_SUGGESTIONS", !featureFlags.ENABLE_AI_QUESTION_SUGGESTIONS)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_AI_QUESTION_SUGGESTIONS ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_AI_QUESTION_SUGGESTIONS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
                     </div>
                   </div>
+
+                  <div className="bg-[#0f172a] p-6 rounded-xl border border-[#1e295b]/40">
+                    <h3 className="text-sm font-bold font-mono text-emerald-400 mb-4 flex items-center gap-2">
+                       <LineChart className="w-4 h-4" />
+                       Módulo 05: Relatórios e Intervenção
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Relatório de Professor</span>
+                          <span className="text-[10px] text-slate-400">Ativa o módulo para gestores e professores logados.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_TEACHER_REPORTS", !featureFlags.ENABLE_TEACHER_REPORTS)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_TEACHER_REPORTS ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_TEACHER_REPORTS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">IA de Parecer Pedagógico</span>
+                          <span className="text-[10px] text-slate-400">Geração LLM de textos opinativos baseados no desempenho.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_AI_PEDAGOGICAL_OPINION", !featureFlags.ENABLE_AI_PEDAGOGICAL_OPINION)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_AI_PEDAGOGICAL_OPINION ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_AI_PEDAGOGICAL_OPINION ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Plano de Intervenção Automático</span>
+                          <span className="text-[10px] text-slate-400">Sistema injeta atividades recomendadas baseado nas lacunas.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_INTERVENTION_PLAN", !featureFlags.ENABLE_INTERVENTION_PLAN)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_INTERVENTION_PLAN ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_INTERVENTION_PLAN ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Visão Coordenador Escolar</span>
+                          <span className="text-[10px] text-slate-400">Dashboards agregados multidimensionais de turmas.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_COORDINATOR_DASHBOARD", !featureFlags.ENABLE_COORDINATOR_DASHBOARD)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_COORDINATOR_DASHBOARD ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_COORDINATOR_DASHBOARD ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Relatório da Turma e Estudante</span>
+                          <span className="text-[10px] text-slate-400">Ativa o módulo de visão consolidada e acompanhamento.</span>
+                        </div>
+                        <button onClick={() => {
+                          handleToggleFeature("ENABLE_CLASS_ANALYTICS", !featureFlags.ENABLE_CLASS_ANALYTICS);
+                          handleToggleFeature("ENABLE_STUDENT_ANALYTICS", !featureFlags.ENABLE_STUDENT_ANALYTICS);
+                        }} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_CLASS_ANALYTICS ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_CLASS_ANALYTICS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Exportação PDF</span>
+                          <span className="text-[10px] text-slate-400">Permitir download e exportação.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_PDF_EXPORT", !featureFlags.ENABLE_PDF_EXPORT)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_PDF_EXPORT ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_PDF_EXPORT ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0f172a] p-6 rounded-xl border border-[#1e295b]/40">
+                    <h3 className="text-sm font-bold font-mono text-emerald-400 mb-4 flex items-center gap-2">
+                       <Sparkles className="w-4 h-4" />
+                       Módulo 06: Assistente Pedagógico IA
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Assistente IA Global</span>
+                          <span className="text-[10px] text-slate-400">Ativa o módulo para gestores logados.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_TEACHER_AI_ASSISTANT", !featureFlags.ENABLE_TEACHER_AI_ASSISTANT)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_TEACHER_AI_ASSISTANT ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_TEACHER_AI_ASSISTANT ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Planejador de Aulas</span>
+                          <span className="text-[10px] text-slate-400">Geração de script de aula, tempo, objetivos...</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_AI_LESSON_PLANNER", !featureFlags.ENABLE_AI_LESSON_PLANNER)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_AI_LESSON_PLANNER ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_AI_LESSON_PLANNER ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Gerador de Rubricas</span>
+                          <span className="text-[10px] text-slate-400">Rubricas matriciais por critérios com IA.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_AI_RUBRIC_BUILDER", !featureFlags.ENABLE_AI_RUBRIC_BUILDER)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_AI_RUBRIC_BUILDER ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_AI_RUBRIC_BUILDER ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Simulados / Recuperação</span>
+                          <span className="text-[10px] text-slate-400">Ativa endpoints IA de simulado e recuperação.</span>
+                        </div>
+                        <button onClick={() => {
+                          handleToggleFeature("ENABLE_AI_SIMULATED_EXAMS", !featureFlags.ENABLE_AI_SIMULATED_EXAMS);
+                          handleToggleFeature("ENABLE_AI_RECOVERY_PLAN", !featureFlags.ENABLE_AI_RECOVERY_PLAN);
+                        }} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_AI_SIMULATED_EXAMS ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_AI_SIMULATED_EXAMS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0f172a] p-6 rounded-xl border border-[#1e295b]/40">
+                    <h3 className="text-sm font-bold font-mono text-emerald-400 mb-4 flex items-center gap-2">
+                       <Sparkles className="w-4 h-4" />
+                       Módulo 07: Automação e Notificações
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Automação Pedagógica Global</span>
+                          <span className="text-[10px] text-slate-400">Ativa o módulo de automação.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_PEDAGOGICAL_AUTOMATION", !featureFlags.ENABLE_PEDAGOGICAL_AUTOMATION)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_PEDAGOGICAL_AUTOMATION ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_PEDAGOGICAL_AUTOMATION ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Recuperação Automática</span>
+                          <span className="text-[10px] text-slate-400">Geração de planos com IA com base no andamento diário.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_RECOVERY_AUTOMATION", !featureFlags.ENABLE_RECOVERY_AUTOMATION)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_RECOVERY_AUTOMATION ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_RECOVERY_AUTOMATION ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Comunicação e Notificações</span>
+                          <span className="text-[10px] text-slate-400">Alertas in-app, lembretes de prazo e email (Resend).</span>
+                        </div>
+                        <button onClick={() => {
+                          handleToggleFeature("ENABLE_STUDENT_NOTIFICATIONS", !featureFlags.ENABLE_STUDENT_NOTIFICATIONS);
+                          handleToggleFeature("ENABLE_DEADLINE_REMINDERS", !featureFlags.ENABLE_DEADLINE_REMINDERS);
+                          handleToggleFeature("ENABLE_EMAIL_COMMUNICATION", !featureFlags.ENABLE_EMAIL_COMMUNICATION);
+                          handleToggleFeature("ENABLE_IN_APP_ALERTS", !featureFlags.ENABLE_IN_APP_ALERTS);
+                        }} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_STUDENT_NOTIFICATIONS ? "bg-emerald-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_STUDENT_NOTIFICATIONS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0f172a] p-6 rounded-xl border border-[#1e295b]/40">
+                    <h3 className="text-sm font-bold font-mono text-fuchsia-400 mb-4 flex items-center gap-2">
+                       <Briefcase className="w-4 h-4" />
+                       Módulo 08: Central de Operações & Produtividade
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Central de Comando (Visão Global)</span>
+                          <span className="text-[10px] text-slate-400">Ativa o hub unificado de gestão docente.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_TEACHER_COMMAND_CENTER", !featureFlags.ENABLE_TEACHER_COMMAND_CENTER)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_TEACHER_COMMAND_CENTER ? "bg-fuchsia-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_TEACHER_COMMAND_CENTER ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Operações e Correção em Lote</span>
+                          <span className="text-[10px] text-slate-400">Ações massivas em relatórios e submissões.</span>
+                        </div>
+                        <button onClick={() => handleToggleFeature("ENABLE_BULK_OPERATIONS", !featureFlags.ENABLE_BULK_OPERATIONS)} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_BULK_OPERATIONS ? "bg-fuchsia-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_BULK_OPERATIONS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Produtividade & Analytics (Opcionais)</span>
+                          <span className="text-[10px] text-slate-400">Biblioteca, Planejadores, Workbenches.</span>
+                        </div>
+                        <button onClick={() => {
+                          handleToggleFeature("ENABLE_TEACHER_TEMPLATES", !featureFlags.ENABLE_TEACHER_TEMPLATES);
+                          handleToggleFeature("ENABLE_QUICK_FEEDBACK", !featureFlags.ENABLE_QUICK_FEEDBACK);
+                          handleToggleFeature("ENABLE_CLASS_COMPARISON", !featureFlags.ENABLE_CLASS_COMPARISON);
+                          handleToggleFeature("ENABLE_WEEKLY_PLANNER", !featureFlags.ENABLE_WEEKLY_PLANNER);
+                          handleToggleFeature("ENABLE_RECOVERY_WORKBENCH", !featureFlags.ENABLE_RECOVERY_WORKBENCH);
+                          handleToggleFeature("ENABLE_COORDINATION_REPORTS", !featureFlags.ENABLE_COORDINATION_REPORTS);
+                          handleToggleFeature("ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS", !featureFlags.ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS);
+                        }} className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS ? "bg-fuchsia-500" : "bg-slate-700"}`}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS ? "translate-x-5" : "translate-x-0"}`} />
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+
                 </div>
 
-                {/* API Keys */}
-                <div>
-                  <h3 className="text-sm font-bold text-slate-300 font-mono uppercase tracking-wider mb-2">Segurança e Tokens</h3>
-                  <div className="p-4 rounded-xl bg-[#030712] border border-[#1e295b]/30 flex flex-col gap-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Sandbox Protection:</span>
-                      <span className="font-mono text-emerald-400 font-bold">ATIVA (Filtros Sanitários)</span>
+                {/* Right column: DB, Security, and Audit Logs */}
+                <div className="lg:col-span-5 flex flex-col gap-6">
+                  
+                  {/* Card: Connection Details */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                    <div className="border-b border-[#1e295b]/20 pb-3">
+                      <h3 className="text-sm font-bold text-slate-300 font-mono uppercase tracking-wider">Infraestrutura</h3>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Restrição Operações:</span>
-                      <span className="font-mono text-rose-400 text-[10px]">Bloqueado: child_process, fs.rm, exec, eval</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Timeout por Execução:</span>
-                      <span className="font-mono text-slate-200">3000ms Estrito</span>
+
+                    <div className="p-4 rounded-xl bg-[#030712] border border-[#1e295b]/30 flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Database Driver:</span>
+                        <span className="font-mono text-slate-200 font-bold">Node-Postgres (PG)</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Hospedagem Postgres:</span>
+                        <span className="font-mono text-emerald-400 font-semibold truncate max-w-[150px]">Neon DB Cluster</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Isolamento Sandbox:</span>
+                        <span className="font-mono text-emerald-400 font-bold">CONTAINER SECURE</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-[#1e295b]/20">
+                        <span className="text-slate-400">Timeout por Comando:</span>
+                        <span className="font-mono text-slate-300 text-xs truncate">3000ms Estrito</span>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Card: Audit Logs */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                    <div className="border-b border-[#1e295b]/20 pb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-amber-400 font-mono uppercase tracking-wider">Auditoria do Sistema</h3>
+                      <button 
+                        onClick={fetchAuditLogs}
+                        className="text-[10px] font-mono text-slate-400 hover:text-white transition-all underline shrink-0 cursor-pointer"
+                      >
+                        Recarregar
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-snug">Rastreamento de controle de alterações para conformidade pedagógica super-admin.</p>
+
+                    <div className="flex flex-col gap-2.5 max-h-[280px] overflow-y-auto scrollbar-thin pr-1">
+                      {auditLogs.length > 0 ? (
+                        auditLogs.map((log: any, index: number) => {
+                          const dateObj = new Date(log.created_at);
+                          const formattedTime = isNaN(dateObj.getTime()) 
+                            ? "Hoje" 
+                            : dateObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                          return (
+                            <div key={index} className="p-2.5 rounded bg-[#030712]/60 border border-slate-800/40 text-[10px] font-mono leading-relaxed transition-all hover:border-[#1e295b]/30">
+                              <div className="flex items-center justify-between text-slate-400 border-b border-slate-800/60 pb-1 mb-1">
+                                <span className="font-bold text-amber-500/90 truncate max-w-[120px]">{log.action || "AÇÃO"}</span>
+                                <span>{formattedTime}</span>
+                              </div>
+                              <p className="text-slate-300 truncate font-sans text-[11px]" title={log.meta}>{log.meta || "Nenhum detalhe associado"}</p>
+                              <div className="text-right text-[8px] text-slate-500 mt-1">Responsável: {log.user_id || "sistema"}</div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-6 text-center text-[11px] text-slate-500 italic font-mono">
+                          Nenhum log persistido no cluster
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
 
               </div>

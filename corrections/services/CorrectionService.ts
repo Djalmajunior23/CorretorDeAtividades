@@ -1,8 +1,10 @@
 import { SecurityAnalyzer } from "../security/SecurityAnalyzer.ts";
-import { CodeQualityAnalyzer } from "../analyzers/CodeQualityAnalyzer.ts";
+import { CodeQualityAnalyzer, LintingSettings } from "../analyzers/CodeQualityAnalyzer.ts";
 import { TestRunner } from "../test_runner/TestRunner.ts";
 import { Grader, Rubric } from "../graders/Grader.ts";
 import { PedagogicalFeedback, FeedbackStructure } from "../feedback/PedagogicalFeedback.ts";
+import { RubricGrader, RubricCriterion } from "../feedback/RubricGrader.ts";
+import { AIFeedbackGenerator, AIFeedbackResponse } from "../feedback/AIFeedbackGenerator.ts";
 
 import { PythonExecutor } from "../executors/PythonExecutor.ts";
 import { JavaScriptExecutor } from "../executors/JavaScriptExecutor.ts";
@@ -10,6 +12,8 @@ import { TypeScriptExecutor } from "../executors/TypeScriptExecutor.ts";
 import { SQLExecutor } from "../executors/SQLExecutor.ts";
 import { StaticLangsExecutor } from "../executors/StaticLangsExecutor.ts";
 import { TestCase } from "../executors/BaseExecutor.ts";
+
+import { SandboxExecutor } from "../executors/SandboxExecutor.ts";
 
 export interface CorrectionResult20 {
   language: string;
@@ -54,6 +58,8 @@ export interface CorrectionResult20 {
     network_firewall: "BLOCKED" | "ALLOWED";
     os_sandbox: "CONTAINER_SECURE" | "LOCAL_SANDBOX";
   };
+  rubric_criteria?: RubricCriterion[];
+  ai_pedagogical_feedback?: AIFeedbackResponse;
 }
 
 export class CorrectionService {
@@ -64,7 +70,9 @@ export class CorrectionService {
     language: string,
     code: string,
     testCases: TestCase[],
-    rubric?: Rubric
+    rubric?: Rubric,
+    lintingSettings?: LintingSettings,
+    enableSandbox: boolean = false
   ): Promise<CorrectionResult20> {
     const langLower = language.toLowerCase();
     
@@ -120,13 +128,35 @@ export class CorrectionService {
       };
     }
 
+    // Is there sandbox support for this language?
+    const isSandboxSupported = ["python", "javascript", "c", "cpp"].includes(langLower);
+
     // 3. Static check if the language is not executable locally, or if is static Portugol/Pseudocode
-    const isStaticOrUnavailable = ["portugol", "pseudocode", "pseudocodigo", "pseudocódigo", "java", "c", "cpp", "csharp", "php", "go", "rust", "kotlin"].includes(langLower);
+    const isStaticOrUnavailable = !enableSandbox && ["portugol", "pseudocode", "pseudocodigo", "pseudocódigo", "java", "c", "cpp", "csharp", "php", "go", "rust", "kotlin"].includes(langLower);
     
-    if (isStaticOrUnavailable) {
+    // Check if we should use Sandbox
+    if (enableSandbox && isSandboxSupported) {
+       // Route to Sandbox
+       const sbRes = await SandboxExecutor.execute(code, language, testCases);
+       syntax_ok = sbRes.syntaxOk;
+       compiled = sbRes.compiled;
+       tests_passed = sbRes.testsPassed;
+       test_results = sbRes.testResults;
+       stdout = sbRes.stdout;
+       stderr = sbRes.stderr;
+       execution_time_ms = sbRes.executionTimeMs;
+       status = sbRes.status as any;
+       
+       if (tests_passed === testCases.length && testCases.length > 0) {
+         testScorePercentage = 100;
+       } else if (testCases.length > 0) {
+         testScorePercentage = (tests_passed / testCases.length) * 100;
+       }
+
+    } else if (isStaticOrUnavailable) {
       const staticRes = StaticLangsExecutor.analyze(code, language);
       
-      const qualityAnalysis = CodeQualityAnalyzer.analyze(code, language);
+      const qualityAnalysis = CodeQualityAnalyzer.analyze(code, language, lintingSettings);
       const graded = Grader.grade(
         staticRes.syntaxOk,
         staticRes.isUnavailable ? 0 : 100, // static Portugol gets full test points mock, unavailable gets 0
@@ -157,6 +187,37 @@ export class CorrectionService {
         os_sandbox: "CONTAINER_SECURE" as const
       };
 
+      // Evaluate rubrics (if flag is active)
+      let rubric_criteria: RubricCriterion[] | undefined = undefined;
+      if (process.env.ENABLE_RUBRIC_CORRECTION !== "false" && !staticRes.isUnavailable) {
+        const rubricEval = await RubricGrader.evaluate(
+          language,
+          code,
+          staticRes.syntaxOk,
+          testCases.length,
+          staticRes.isUnavailable ? 0 : testCases.length,
+          qualityAnalysis.issues,
+          staticRes.isUnavailable ? staticRes.feedback : "",
+          graded.final_score
+        );
+        rubric_criteria = rubricEval.criteria;
+      }
+
+      // Evaluate AI feedback (if flag is active)
+      let ai_pedagogical_feedback: AIFeedbackResponse | undefined = undefined;
+      if (process.env.ENABLE_AI_FEEDBACK !== "false" && !staticRes.isUnavailable) {
+        ai_pedagogical_feedback = await AIFeedbackGenerator.generate(
+          language,
+          code,
+          staticRes.syntaxOk,
+          testCases.length,
+          staticRes.isUnavailable ? 0 : testCases.length,
+          qualityAnalysis.issues,
+          staticRes.isUnavailable ? staticRes.feedback : "",
+          graded.final_score
+        );
+      }
+
       return {
         language,
         status: staticRes.isUnavailable ? "EXECUTOR_UNAVAILABLE" : "CORRECTED",
@@ -182,7 +243,9 @@ export class CorrectionService {
         })),
         competencies: staticCompetencies,
         ai_detection: staticAiDetection,
-        sandbox_metrics: staticSandboxMetrics
+        sandbox_metrics: staticSandboxMetrics,
+        rubric_criteria,
+        ai_pedagogical_feedback
       };
     }
 
@@ -230,7 +293,7 @@ export class CorrectionService {
     }
 
     // 6. Quality Checks
-    const qualityAnalysis = CodeQualityAnalyzer.analyze(code, language);
+    const qualityAnalysis = CodeQualityAnalyzer.analyze(code, language, lintingSettings);
 
     // 7. Calculate Rubric Grades
     const graded = Grader.grade(
@@ -268,6 +331,37 @@ export class CorrectionService {
       os_sandbox: "CONTAINER_SECURE" as const
     };
 
+    // Evaluate rubrics (if flag is active)
+    let rubric_criteria: RubricCriterion[] | undefined = undefined;
+    if (process.env.ENABLE_RUBRIC_CORRECTION !== "false") {
+      const rubricEval = await RubricGrader.evaluate(
+        language,
+        code,
+        syntax_ok,
+        testCases.length,
+        tests_passed,
+        qualityAnalysis.issues,
+        stderr,
+        graded.final_score
+      );
+      rubric_criteria = rubricEval.criteria;
+    }
+
+    // Evaluate AI feedback (if flag is active)
+    let ai_pedagogical_feedback: AIFeedbackResponse | undefined = undefined;
+    if (process.env.ENABLE_AI_FEEDBACK !== "false") {
+      ai_pedagogical_feedback = await AIFeedbackGenerator.generate(
+        language,
+        code,
+        syntax_ok,
+        testCases.length,
+        tests_passed,
+        qualityAnalysis.issues,
+        stderr,
+        graded.final_score
+      );
+    }
+
     return {
       language,
       status,
@@ -288,7 +382,9 @@ export class CorrectionService {
       test_results,
       competencies,
       ai_detection,
-      sandbox_metrics
+      sandbox_metrics,
+      rubric_criteria,
+      ai_pedagogical_feedback
     };
   }
 

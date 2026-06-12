@@ -26,6 +26,7 @@ export interface CorrectionResult {
 export interface CorrectionSubmission {
   id: string; // uuid
   teacher_id: string;
+  student_name?: string;
   language: string;
   code: string;
   status: 'success' | 'failed';

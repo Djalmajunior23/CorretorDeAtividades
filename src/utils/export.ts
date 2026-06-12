@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 
 export const exportToCSV = (data: any[], filename: string) => {
     if (data.length === 0) return;
@@ -34,4 +35,26 @@ export const exportToPDF = (tableData: any[], tableHeaders: string[], title: str
     }
 
     doc.save(`${filename}.pdf`);
+};
+
+export const exportHtmlToPDF = async (elementId: string, title: string, filename: string) => {
+    const element = document.getElementById(elementId);
+    if (!element) {
+        console.error(`Element with id ${elementId} not found`);
+        return;
+    }
+
+    try {
+        const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#0f172a' });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.text(title, 14, 15);
+        pdf.addImage(imgData, 'PNG', 0, 20, pdfWidth, pdfHeight);
+        pdf.save(`${filename}.pdf`);
+    } catch (error) {
+        console.error("Error generating PDF", error);
+    }
 };

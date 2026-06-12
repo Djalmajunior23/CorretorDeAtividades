@@ -26,7 +26,7 @@ export const diagnoseResponse = async (
     
     if (response.status === 401 || response.status === 403) {
       console.error(
-        `%cDIAGNOSIS (Auth/CORS Error): The backend at Fly.io responded with status ${response.status}.\n` +
+        `%cDIAGNOSIS (Auth/CORS Error): The backend responded with status ${response.status}.\n` +
         "This indicates your request was rejected due to lack of credentials, invalid token structure, or a CORS blocklist configuration.",
         "color: #ff3333; font-weight: bold;"
       );
@@ -53,8 +53,8 @@ export const diagnoseResponse = async (
       console.error(
         `%cDIAGNOSIS (Potential CORS or Network Block):\n` +
         "The operation triggered a TypeError: 'Failed to fetch'. In browsers, this usually means that either:\n" +
-        "1. CORS Violation: The backend server at Fly.io received the request but did not return 'Access-Control-Allow-Origin: *' or did not permit the Vercel header.\n" +
-        "2. Network Unreachable: The backend server is not running or the URL (https://corretordeatividades.fly.dev) is down.\n" +
+        "1. CORS Violation: The backend server received the request but did not return 'Access-Control-Allow-Origin: *'.\n" +
+        "2. Network Unreachable: The backend server is not running or the URL is down.\n" +
         "3. Mixed Content block or SSL invalid certificate.",
         "color: #ff3333; font-weight: bold;"
       );

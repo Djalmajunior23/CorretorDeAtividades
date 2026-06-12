@@ -16,11 +16,13 @@ import {
   AlertCircle,
   ChevronRight,
   Zap,
+  Download,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { cn } from "../../utils/cn";
 import Sidebar from "../../components/layout/Sidebar";
 import { getApiBaseUrl } from "../../services/apiService";
+import { exportHtmlToPDF } from "../../utils/export";
 
 const LANGUAGES = [
   { id: "python", name: "Python", icon: "🐍" },
@@ -595,17 +597,28 @@ function FeedbackTab({ feedback, status }: any) {
   if (!feedback) return <Placeholder text="Feedback não disponível." />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex space-x-4">
-        <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-          <Zap className="w-5 h-5 text-indigo-400" />
+    <div className="space-y-6" id="pedagogical-feedback-content">
+      <div className="flex justify-between items-start">
+        <div className="flex space-x-4">
+          <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+            <Zap className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div>
+            <h3 className="text-slate-200 font-medium mb-1">Resumo</h3>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              {feedback.summary || "Sem resumo."}
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-slate-200 font-medium mb-1">Resumo</h3>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            {feedback.summary || "Sem resumo."}
-          </p>
-        </div>
+        
+        <button
+          onClick={() => exportHtmlToPDF("pedagogical-feedback-content", "Feedback Pedagógico", "feedback_pedagogico")}
+          className="flex items-center px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm rounded-lg transition-colors border border-slate-700 flex-shrink-0"
+          title="Exportar Feedback em PDF"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Exportar PDF
+        </button>
       </div>
 
       {feedback.strengths && feedback.strengths.length > 0 && (
