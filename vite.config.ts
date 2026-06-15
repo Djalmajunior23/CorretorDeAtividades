@@ -6,11 +6,6 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom']
   },
-  server: {
-    port: 3000,
-    host: '0.0.0.0',
-    strictPort: true,
-  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

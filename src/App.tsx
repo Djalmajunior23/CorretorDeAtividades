@@ -177,6 +177,11 @@ const INITIAL_TEST_CASES: TestCase[] = [
 
 export default function App() {
   const [currentTab, setTab] = useState<string>("dashboard");
+  const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
+  const [selectedCorrectorStudent, setSelectedCorrectorStudent] = useState<string>('');
+  const [showCorrectorStudentWarning, setShowCorrectorStudentWarning] = useState<boolean>(false);
+  const [correctorClasses, setCorrectorClasses] = useState<any[]>([]);
+  const [correctorStudents, setCorrectorStudents] = useState<any[]>([]);
   const [productivityFocused, setProductivityFocused] = useState<boolean>(() => {
     try {
       return localStorage.getItem("codecheck_productivity_focused") === "true";
@@ -721,6 +726,10 @@ export default function App() {
 
   // Dispatch run code
   const handleRunCorrection = async () => {
+    if (!selectedCorrectorClass || !selectedCorrectorStudent) {
+      setShowCorrectorStudentWarning(true);
+      return;
+    }
     setCorrecting(true);
     setResult(null);
     setCurrentStage("security");
@@ -1123,8 +1132,30 @@ export default function App() {
                       <option value="php">PHP (Análise Sintática, Sandbox no Local Indisponível)</option>
                       <option value="go">Go (Análise Sintática, Sandbox no Local Indisponível)</option>
                       <option value="rust">Rust (Análise Sintática, Sandbox no Local Indisponível)</option>
-                      <option value="kotlin">Kotlin (Análise Sintática, Sandbox no Local Indisponível)</option>
-                    </select>
+                      <option value="kotlin">Kotlin (Análise Sintática, Sandbox no Local Indisponível)</option></select>
+
+                    <div className="mt-4">
+                      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Turma Base</label>
+                      <select value={selectedCorrectorClass} onChange={e => { setSelectedCorrectorClass(e.target.value); setShowCorrectorStudentWarning(false); }} className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer">
+                        <option value="">(Selecione a Turma)</option>
+                        {correctorClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    {selectedCorrectorClass && (
+                      <div className="mt-3">
+                        <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Aluno(a)</label>
+                        <select value={selectedCorrectorStudent} onChange={e => { setSelectedCorrectorStudent(e.target.value); setShowCorrectorStudentWarning(false); }} className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer">
+                          <option value="">Selecione o Aluno...</option>
+                          {correctorStudents.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    {showCorrectorStudentWarning && (
+                      <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300 text-xs flex gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>Por favor, para manter o histórico pedagógico e o Analytics funcionando, selecione obrigatoriamente a turma e o aluno da submissão antes de continuar.</div>
+                      </div>
+                    )}
 
                     {isEnvironmentUnvailable && (
                       <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs leading-relaxed">

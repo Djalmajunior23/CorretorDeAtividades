@@ -1,3 +1,4 @@
+import { registerAddonEndpoints } from './server-addon';
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -36,6 +37,7 @@ const PORT = 3000;
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
+
 
 // ============================================
 // HARDENING & SECURITY MIDDLEWARES
@@ -145,6 +147,55 @@ async function initDatabase() {
     return;
   }
   try {
+
+    // Módulo de Gestão de Turmas e Alunos
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_class_group (
+        id UUID PRIMARY KEY,
+        teacher_id VARCHAR(100) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        course VARCHAR(255),
+        module VARCHAR(255),
+        semester VARCHAR(50),
+        shift VARCHAR(50),
+        year INT,
+        description TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_student_record (
+        id UUID PRIMARY KEY,
+        teacher_id VARCHAR(100) NOT NULL,
+        class_id UUID REFERENCES d_class_group(id),
+        name VARCHAR(255) NOT NULL,
+        enrollment_code VARCHAR(100),
+        email VARCHAR(255),
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_pedagogical_evidence (
+        id UUID PRIMARY KEY,
+        teacher_id VARCHAR(100) NOT NULL,
+        class_id UUID REFERENCES d_class_group(id),
+        student_id UUID REFERENCES d_student_record(id),
+        source_type VARCHAR(100),
+        source_id VARCHAR(100),
+        title VARCHAR(255),
+        description TEXT,
+        score NUMERIC,
+        feedback TEXT,
+        tags JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // 1. Core Submissions Table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS d_correction_submission (
@@ -5591,6 +5642,7 @@ const inMemoryClassSummaries: any[] = [];
 const inMemoryClassExports: any[] = [];
 
 // GET & POST: Class Sessions (Registros de Aulas)
+app.get("/api/codecheck/diary/sessions", (r,s,n) => { console.log("!!!HIT SESSIONS ", r.url); n(); });
 app.get("/api/codecheck/diary/sessions", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_SMART_CLASS_DIARY) return res.status(403).json({ error: "Desativado" });
   const { search, class_name } = req.query;
@@ -6638,6 +6690,8 @@ app.get("/api/audit-logs", async (req, res) => {
     { id: "1", user_id: "teacher_portal", action: "CORRECTION_EXECUTION", details: "Ran static analyzer for language: python", created_at: new Date().toISOString() }
   ]);
 });
+
+registerAddonEndpoints(app, pool);
 
 // Start listening and serve frontend UI
 async function main() {
