@@ -33,10 +33,17 @@ export class RubricGrader {
     testsPassed: number,
     qualityIssues: string[],
     stderr: string,
-    finalScore: number
+    finalScore: number,
+    customRubricCriteria?: Record<string, number>
   ): Promise<RubricEvaluationResult> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
+    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER);
+    
+    // If we have custom criteria, we use them instead of the default 7
+    const activeCriteria = customRubricCriteria 
+        ? Object.entries(customRubricCriteria).map(([nome, peso]) => ({ nome, peso, descricao: `Critério definido pelo professor: ${nome}` }))
+        : this.CRITERIA_METADATA;
+
+    if (hasAI) {
       try {
         const schema = {
           type: "OBJECT",
@@ -62,11 +69,11 @@ export class RubricGrader {
         };
 
         const optConfig = {
-          systemInstruction: "Você é um auditor de avaliação acadêmica computacional. Seu papel é atribuir pontuações precisas às 7 rubricas estruturadas dos alunos sem divergir da nota agregada final que já foi auferida por testes."
+          systemInstruction: "Você é um auditor de avaliação acadêmica computacional. Seu papel é atribuir pontuações precisas às rubricas estruturadas dos alunos sem divergir da nota agregada final que já foi auferida por testes."
         };
 
         const promptText = `
-Avalie o seguinte código segundo as 7 rubricas de avaliação estruturadas pelo professor:
+Avalie o seguinte código segundo as rubricas de avaliação estruturadas pelo professor:
 Linguagem: ${language}
 Sintaxe OK: ${syntaxOk}
 Testes: passou em ${testsPassed} de ${totalTests} testes unitários.
@@ -74,15 +81,9 @@ Nota calculada pelo avaliador automático: ${finalScore}/100.
 Questões de Qualidade: ${JSON.stringify(qualityIssues)}
 Mensagem de Erro (stderr): ${stderr}
 
-A soma total de todas as 'nota_obtida' dos 7 critérios DEVE ser exatamente igual a ${finalScore} ou no máximo diferir por 1 ponto. Divida a nota proporcionalmente entre os critérios.
+A soma total de todas as 'nota_obtida' dos critérios DEVE ser exatamente igual a ${finalScore}. Divida a nota proporcionalmente entre os critérios.
 Não atribua notas maiores que os respectivos pesos:
-- Lógica de programação (Peso: 20)
-- Sintaxe (Peso: 15)
-- Organização do código (Peso: 15)
-- Boas práticas (Peso: 15)
-- Eficiência (Peso: 15)
-- Segurança (Peso: 10)
-- Clareza da solução (Peso: 10)
+${activeCriteria.map(c => `- ${c.nome} (Peso: ${c.peso})`).join("\n")}
 
 Código-fonte do aluno:
 \`\`\`
@@ -90,7 +91,7 @@ ${code}
 \`\`\``;
 
         const payload = await aiService.generateStructuredWithRetry<any>(promptText, schema, optConfig);
-        if (payload && Array.isArray(payload.criteria) && payload.criteria.length === 7) {
+        if (payload && Array.isArray(payload.criteria) && payload.criteria.length === activeCriteria.length) {
           // Normalize sub-grades dynamically to match overall grade exactly
           let sum = payload.criteria.reduce((acc: number, c: any) => acc + c.nota_obtida, 0);
           if (sum !== finalScore) {
@@ -106,8 +107,8 @@ ${code}
       }
     }
 
-    // High-precision rule-based heuristic evaluator fallback
-    return this.evaluateHeuristics(language, code, syntaxOk, totalTests, testsPassed, qualityIssues, stderr, finalScore);
+    // High-precision rule-based heuristic evaluator fallback (Limited when dynamic)
+    return this.evaluateHeuristics(language, code, syntaxOk, totalTests, testsPassed, qualityIssues, stderr, finalScore, activeCriteria);
   }
 
   private static evaluateHeuristics(
@@ -118,41 +119,18 @@ ${code}
     testsPassed: number,
     qualityIssues: string[],
     stderr: string,
-    finalScore: number
+    finalScore: number,
+    activeMetadata: any[]
   ): RubricEvaluationResult {
-    const isSecurityOk = finalScore > 0; // if final score is 0, security or syntax failed catastrophically
-
-    // Let's formulate raw scores
-    const rawScores: Record<string, number> = {
-      "Lógica de programação": syntaxOk ? Math.round((testsPassed / (totalTests || 1)) * 20) : 0,
-      "Sintaxe": syntaxOk ? 15 : 0,
-      "Organização do código": qualityIssues.some(i => i.includes("linhas") || i.includes("indentação")) ? 10 : 15,
-      "Boas práticas": qualityIssues.some(i => i.includes("nomes") || i.includes("duplicidade")) ? 10 : 15,
-      "Eficiência": qualityIssues.some(i => i.includes("complexidade")) ? 10 : 15,
-      "Segurança": isSecurityOk ? 10 : 0,
-      "Clareza da solução": code.includes("#") || code.includes("//") || code.includes("/*") || code.includes("--") ? 10 : 7
-    };
-
-    // Correct if syntax went wrong
-    if (!syntaxOk) {
-      rawScores["Organização do código"] = 5;
-      rawScores["Boas práticas"] = 5;
-      rawScores["Eficiência"] = 5;
-      rawScores["Clareza da solução"] = 5;
-    }
-
-    // Scale precisely so that the sum matches the finalScore
-    const rawSum = Object.values(rawScores).reduce((a, b) => a + b, 0);
-    const scale = finalScore / (rawSum || 1);
+    const isSecurityOk = finalScore > 0;
     
-    const criteria: RubricCriterion[] = this.CRITERIA_METADATA.map((meta) => {
-      let nota_obtida = Math.round(rawScores[meta.nome] * scale);
-      if (nota_obtida > meta.peso) {
-        nota_obtida = meta.peso;
-      }
+    const scale = finalScore / 100;
+    
+    const criteria: RubricCriterion[] = activeMetadata.map((meta) => {
+      let nota_obtida = Math.round(meta.peso * scale);
       
       let status: RubricCriterion["status"] = "Excelente";
-      const pct = nota_obtida / meta.peso;
+      const pct = nota_obtida / (meta.peso || 1);
       if (pct >= 0.85) status = "Excelente";
       else if (pct >= 0.6) status = "Aprovado";
       else if (pct >= 0.35) status = "Atenção";
@@ -160,23 +138,12 @@ ${code}
 
       if (!syntaxOk) status = "Falhou";
 
-      let observacao = `Critério avaliado com desempenho de ${nota_obtida}/${meta.peso} pts.`;
-      if (meta.nome === "Lógica de programação" && testsPassed < totalTests) {
-        observacao = `Lógica necessita ajustes. Falha em ${totalTests - testsPassed} dos cenários propostos.`;
-      } else if (meta.nome === "Sintaxe" && !syntaxOk) {
-        observacao = `Erro de formatação impede execução segura: ${stderr.slice(0, 50)}...`;
-      } else if (meta.nome === "Organização do código" && qualityIssues.some(i => i.includes("indentação"))) {
-        observacao = "Indique melhor as aberturas de escopos de controle e formatações de classe.";
-      } else if (meta.nome === "Clareza da solução" && nota_obtida < meta.peso) {
-        observacao = "Adicione comentários explicando a finalidade das variáveis críticas e decisões de loops.";
-      }
-
       return {
         nome: meta.nome,
         descricao: meta.descricao,
         peso: meta.peso,
         nota_obtida,
-        observacao,
+        observacao: `Avaliação proporcional de ${nota_obtida}/${meta.peso} pontos.`,
         status
       };
     });
@@ -199,7 +166,7 @@ ${code}
 
     return {
       criteria,
-      overall_feedback: `Análise estruturada e correção por rubricas realizada para a linguagem ${language.toUpperCase()}.`
+      overall_feedback: `Análise estruturada por rubricas para ${language.toUpperCase()}.`
     };
   }
 }

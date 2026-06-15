@@ -1,101 +1,436 @@
-import React, { useState } from "react";
-import { motion } from "motion/react";
-import { 
-  FileText, Download, Folder, BookOpen, Layers, Sparkles, 
-  Search, ExternalLink, HelpCircle
+import React, { useState, useEffect } from "react";
+import {
+  Sparkles,
+  Plus,
+  Search,
+  Filter,
+  ChevronRight,
+  FileText,
+  Download,
+  Trash2,
+  Archive,
+  RefreshCw,
+  LayoutGrid,
+  Zap,
+  BrainCircuit,
+  ClipboardList,
+  Target,
+  FlaskConical,
+  Database,
+  BarChart3,
+  Calendar,
+  AlertCircle,
+  CheckCircle2,
+  FileCode,
+  Languages,
+  Layers,
+  Check,
+  Eye,
+  History,
+  Settings,
+  MoreVertical,
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
+import { EducationalTemplate, GeneratedMaterial } from "../types";
 
-export default function MateriaisView() {
-  const [filterType, setFilterType] = useState<string>("all");
+const TEMPLATE_TYPES = [
+  { id: "exercise_list", label: "Lista de Exercícios" },
+  { id: "practical_activity", label: "Atividade Prática" },
+  { id: "lab_script", label: "Roteiro de Laboratório" },
+  { id: "lesson_plan", label: "Plano de Aula" },
+  { id: "reinforcement_plan", label: "Plano de Reforço" },
+  { id: "recovery_plan", label: "Plano de Recuperação" },
+  { id: "mock_exam", label: "Simulado" },
+  { id: "revision_guide", label: "Guia de Revisão" },
+];
 
-  const libraryItems = [
-    { title: "Plano de Curso: Programação de Computadores SENAI", type: "document", desc: "Matriz curricular e ementa oficial regulamentada do Ministério da Educação.", size: "1.4 MB" },
-    { title: "Apostila de Algoritmos e Lógica", type: "handout", desc: "Material didático com 150 páginas cobrindo arrays, sub-rotinas e complexidades de código.", size: "4.8 MB" },
-    { title: "Slides de Aula: Introdução a Árvores e Listas Dinâmicas", type: "slides", desc: "Apresentações em PPTX editáveis para aplicação didática em sala.", size: "2.1 MB" },
-    { title: "Gabarito Oficial: Desafio Técnico de Programador Web", type: "document", desc: "Gabaritos e notas de correção sugeridos para exames institucionais.", size: "640 KB" },
-    { title: "Kit de Ferramentas de Exercícios de Sandbox", type: "code", desc: "Starter kit contendo testes unitários automatizados em Java, Python e JavaScript.", size: "150 KB" }
-  ];
+const TOPICS = [
+  "Lógica de Programação",
+  "Algoritmos",
+  "Portugol",
+  "Python",
+  "Java",
+  "JavaScript",
+  "HTML/CSS",
+  "Banco de Dados",
+  "SQL",
+  "POO",
+];
 
-  const filtered = filterType === "all" ? libraryItems : libraryItems.filter(item => item.type === filterType);
+export default function MateriaisDidaticosView() {
+  const [templates, setTemplates] = useState<EducationalTemplate[]>([]);
+  const [materials, setMaterials] = useState<GeneratedMaterial[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"materials" | "generator">(
+    "materials",
+  );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<EducationalTemplate | null>(null);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    template_type: "exercise_list",
+    topic: "Lógica de Programação",
+    difficulty: "iniciante",
+    target_audience: "Ensino Técnico",
+    quantity: 10,
+    include_answer_key: true,
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [tRes, mRes] = await Promise.all([
+        fetch("/api/educational-templates"),
+        fetch("/api/materials"),
+      ]);
+      setTemplates(await tRes.json());
+      setMaterials(await mRes.json());
+    } catch (e) {
+      toast.error("Erro ao carregar dados.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateMaterial = async () => {
+    setIsGenerating(true);
+    try {
+      const res = await fetch("/api/materials/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Material gerado com sucesso!");
+        setActiveTab("materials");
+        fetchData();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (e) {
+      toast.error("Erro ao gerar material.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const approveMaterial = async (id: string) => {
+    try {
+      await fetch(`/api/materials/${id}/approve`, { method: "POST" });
+      toast.success("Material aprovado.");
+      fetchData();
+    } catch (e) {
+      toast.error("Erro ao aprovar.");
+    }
+  };
+
+  const exportPDF = (id: string) => {
+    window.open(`/api/materials/${id}/export/pdf`, "_blank");
+  };
 
   return (
-    <div className="max-w-7xl mx-auto flex flex-col gap-8 text-slate-100 animate-fade-in">
-      
-      {/* Title block */}
-      <div>
-        <span className="text-xs font-mono font-bold tracking-widest text-[#10b981] uppercase">Fase 12 / 13: Materiais e Apoio Didático</span>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight font-display mt-0.5">Materiais Didáticos de Curso</h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Acesse apostilas regulamentadas, slides de apoio didático, gabaritos modelo de avaliação e kits de código complementares.
-        </p>
+    <div className="p-8 max-w-7xl mx-auto space-y-8 min-h-screen bg-slate-950 text-slate-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+            <Layers className="w-8 h-8 text-indigo-500" />
+            Materiais Didáticos
+          </h1>
+          <p className="text-slate-400 mt-2">
+            Criação e gestão de conteúdos educacionais com IA
+          </p>
+        </div>
+        <div className="flex gap-2 bg-slate-900 p-1 rounded-xl border border-white/5">
+          <button
+            onClick={() => setActiveTab("materials")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "materials"
+                ? "bg-indigo-600 text-white shadow-lg"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            Meus Materiais
+          </button>
+          <button
+            onClick={() => setActiveTab("generator")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+              activeTab === "generator"
+                ? "bg-indigo-600 text-white shadow-lg"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            Gerador IA
+          </button>
+        </div>
       </div>
 
-      {/* Categories filters */}
-      <div className="flex border-b border-slate-800 gap-6">
-        <button 
-          onClick={() => setFilterType("all")} 
-          className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer ${filterType === "all" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}
-        >
-          Todos os Materiais
-          {filterType === "all" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />}
-        </button>
+      <div className="flex flex-col lg:flex-row gap-8">
+        {activeTab === "materials" ? (
+          <div className="flex-1 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {loading ? (
+                <div className="col-span-full py-20 text-center flex flex-col items-center gap-4">
+                  <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
+                  <p className="text-slate-500">Buscando materiais...</p>
+                </div>
+              ) : materials.length === 0 ? (
+                <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-3xl bg-slate-900/20">
+                  <FileText className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                  <p className="text-slate-500">
+                    Você ainda não gerou nenhum material didático.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab("generator")}
+                    className="mt-4 text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-2 mx-auto"
+                  >
+                    Começar a gerar <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                materials.map((m) => (
+                  <motion.div
+                    key={m.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-slate-900/40 border border-white/10 rounded-2xl p-6 hover:bg-slate-900/60 transition-all border-t-4 border-t-indigo-500 flex flex-col"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded-full">
+                        {m.type.replace("_", " ")}
+                      </span>
+                      <div className="flex gap-1">
+                        {m.status === "draft" && (
+                          <button
+                            onClick={() => approveMaterial(m.id)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-all"
+                            title="Aprovar"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => exportPDF(m.id)}
+                          className="p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded transition-all"
+                          title="Exportar PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
 
-        <button 
-          onClick={() => setFilterType("document")} 
-          className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer ${filterType === "document" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}
-        >
-          Plano & Ementas
-          {filterType === "document" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />}
-        </button>
+                    <h3 className="text-lg font-bold text-white mb-2 line-clamp-2">
+                      {m.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-6 flex items-center gap-2">
+                      <Calendar className="w-3 h-3" />
+                      Criado em {new Date(m.created_at).toLocaleDateString()}
+                    </p>
 
-        <button 
-          onClick={() => setFilterType("handout")} 
-          className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer ${filterType === "handout" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}
-        >
-          Apostilas
-          {filterType === "handout" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />}
-        </button>
-
-        <button 
-          onClick={() => setFilterType("slides")} 
-          className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer ${filterType === "slides" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}
-        >
-          Slides PPTX
-          {filterType === "slides" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />}
-        </button>
-      </div>
-
-      {/* Grid listing */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filtered.map((item, idx) => (
-          <div key={idx} className="p-5 rounded-2xl bg-[#0f172a] border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="p-2.5 bg-slate-900 text-slate-400 rounded-xl">
-                <FileText className="w-5 h-5 text-emerald-400" />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase font-mono font-bold text-slate-500">{item.type}</span>
-                <h4 className="text-sm font-bold text-slate-200">{item.title}</h4>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">{item.desc}</p>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center border-t border-slate-900 pt-3 text-[11px] text-slate-500 font-mono">
-              <span>Tamanho: {item.size}</span>
-              <button 
-                type="button"
-                onClick={() => alert(`Iniciando download do material: ${item.title}`)}
-                className="flex items-center gap-1 text-emerald-400 hover:underline cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download
-              </button>
+                    <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-2 h-2 rounded-full ${m.status === "approved" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-amber-500"}`}
+                        ></span>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-black">
+                          {m.status}
+                        </span>
+                      </div>
+                      <button className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 group">
+                        Ver Material{" "}
+                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-all" />
+                      </button>
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </div>
           </div>
-        ))}
-      </div>
+        ) : (
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-5 space-y-6">
+              <div className="bg-slate-900/50 border border-white/10 rounded-3xl p-8 space-y-6 shadow-2xl">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-indigo-600/20 rounded-xl">
+                    <Sparkles className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white">
+                    Configurar IA
+                  </h2>
+                </div>
 
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                      Tipo de Material
+                    </label>
+                    <select
+                      value={formData.template_type}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          template_type: e.target.value,
+                        })
+                      }
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition-all text-sm"
+                    >
+                      {TEMPLATE_TYPES.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                      Tópico / Conteúdo
+                    </label>
+                    <select
+                      value={formData.topic}
+                      onChange={(e) =>
+                        setFormData({ ...formData, topic: e.target.value })
+                      }
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition-all text-sm"
+                    >
+                      {TOPICS.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        Dificuldade
+                      </label>
+                      <select
+                        value={formData.difficulty}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            difficulty: e.target.value,
+                          })
+                        }
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition-all text-sm"
+                      >
+                        <option value="iniciante">Iniciante</option>
+                        <option value="intermediário">Intermediário</option>
+                        <option value="avançado">Avançado</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        Quantidade
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.quantity}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            quantity: parseInt(e.target.value),
+                          })
+                        }
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition-all text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <button
+                      onClick={generateMaterial}
+                      disabled={isGenerating}
+                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-xl shadow-indigo-600/20 transition-all"
+                    >
+                      {isGenerating ? (
+                        <>
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                          Gerando conteúdo estruturado...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-5 h-5" />
+                          Gerar com Inteligência Artificial
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-7 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-6 bg-slate-900/30 border border-white/5 rounded-3xl">
+                  <div className="flex items-center gap-3 mb-4">
+                    <BrainCircuit className="w-5 h-5 text-indigo-400" />
+                    <h3 className="font-bold text-slate-200">Personalização</h3>
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">
+                    A IA utiliza as diretrizes do template para estruturar
+                    tópicos teóricos, exemplos de código e questões práticas
+                    baseadas no seu público-alvo.
+                  </p>
+                </div>
+                <div className="p-6 bg-slate-900/30 border border-white/5 rounded-3xl">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Download className="w-5 h-5 text-emerald-400" />
+                    <h3 className="font-bold text-slate-200">
+                      Pronto para Uso
+                    </h3>
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">
+                    Todo material gerado entra em modo rascunho para que você
+                    possa revisar antes de exportar em PDF para seus alunos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/20 border border-indigo-500/10 rounded-3xl p-8 border-dashed">
+                <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6 px-1">
+                  Templates Recomendados
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {templates
+                    .filter((t) => t.is_system_template)
+                    .slice(0, 4)
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        className="p-4 bg-slate-950/50 border border-white/5 rounded-2xl hover:border-indigo-500/50 transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                            <FileCode className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white line-clamp-1">
+                              {t.title}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              {t.type}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

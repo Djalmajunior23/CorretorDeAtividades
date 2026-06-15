@@ -1,62 +1,55 @@
 import { TestCase } from "./BaseExecutor.ts";
-import { executeInSandbox } from "../../sandbox.ts"; // Points to the one I created at root
+import { ExecutionService } from "../../src/ai/services/sandbox/execution_service.ts";
 
 export class SandboxExecutor {
   static async execute(code: string, language: string, testCases: TestCase[]) {
-    let passed = 0;
-    let totalTime = 0;
-    let stdouts: string[] = [];
-    let stderrs: string[] = [];
-    let results: Array<{
-      input: string;
-      expected_output: string;
-      actual_output: string;
-      passed: boolean;
-      is_hidden?: boolean;
-    }> = [];
-    let globalStatus: string = "CORRECTED";
-    let compiled = true;
+    // Adapter mapping our generic TestCase to ExecutionService's TestCase
+    const mappedTestCases = testCases.map((tc, idx) => ({
+      name: `Teste #${idx + 1}${tc.is_hidden ? " (Oculto)" : ""}`,
+      stdin: tc.input || "",
+      expected_stdout: tc.expected_output || ""
+    }));
 
-    for (const tc of testCases) {
-      const res = await executeInSandbox(code, language, tc.input);
-      
-      const isPass = res.status === "ACCEPTED" && res.stdout.trim() === tc.expected_output.trim();
-      if (isPass) passed++;
-      
-      if (res.status === "COMPILATION_ERROR") {
-        compiled = false;
-        globalStatus = "COMPILE_ERROR";
-      } else if (res.status === "RUNTIME_ERROR") {
-        globalStatus = "RUNTIME_ERROR";
-      } else if (res.status === "TIME_LIMIT_EXCEEDED") {
-        globalStatus = "TIMEOUT";
-      }
+    const response = await ExecutionService.run({
+      language,
+      code,
+      test_cases: mappedTestCases,
+      timeout_seconds: 5
+    });
 
-      totalTime += res.executionTimeMs;
-      stdouts.push(res.stdout);
-      if (res.stderr) stderrs.push(res.stderr);
-
-      results.push({
-        input: tc.input,
-        expected_output: tc.expected_output,
-        actual_output: res.stdout.trim() || res.stderr.trim(),
-        passed: isPass,
-        is_hidden: tc.is_hidden
-      });
-
-      if (!compiled) break; // Don't run rest if it doesn't compile
-    }
+    const statusMap: Record<string, string> = {
+      "accepted": "CORRECTED",
+      "compilation_error": "COMPILE_ERROR",
+      "runtime_error": "RUNTIME_ERROR",
+      "timeout": "TIMEOUT",
+      "security_blocked": "SECURITY_BLOCKED"
+    };
 
     return {
-      status: globalStatus as any,
-      compiled,
-      syntaxOk: compiled, 
-      testsPassed: passed,
+      status: (statusMap[response.status] || "CORRECTED") as any,
+      compiled: response.status !== "compilation_error",
+      syntaxOk: response.status !== "compilation_error",
+      testsPassed: response.test_results.filter(r => r.passed).length,
       totalTests: testCases.length,
-      executionTimeMs: totalTime,
-      testResults: results,
-      stdout: stdouts.join("\\n---\\n"),
-      stderr: stderrs.join("\\n")
+      executionTimeMs: response.execution_time_ms,
+      testResults: response.test_results.map((tr, idx) => ({
+         input: testCases[idx].input,
+         expected_output: testCases[idx].expected_output,
+         actual_output: tr.actual_stdout,
+         passed: tr.passed,
+         is_hidden: testCases[idx].is_hidden
+      })),
+      stdout: response.stdout,
+      stderr: response.stderr,
+      memoryUsed: response.memory_used_mb,
+      securityFlags: response.security_flags,
+      sandboxMetrics: {
+        cpu_limit_ghz: 1.5,
+        ram_limit_mb: 128,
+        timeout_ms: 5000,
+        network_firewall: "BLOCKED" as const,
+        os_sandbox: "CONTAINER_SECURE" as const
+      }
     };
   }
 }

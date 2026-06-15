@@ -20,7 +20,13 @@ import {
   Award,
   Users,
   RefreshCw,
-  FileText
+  FileText,
+  FlaskConical,
+  FileSearch,
+  ClipboardList,
+  Library,
+  FileCheck,
+  HelpCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -54,13 +60,22 @@ export default function Sidebar({
     { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Diário de Aula Inteligente", visible: featureFlags.ENABLE_SMART_CLASS_DIARY !== false },
     { id: "turmas", label: "Turmas", icon: Users, desc: "Gestão e Níveis de Acesso", visible: true },
     { id: "activities", label: "Atividades", icon: Zap, desc: "Banco de Questões e IA", visible: true },
+    { id: "question_bank", label: "Banco de Questões", icon: Database, desc: "Questões e Desafios IA", visible: true },
+    { id: "batch", label: "Correção em Lote", icon: Layers, desc: "Processamento Massivo ZIP", visible: true },
+    { id: "similarity", label: "Similaridade", icon: FileSearch, desc: "Análise de Códigos", visible: true },
+    { id: "smart_labs", label: "Laboratórios", icon: FlaskConical, desc: "Experimentação & IA", visible: true },
+    { id: "pedagogical_tracks", label: "Trilhas e Planos", icon: ClipboardList, desc: "Recuperação e Intervenção", visible: true },
+    { id: "analytics", label: "Analytics Educacional", icon: BarChart3, desc: "Indicadores de Aprendizagem", visible: true },
+    { id: "resource_library", label: "Biblioteca", icon: Library, desc: "Recursos e Repositório", visible: true },
+    { id: "reports", label: "Pareceres e Relatórios", icon: FileCheck, desc: "Geração de Documentos", visible: true },
     { id: "avaliacoes", label: "Avaliações", icon: FileText, desc: "Provas, Simulados e Evidências", visible: true },
     { id: "corrector", label: "Correções", icon: Terminal, desc: "Parâmetros e Sandbox", visible: true },
     { id: "competencies", label: "Competências", icon: Award, desc: "Mapeamento Curricular SENAI", visible: featureFlags.ENABLE_COMPETENCY_MANAGER !== false },
     { id: "recuperacao", label: "Recuperação", icon: RefreshCw, desc: "Estudos Paralelos F13", visible: true },
-    { id: "reports", label: "Relatórios", icon: Activity, desc: "IA e Planos de Intervenção", visible: featureFlags.ENABLE_TEACHER_REPORTS !== false },
     { id: "materiais", label: "Materiais", icon: BookOpen, desc: "Biblioteca & Apoio Didático", visible: true },
     { id: "assistant", label: "Assistente IA", icon: Sparkles, desc: "Copiloto Pedagógico IA", visible: featureFlags.ENABLE_TEACHER_AI_ASSISTANT !== false },
+    { id: "help_center", label: "Central de Ajuda", icon: HelpCircle, desc: "Manual, FAQ e Onboarding", visible: true },
+    { id: "system_health", label: "Saúde do Sistema", icon: Activity, desc: "Status e Auditoria", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];
 

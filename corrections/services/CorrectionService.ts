@@ -153,6 +153,95 @@ export class CorrectionService {
          testScorePercentage = (tests_passed / testCases.length) * 100;
        }
 
+       // Extract additional sandbox metadata
+       const sandbox_metrics = (sbRes as any).sandboxMetrics;
+       const security_flags = (sbRes as any).securityFlags;
+
+       // Quality Checks (still run static quality check even in sandbox)
+       const qualityAnalysis = CodeQualityAnalyzer.analyze(code, language, lintingSettings);
+       
+       // Calculate Rubric Grades
+       const graded = Grader.grade(
+         syntax_ok,
+         testScorePercentage,
+         qualityAnalysis.score,
+         true,
+         rubric
+       );
+
+       // Generate advanced pedagogical response details
+       const feedback = await PedagogicalFeedback.generate(
+         language,
+         code,
+         syntax_ok,
+         testCases.length,
+         tests_passed,
+         qualityAnalysis.issues,
+         stderr,
+         true,
+         null
+       );
+
+       const execution_time = parseFloat((execution_time_ms / 1000).toFixed(3)) || 0.01;
+       const competencies = CorrectionService.analyzeCompetencies(code, language);
+       const ai_detection = CorrectionService.analyzeAIDetection(code, language);
+
+       // Evaluate rubrics (if flag is active)
+       let rubric_criteria: RubricCriterion[] | undefined = undefined;
+       if (process.env.ENABLE_RUBRIC_CORRECTION !== "false") {
+         const rubricEval = await RubricGrader.evaluate(
+           language,
+           code,
+           syntax_ok,
+           testCases.length,
+           tests_passed,
+           qualityAnalysis.issues,
+           stderr,
+           graded.final_score
+         );
+         rubric_criteria = rubricEval.criteria;
+       }
+
+       // Evaluate AI feedback (if flag is active)
+       let ai_pedagogical_feedback: AIFeedbackResponse | undefined = undefined;
+       if (process.env.ENABLE_AI_FEEDBACK !== "false") {
+         ai_pedagogical_feedback = await AIFeedbackGenerator.generate(
+           language,
+           code,
+           syntax_ok,
+           testCases.length,
+           tests_passed,
+           qualityAnalysis.issues,
+           stderr,
+           graded.final_score
+         );
+       }
+
+       return {
+         language,
+         status,
+         syntax_ok,
+         security_ok: status !== "SECURITY_BLOCKED",
+         compiled,
+         tests_passed,
+         total_tests: testCases.length,
+         syntax_score: graded.syntax_score,
+         test_score: graded.test_score,
+         quality_score: graded.quality_score,
+         final_score: graded.final_score,
+         stdout,
+         stderr,
+         execution_time,
+         memory_used: (sbRes as any).memoryUsed,
+         feedback,
+         test_results,
+         competencies,
+         ai_detection,
+         sandbox_metrics,
+         rubric_criteria,
+         ai_pedagogical_feedback
+       };
+
     } else if (isStaticOrUnavailable) {
       const staticRes = StaticLangsExecutor.analyze(code, language);
       

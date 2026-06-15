@@ -50,7 +50,7 @@ export async function generateActivityWithIA(params: any) {
   try {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: prompt,
       config: {
         temperature: 0.7,

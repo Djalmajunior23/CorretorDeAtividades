@@ -35,6 +35,8 @@ interface BatchItem {
   feedback: string;
 }
 
+import { exportBatchReportToPDF } from '../../utils/pdfExport';
+
 export default function TeacherBatchCorrectionPage() {
   const [jobs, setJobs] = useState<BatchJob[]>([]);
   const [activeJob, setActiveJob] = useState<number | null>(null);
@@ -107,18 +109,25 @@ export default function TeacherBatchCorrectionPage() {
     }
   };
 
-  const handleExport = async (jobId: number) => {
-    try {
-       const baseUrl = getApiBaseUrl();
-       const res = await fetch(`${baseUrl}/batch-correction/export/${jobId}`, {
-           method: 'POST'
-       });
-       if(res.ok) {
-           alert("Relatório gerado! Em uma versão real, o download iniciaria aqui.");
-       }
-    } catch (e) {
-        console.error("Error exporting", e);
-    }
+  const handleExport = (jobId: number) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+
+    exportBatchReportToPDF({
+      jobTitle: job.title,
+      createdAt: job.created_at,
+      total: job.total_files,
+      processed: job.processed_files,
+      success: job.successful_corrections,
+      failed: job.failed_corrections,
+      items: items.map(item => ({
+        studentName: item.student_name,
+        fileName: item.file_name,
+        score: item.score,
+        status: item.status,
+        feedback: item.feedback
+      }))
+    });
   }
 
   const actJobDetails = jobs.find(j => j.id === activeJob);

@@ -37,8 +37,8 @@ export class PedagogicalFeedback {
       };
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
+    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER);
+    if (hasAI) {
       try {
         const schema = {
           type: "OBJECT",

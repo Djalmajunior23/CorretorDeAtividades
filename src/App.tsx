@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { Toaster, toast } from 'sonner';
 import Sidebar from "./components/layout/Sidebar";
 import GeneratorView from "./components/GeneratorView";
 import ActivityBankView from "./components/ActivityBankView";
@@ -16,6 +17,17 @@ import TurmasView from "./components/TurmasView";
 import AvaliacoesView from "./components/AvaliacoesView";
 import RecuperacaoView from "./components/RecuperacaoView";
 import MateriaisView from "./components/MateriaisView";
+import PedagogicalDashboard from "./components/dashboard/PedagogicalDashboard";
+import BatchCorrectionView from "./components/BatchCorrectionView";
+import SimilarityView from "./components/SimilarityView";
+import EducationalAnalyticsView from "./components/EducationalAnalyticsView";
+import QuestionBankView from "./components/QuestionBankView";
+import SmartLabsView from "./components/SmartLabsView";
+import PedagogicalTracksView from "./components/PedagogicalTracksView";
+import ResourceLibraryView from "./components/ResourceLibraryView";
+import ReportsView from "./components/ReportsView";
+import HelpCenterView from "./components/HelpCenterView";
+import SystemHealthView from "./components/SystemHealthView";
 import { 
   Play, 
   Terminal, 
@@ -34,6 +46,8 @@ import {
   Sparkles,
   BookOpen,
   LineChart,
+  BarChart3,
+  Download,
   Briefcase,
   Bell,
   Eye,
@@ -46,6 +60,9 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -274,14 +291,19 @@ export default function App() {
     requireFunctions: false
   });
 
-  const [analyticsSubTab, setAnalyticsSubTab] = useState<"general" | "errors" | "student" | "competencies">("general");
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<"general" | "errors" | "student" | "competencies" | "comparison" | "pedagogical">("general");
   const [savingSettings, setSavingSettings] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState("Vinícius Souza");
   const [studentEvolutionData, setStudentEvolutionData] = useState<any>(null);
   const [classErrorData, setClassErrorData] = useState<any>(null);
+  const [comparisonData, setComparisonData] = useState<any[]>([]);
   const [loadingClassErrors, setLoadingClassErrors] = useState(false);
   const [loadingStudentPromo, setLoadingStudentPromo] = useState(false);
+  const [loadingComparison, setLoadingComparison] = useState(false);
+  const [classA, setClassA] = useState("");
+  const [classB, setClassB] = useState("");
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [sandboxStatus, setSandboxStatus] = useState<any>(null);
 
   // Fetch audit logs helper (Regras de auditoria)
   const fetchAuditLogs = () => {
@@ -289,6 +311,39 @@ export default function App() {
       .then(res => res.json())
       .then(data => setAuditLogs(data))
       .catch(e => console.error("Error loading audits:", e));
+  };
+
+  const fetchSandboxStatus = () => {
+    fetch("/api/execution/status")
+      .then(res => res.json())
+      .then(data => setSandboxStatus(data))
+      .catch(e => console.error("Error loading sandbox status:", e));
+  };
+
+  const handleCompareClasses = async () => {
+    if (!classA || !classB) {
+      toast.error("Por favor, informe o nome das duas turmas.");
+      return;
+    }
+
+    setLoadingComparison(true);
+    try {
+      const resA = await fetch(`/api/analytics/class-average?name=${encodeURIComponent(classA)}`);
+      const dataA = await resA.json();
+      
+      const resB = await fetch(`/api/analytics/class-average?name=${encodeURIComponent(classB)}`);
+      const dataB = await resB.json();
+
+      setComparisonData([
+        { name: dataA.className || classA, media: dataA.average },
+        { name: dataB.className || classB, media: dataB.average }
+      ]);
+    } catch (e) {
+      console.error("Error comparing classes:", e);
+      toast.error("Erro ao carregar dados comparativos.");
+    } finally {
+      setLoadingComparison(false);
+    }
   };
 
   // Fetch system health telemetry
@@ -349,8 +404,29 @@ export default function App() {
     }
   };
 
+  // Fetch comparison analytics
+  const fetchComparisonAnalytics = async () => {
+    setLoadingComparison(true);
+    try {
+      const res = await fetch("/api/class-comparison-analytics");
+      if (res.ok) {
+        const data = await res.json();
+        setComparisonData(data);
+        if (data.length >= 2) {
+          if (!classA) setClassA(data[0].class_name);
+          if (!classB) setClassB(data[1].class_name);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading comparison analytics", err);
+    } finally {
+      setLoadingComparison(false);
+    }
+  };
+
   useEffect(() => {
     fetchQuestions();
+    fetchSandboxStatus();
     
     // Fetch initial feature flags and linting settings
     fetch("/api/feature-flags")
@@ -369,6 +445,10 @@ export default function App() {
       fetchHealthStatus();
     } else if (currentTab === "analytics") {
       fetchTeacherAnalytics();
+
+      if (analyticsSubTab === "comparison") {
+        fetchComparisonAnalytics();
+      }
 
       if (analyticsSubTab === "errors" && !featureFlags.ENABLE_CLASS_ERROR_DASHBOARD) {
         setAnalyticsSubTab("general");
@@ -898,6 +978,46 @@ export default function App() {
             <TurmasView />
           )}
 
+          {currentTab === "batch" && (
+            <BatchCorrectionView />
+          )}
+
+          {currentTab === "similarity" && (
+            <SimilarityView />
+          )}
+
+          {currentTab === "analytics" && (
+            <EducationalAnalyticsView />
+          )}
+
+          {currentTab === "question_bank" && (
+            <QuestionBankView />
+          )}
+          
+          {currentTab === "smart_labs" && (
+            <SmartLabsView />
+          )}
+
+          {currentTab === "pedagogical_tracks" && (
+            <PedagogicalTracksView />
+          )}
+
+          {currentTab === "resource_library" && (
+            <ResourceLibraryView />
+          )}
+
+          {currentTab === "reports" && (
+            <ReportsView />
+          )}
+
+          {currentTab === "help_center" && (
+            <HelpCenterView />
+          )}
+
+          {currentTab === "system_health" && (
+            <SystemHealthView />
+          )}
+
           {currentTab === "avaliacoes" && (
             <AvaliacoesView />
           )}
@@ -935,11 +1055,43 @@ export default function App() {
             <div className="max-w-6xl mx-auto flex flex-col gap-6">
               
               {/* Header description */}
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight text-white font-display">Playground de Correção Inteligente</h2>
-                <p className="text-sm text-slate-400 mt-1">
-                  Insira o código-fonte, selecione a linguagem-alvo correspondente e estipule os casos de verificação de entrada e saída esperados.
-                </p>
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight text-white font-display">Playground de Correção Inteligente</h2>
+                  <p className="text-sm text-slate-400 mt-1">
+                    Insira o código-fonte, selecione a linguagem-alvo correspondente e estipule os casos de verificação de entrada e saída esperados.
+                  </p>
+                </div>
+                
+                {/* Sandbox Monitor - Professional UI */}
+                <div className="bg-[#0f172a] border border-[#1e295b]/30 rounded-xl px-4 py-2.5 flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest">Sandbox Core</span>
+                    <div className="flex items-center gap-2">
+                       <div className={`w-2 h-2 rounded-full ${sandboxStatus?.status === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-700 animate-pulse'}`} />
+                       <span className="text-xs font-bold text-slate-200 capitalize">{sandboxStatus?.status || 'Processando...'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="h-8 w-px bg-slate-800/50" />
+                  
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest">Isolamento</span>
+                    <span className="text-xs font-bold text-emerald-400 font-mono">SUBPROCESS_JAIL</span>
+                  </div>
+
+                  <div className="h-8 w-px bg-slate-800/50" />
+
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest">Engines</span>
+                    <div className="flex gap-1.5 mt-0.5">
+                       {sandboxStatus?.engines?.python === 'available' && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" title="Python 3" />}
+                       {sandboxStatus?.engines?.node === 'available' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Node.js" />}
+                       {sandboxStatus?.engines?.gcc === 'available' && <span className="w-1.5 h-1.5 rounded-full bg-slate-400" title="GCC/C" />}
+                       {sandboxStatus?.engines?.gplusplus === 'available' && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" title="G++/C++" />}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Grid content */}
@@ -2064,7 +2216,17 @@ export default function App() {
                   >
                     Geral
                   </button>
-                  {featureFlags.ENABLE_CLASS_ERROR_DASHBOARD && (
+                    <button
+                      onClick={() => setAnalyticsSubTab("pedagogical")}
+                      className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
+                        analyticsSubTab === "pedagogical" 
+                          ? "bg-emerald-500 text-slate-900 shadow" 
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Pedagógico
+                    </button>
+                    {featureFlags.ENABLE_CLASS_ERROR_DASHBOARD && (
                     <button
                       onClick={() => setAnalyticsSubTab("errors")}
                       className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
@@ -2098,6 +2260,18 @@ export default function App() {
                       }`}
                     >
                       Mapa de Competências
+                    </button>
+                  )}
+                  {featureFlags.ENABLE_CLASS_COMPARISON && (
+                    <button
+                      onClick={() => setAnalyticsSubTab("comparison")}
+                      className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
+                        analyticsSubTab === "comparison" 
+                          ? "bg-emerald-500 text-slate-900 shadow" 
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Comparativo
                     </button>
                   )}
                 </div>
@@ -2297,7 +2471,8 @@ export default function App() {
 
                   </div>
                 </>
-              ))}
+              )
+            )}
 
               {/* Class Error Dashboard subtab */}
               {analyticsSubTab === "errors" && featureFlags.ENABLE_CLASS_ERROR_DASHBOARD && (
@@ -2430,6 +2605,164 @@ export default function App() {
                               Excelente aproveitamento! Nenhum estudante abaixo de 70%
                             </div>
                           )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {analyticsSubTab === "pedagogical" && (
+                <PedagogicalDashboard />
+              )}
+
+              {analyticsSubTab === "comparison" && featureFlags.ENABLE_CLASS_COMPARISON && (
+                <div className="flex flex-col gap-6 animate-fade-in text-slate-100">
+                  <div className="p-6 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex flex-col gap-1">
+                      <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-emerald-400" />
+                        Gráfico de Comparação de Turmas
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">Selecione duas unidades para um diagnóstico comparativo de aproveitamento médio.</p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="flex flex-col gap-1 w-full sm:w-64">
+                        <label className="text-[10px] font-mono text-slate-500 uppercase font-bold">Turma A</label>
+                        <select
+                          value={classA}
+                          onChange={(e) => setClassA(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-[#030712] border border-[#1e295b]/40 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                        >
+                          {comparisonData.map((c, i) => (
+                            <option key={i} value={c.class_name}>{c.class_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="text-slate-600 font-black italic">VS</div>
+                      <div className="flex flex-col gap-1 w-full sm:w-64">
+                        <label className="text-[10px] font-mono text-slate-500 uppercase font-bold">Turma B</label>
+                        <select
+                          value={classB}
+                          onChange={(e) => setClassB(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-[#030712] border border-[#1e295b]/40 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                        >
+                          {comparisonData.map((c, i) => (
+                            <option key={i} value={c.class_name}>{c.class_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {loadingComparison ? (
+                    <div className="py-24 text-center animate-pulse">
+                      <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
+                      <span className="text-xs font-mono text-slate-400">Cruzando dados analíticos...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+                      {/* Bar Chart Comparison */}
+                      <div className="col-span-12 md:col-span-8 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                        <div className="w-full h-[400px] mt-2">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={[
+                                comparisonData.find(c => c.class_name === classA),
+                                comparisonData.find(c => c.class_name === classB)
+                              ].filter(Boolean)}
+                              margin={{ top: 20, right: 30, left: -20, bottom: 20 }}
+                              barSize={60}
+                            >
+                              <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+                              <XAxis 
+                                dataKey="class_name" 
+                                stroke="#64748b" 
+                                fontSize={11} 
+                                fontFamily="JetBrains Mono" 
+                                tickLine={false} 
+                                axisLine={false}
+                                interval={0}
+                              />
+                              <YAxis 
+                                domain={[0, 100]} 
+                                stroke="#64748b" 
+                                fontSize={10} 
+                                fontFamily="JetBrains Mono" 
+                                tickLine={false} 
+                                axisLine={false}
+                              />
+                              <Tooltip 
+                                cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    const data = payload[0].payload;
+                                    return (
+                                      <div className="bg-[#0b0f19] border border-[#1e295b]/60 p-4 rounded-xl shadow-2xl">
+                                        <p className="text-white font-bold text-sm mb-2">{data.class_name}</p>
+                                        <div className="flex flex-col gap-1.5 text-xs font-mono">
+                                          <p className="text-emerald-400">Média Geral: <span className="font-extrabold">{data.average_grade}%</span></p>
+                                          <p className="text-slate-400">Total Submissões: <span className="text-slate-200">{data.total_submissions}</span></p>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="average_grade" radius={[8, 8, 0, 0]}>
+                                {comparisonData.map((entry, index) => (
+                                  <Cell 
+                                    key={index} 
+                                    fill={entry.class_name === classA ? '#10b981' : '#6366f1'} 
+                                    fillOpacity={0.8}
+                                  />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="flex items-center gap-6 justify-center border-t border-[#1e295b]/10 pt-4">
+                          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                            <div className="w-3 h-3 rounded bg-emerald-500 opacity-80" />
+                            <span>{classA}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                            <div className="w-3 h-3 rounded bg-indigo-500 opacity-80" />
+                            <span>{classB}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Detailed comparison metrics */}
+                      <div className="col-span-12 md:col-span-4 flex flex-col gap-6">
+                        <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-6">
+                          <h4 className="text-xs font-mono font-bold uppercase text-slate-400 tracking-widest border-b border-[#1e295b]/20 pb-3">Insights Comparativos</h4>
+                          
+                          <div className="flex flex-col gap-5">
+                            {[
+                              { label: "Diferença de Aproveitamento", val: `${Math.abs((comparisonData.find(c => c.class_name === classA)?.average_grade || 0) - (comparisonData.find(c => c.class_name === classB)?.average_grade || 0))}%`, desc: "Variação pontos percentuais" },
+                              { label: "Volume de Atividades", val: `${(comparisonData.find(c => c.class_name === classA)?.total_submissions || 0) + (comparisonData.find(c => c.class_name === classB)?.total_submissions || 0)}`, desc: "Envios totais agregados" },
+                              { label: "Líder de Performance", val: (comparisonData.find(c => c.class_name === classA)?.average_grade || 0) > (comparisonData.find(c => c.class_name === classB)?.average_grade || 0) ? classA : classB, desc: "Maior média registrada" }
+                            ].map((insight, i) => (
+                              <div key={i} className="flex flex-col gap-1">
+                                <span className="text-[10px] text-slate-500 font-mono font-bold uppercase">{insight.label}</span>
+                                <span className="text-lg font-bold text-white tracking-tight">{insight.val}</span>
+                                <span className="text-[10px] text-slate-400 italic font-medium">{insight.desc}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl mt-2">
+                            <div className="flex items-start gap-2">
+                              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                              <p className="text-[10px] leading-relaxed text-emerald-100/70 font-mono">
+                                <strong className="text-emerald-400">Diagnóstico IA:</strong> A turma { (comparisonData.find(c => c.class_name === classA)?.average_grade || 0) > (comparisonData.find(c => c.class_name === classB)?.average_grade || 0) ? classA : classB } apresenta maior estabilidade nas submissões recentes. Recomenda-se nivelamento focado em exercícios base para a parceira.
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

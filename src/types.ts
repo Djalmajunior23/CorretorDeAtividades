@@ -67,3 +67,95 @@ export interface AuthContextType {
   isLoading: boolean;
   diagnoseResponse?: any;
 }
+
+export interface PedagogicalTrack {
+  id: string;
+  teacher_id: string;
+  class_id?: string;
+  student_id?: string;
+  title: string;
+  type: 'reforço' | 'recuperação' | 'aprofundamento' | 'revisão' | 'competencia';
+  diagnosis?: string;
+  critical_topics?: string[];
+  learning_objectives?: string[];
+  recommended_activities?: any;
+  recommended_questions?: string[];
+  recommended_labs?: string[];
+  estimated_duration?: string;
+  success_criteria?: string[];
+  ai_recommendations?: any;
+  teacher_notes?: string;
+  status: 'draft' | 'active' | 'completed' | 'archived';
+  created_at: string;
+}
+
+export interface InterventionPlan {
+  id: string;
+  teacher_id: string;
+  class_id?: string;
+  student_id?: string;
+  title: string;
+  diagnosis?: string;
+  objectives?: string[];
+  actions?: any;
+  resources?: string[];
+  schedule?: string;
+  success_criteria?: string[];
+  monitoring_strategy?: string;
+  status: 'draft' | 'active' | 'completed' | 'archived';
+  created_at: string;
+}
+
+export interface EducationalTemplate {
+  id: string;
+  teacher_id?: string;
+  title: string;
+  type: string;
+  topic?: string;
+  language?: string;
+  difficulty?: string;
+  target_audience?: string;
+  is_system_template: boolean;
+}
+
+export interface GeneratedMaterial {
+  id: string;
+  teacher_id: string;
+  title: string;
+  type: string;
+  topic: string;
+  content: any;
+  status: 'draft' | 'approved' | 'archived' | 'exported';
+  created_at: string;
+}
+
+export interface ResourceLibraryItem {
+  id: string;
+  teacher_id: string;
+  folder_id?: string;
+  title: string;
+  description?: string;
+  type: string;
+  topic?: string;
+  language?: string;
+  difficulty?: string;
+  tags?: string[];
+  file_url?: string;
+  content?: any;
+  is_favorite: boolean;
+  status: 'active' | 'archived' | 'deleted';
+  created_at: string;
+}
+
+export interface GeneratedReport {
+  id: string;
+  teacher_id: string;
+  class_id?: string;
+  student_id?: string;
+  type: string;
+  title: string;
+  content: any;
+  status: 'draft' | 'reviewed' | 'approved' | 'exported' | 'archived';
+  created_at: string;
+}
+

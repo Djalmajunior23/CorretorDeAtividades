@@ -20,8 +20,8 @@ export class AIFeedbackGenerator {
     stderr: string,
     finalScore: number
   ): Promise<AIFeedbackResponse> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
+    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER);
+    if (hasAI) {
       try {
         const schema = {
           type: "OBJECT",
