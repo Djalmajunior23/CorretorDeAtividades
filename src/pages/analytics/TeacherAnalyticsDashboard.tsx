@@ -69,21 +69,21 @@ export default function TeacherAnalyticsDashboard() {
                 <p className="text-sm text-slate-400 font-medium">Média Geral</p>
                 <BarChart3 className="w-5 h-5 text-emerald-400" />
               </div>
-              <p className="text-3xl font-bold text-white">{summary?.class_metric.average_score.toFixed(1) || 0}</p>
+              <p className="text-3xl font-bold text-white">{Number(summary?.class_metric.average_score || 0).toFixed(1)}</p>
             </div>
             <div className="bg-[#1A1D27] p-5 rounded-xl border border-slate-800">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm text-slate-400 font-medium">Maior Nota</p>
                 <TrendingUp className="w-5 h-5 text-emerald-400" />
               </div>
-              <p className="text-3xl font-bold text-white">{summary?.class_metric.highest_score.toFixed(1) || 0}</p>
+              <p className="text-3xl font-bold text-white">{Number(summary?.class_metric.highest_score || 0).toFixed(1)}</p>
             </div>
             <div className="bg-[#1A1D27] p-5 rounded-xl border border-slate-800">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm text-slate-400 font-medium">Taxa de Conclusão</p>
                 <Users className="w-5 h-5 text-cyan-400" />
               </div>
-              <p className="text-3xl font-bold text-white">{summary?.class_metric.completion_rate.toFixed(1)}%</p>
+              <p className="text-3xl font-bold text-white">{Number(summary?.class_metric.completion_rate || 0).toFixed(1)}%</p>
             </div>
             <div className="bg-[#1A1D27] p-5 rounded-xl border border-red-900/30">
               <div className="flex items-center justify-between mb-2">
@@ -104,7 +104,7 @@ export default function TeacherAnalyticsDashboard() {
                 {risk.map((student: any) => (
                   <div key={student.id} className="flex justify-between items-center p-3 rounded-lg bg-[#1E212B] border border-red-900/30 text-sm">
                     <span className="font-medium text-slate-300">{student.student_name}</span>
-                    <span className="text-red-400 font-bold">{student.score.toFixed(1)}</span>
+                    <span className="text-red-400 font-bold">{Number(student.score || 0).toFixed(1)}</span>
                   </div>
                 ))}
               </div>

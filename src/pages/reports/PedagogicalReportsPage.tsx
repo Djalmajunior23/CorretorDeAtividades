@@ -110,7 +110,7 @@ export default function PedagogicalReportsPage() {
                   <p className="text-sm text-slate-400 font-medium">Média Geral</p>
                   <BarChart3 className="w-5 h-5 text-emerald-400" />
                 </div>
-                <p className="text-3xl font-bold text-white">{(report?.average_score !== undefined && report?.average_score !== null) ? report.average_score.toFixed(1) : '0.0'}</p>
+                <p className="text-3xl font-bold text-white">{(report?.average_score !== undefined && report?.average_score !== null) ? Number(report.average_score).toFixed(1) : '0.0'}</p>
               </div>
               
               <div className="bg-[#1A1D27] p-5 rounded-xl border border-slate-800">

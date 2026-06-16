@@ -3,6 +3,4 @@ dist
 .env
 .git
 .github
-frontend
-src
-public
+*.log

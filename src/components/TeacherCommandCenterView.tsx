@@ -1043,7 +1043,7 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
                         Erros de Compilador
                       </span>
                       <span className="text-base font-bold block text-emerald-400 mt-1">
-                        {(100 - cohortAStats.compilerRate).toFixed(1)}%
+                        {Number(100 - cohortAStats.compilerRate).toFixed(1)}%
                       </span>
                     </div>
                     <div className="bg-slate-900/30 p-3 rounded-lg border border-slate-800">
@@ -1099,7 +1099,7 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
                         Erros de Compilador
                       </span>
                       <span className="text-base font-bold block text-emerald-400 mt-1">
-                        {(100 - cohortBStats.compilerRate).toFixed(1)}%
+                        {Number(100 - cohortBStats.compilerRate).toFixed(1)}%
                       </span>
                     </div>
                     <div className="bg-slate-900/30 p-3 rounded-lg border border-slate-800">

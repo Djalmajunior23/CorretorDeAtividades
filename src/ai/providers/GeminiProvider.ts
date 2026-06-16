@@ -35,13 +35,12 @@ export class GeminiProvider extends BaseProvider {
             contents.push(prompt);
         }
 
-        const primaryModel = this.config.model && this.config.model !== "gemini-2.5-flash" ? this.config.model : "gemini-1.5-flash";
+        const primaryModel = this.config.model && this.config.model !== "gemini-1.5-flash" ? this.config.model : "gemini-1.5-flash";
         const modelsToTry = Array.from(new Set([
             primaryModel,
             "gemini-1.5-flash",
-            "gemini-2.5-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-3.1-pro-preview"
+            "gemini-1.5-pro",
+            "gemini-2.0-flash-exp"
         ]));
 
         let lastError: any = null;
@@ -89,13 +88,12 @@ export class GeminiProvider extends BaseProvider {
             contents.push(prompt);
         }
 
-        const primaryModel = this.config.model && this.config.model !== "gemini-2.5-flash" ? this.config.model : "gemini-1.5-flash";
+        const primaryModel = this.config.model && this.config.model !== "gemini-1.5-flash" ? this.config.model : "gemini-1.5-flash";
         const modelsToTry = Array.from(new Set([
             primaryModel,
             "gemini-1.5-flash",
-            "gemini-2.5-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-3.1-pro-preview"
+            "gemini-1.5-pro",
+            "gemini-2.0-flash-exp"
         ]));
 
         let lastError: any = null;

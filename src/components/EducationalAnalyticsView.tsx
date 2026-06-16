@@ -119,7 +119,7 @@ export default function EducationalAnalyticsView() {
         />
         <KPICard
           title="Média Geral"
-          value={(overview?.average_score || 0).toFixed(1)}
+          value={Number(overview?.average_score || 0).toFixed(1)}
           icon={Target}
           color="text-emerald-400"
           bgColor="bg-emerald-400/10"
@@ -211,7 +211,7 @@ export default function EducationalAnalyticsView() {
                         </td>
                       ))}
                       <td className="py-4 text-center font-black text-white text-sm">
-                        {c.average_score.toFixed(0)}%
+                        {Number(c.average_score || 0).toFixed(0)}%
                       </td>
                     </tr>
                   ))}
@@ -392,7 +392,7 @@ export default function EducationalAnalyticsView() {
                           Média
                         </span>
                         <span className="text-lg font-black text-slate-200">
-                          {s.average_score.toFixed(0)}
+                          {Number(s.average_score || 0).toFixed(0)}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-1 justify-end max-w-[120px]">

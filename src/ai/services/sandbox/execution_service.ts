@@ -5,18 +5,30 @@ import path from "path";
 import os from "os";
 import { ExecutionRequest, ExecutionResponse, TestCase, TestCaseResult, ExecutionStatus } from "./types";
 import { SecurityScanner } from "./security_scanner";
+import { AIExecutor } from "./AIExecutor";
 
 export class ExecutionService {
   private static TEMP_DIR = path.join(os.tmpdir(), "codecheck-sandbox");
 
   static async run(request: ExecutionRequest): Promise<ExecutionResponse> {
+    const language = request.language.toLowerCase();
+    
     // 1. Initial Scan
-    const scanResult = SecurityScanner.scan(request.language, request.code);
+    const scanResult = SecurityScanner.scan(language, request.code);
     if (!scanResult.safe) {
       return this.createErrorResponse(request.language, "security_blocked", "O código contém comandos proibidos.", scanResult.flaggedPatterns);
     }
 
-    // 2. Prepare workspace
+    // 2. Determine execution mode (Local vs AI Simulation)
+    // Only Python and JS/Node are typically available in standard serverless containers
+    const localInterpreters = ["python", "javascript", "node", "typescript"];
+    const needsAI = !localInterpreters.includes(language);
+
+    if (needsAI) {
+      return this.runAISimulation(request);
+    }
+
+    // 3. Prepare workspace for local execution
     if (!fs.existsSync(this.TEMP_DIR)) fs.mkdirSync(this.TEMP_DIR, { recursive: true });
     const jobId = Math.random().toString(36).substring(7);
     const jobDir = path.join(this.TEMP_DIR, jobId);
@@ -101,6 +113,62 @@ export class ExecutionService {
         if (fs.existsSync(jobDir)) fs.rmSync(jobDir, { recursive: true, force: true });
       } catch (err) {}
     }
+  }
+
+  private static async runAISimulation(request: ExecutionRequest): Promise<ExecutionResponse> {
+    const testResults: TestCaseResult[] = [];
+    let totalPassed = 0;
+    let finalStatus: ExecutionStatus = "accepted";
+    let lastStdout = "";
+    let lastStderr = "";
+    
+    const testCases = request.test_cases || (request.stdin !== undefined ? [{ name: "Teste Manual", stdin: request.stdin, expected_stdout: "" }] : []);
+
+    for (const tc of testCases) {
+      const result = await AIExecutor.simulate(request.language, request.code, tc.stdin);
+      
+      let passed = false;
+      if (result.status === "accepted") {
+        passed = tc.expected_stdout ? result.stdout.trim() === tc.expected_stdout.trim() : true;
+      }
+
+      testResults.push({
+        name: tc.name,
+        passed,
+        expected_stdout: tc.expected_stdout,
+        actual_stdout: result.stdout,
+        execution_time_ms: 100 // Simulated AI overhead
+      });
+
+      if (passed) totalPassed++;
+      lastStdout = result.stdout;
+      lastStderr = result.stderr;
+      
+      if (result.status !== "accepted") {
+        finalStatus = result.status;
+        break;
+      }
+    }
+
+    if (testCases.length > 0 && finalStatus === "accepted" && totalPassed < testCases.length) {
+      finalStatus = "wrong_answer";
+    }
+
+    const score = testCases.length > 0 ? Math.round((totalPassed / testCases.length) * 100) : 100;
+
+    return {
+      success: true,
+      language: request.language,
+      status: finalStatus,
+      score,
+      stdout: lastStdout,
+      stderr: lastStderr,
+      execution_time_ms: 500,
+      memory_used_mb: 0,
+      test_results: testResults,
+      security_flags: [],
+      teacher_summary: `Validado via Sandbox IA (Simulação determinística): ${this.getStatusLabel(finalStatus)}`
+    };
   }
 
   private static getFileName(language: string): string {

@@ -14,6 +14,8 @@ import CompetenciesManagerView from "./components/CompetenciesManagerView";
 import DashboardView from "./components/DashboardView";
 import PlanejamentoView from "./components/PlanejamentoView";
 import TurmasView from "./components/TurmasView";
+import { ClassManagerView } from "./components/ClassManagerView";
+import { StudentsManagerView } from "./components/StudentsManagerView";
 import AvaliacoesView from "./components/AvaliacoesView";
 import RecuperacaoView from "./components/RecuperacaoView";
 import MateriaisView from "./components/MateriaisView";
@@ -984,7 +986,11 @@ export default function App() {
           )}
 
           {currentTab === "turmas" && (
-            <TurmasView />
+            <ClassManagerView />
+          )}
+
+          {currentTab === "students" && (
+            <StudentsManagerView />
           )}
 
           {currentTab === "batch" && (

@@ -16,7 +16,7 @@ export default function StudentProgressPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border">
                     <p className="text-gray-500">Média Geral</p>
-                    <p className="text-3xl font-bold">{progress.average_score.toFixed(1)}%</p>
+                    <p className="text-3xl font-bold">{Number(progress.average_score || 0).toFixed(1)}%</p>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border">
                     <p className="text-gray-500">Atividades Concluídas</p>

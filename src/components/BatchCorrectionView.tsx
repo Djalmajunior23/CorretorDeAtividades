@@ -351,7 +351,7 @@ export default function BatchCorrectionView() {
                       MÉDIA TURMA
                     </span>
                     <span className="text-2xl font-black text-white">
-                      {selectedBatch.average_score.toFixed(1)}/100
+                      {Number(selectedBatch.average_score || 0).toFixed(1)}/100
                     </span>
                   </div>
                   <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 flex flex-col gap-1">

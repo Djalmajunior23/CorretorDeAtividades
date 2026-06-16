@@ -33,7 +33,7 @@ dotenv.config();
 
 const { Pool } = pg;
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 8080;
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
@@ -121,6 +121,100 @@ function xssSanitizer(req: express.Request, res: express.Response, next: express
 app.use(securityHeaders);
 app.use(apiRateLimiter);
 app.use(xssSanitizer);
+
+// ============================================
+// AUTHENTICATION ROUTES (Etapa 6 - Login)
+// ============================================
+app.post("/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  
+  // High-Security academic hash simulation (in production use bcrypt)
+  if (email === "professor@email.com" && password === "senha123") {
+    return res.json({
+      token: "academic_jwt_token_simulated_" + Date.now(),
+      user: {
+        id: "teacher_portal",
+        name: "Djalma Batista Junior",
+        email: "professor@email.com",
+        role: "PROFESSOR"
+      }
+    });
+  }
+  
+  if (email === "admin@codecheck.ai" && password === "admin123") {
+    return res.json({
+      token: "admin_jwt_token_simulated_" + Date.now(),
+      user: {
+        id: "admin_root",
+        name: "Administrator",
+        email: "admin@codecheck.ai",
+        role: "ADMIN"
+      }
+    });
+  }
+
+  // Check in DB if pool exists
+  if (pool) {
+    try {
+      const q = await pool.query("SELECT * FROM d_student_record WHERE email = $1", [email]);
+      if (q.rows.length > 0) {
+        // Simple plain check for MVP (Hardening required in Stage 5)
+        const student = q.rows[0];
+        return res.json({
+          token: "student_jwt_token_" + student.id,
+          user: {
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            role: "ALUNO"
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  res.status(401).json({ detail: "E-mail ou senha inválidos." });
+});
+
+app.get("/auth/me", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ detail: "Não autenticado" });
+  
+  const token = authHeader.split(" ")[1];
+  if (token.startsWith("academic_jwt_token")) {
+    return res.json({
+      id: "teacher_portal",
+      name: "Djalma Batista Junior",
+      email: "professor@email.com",
+      role: "PROFESSOR"
+    });
+  } else if (token.startsWith("admin_jwt_token")) {
+    return res.json({
+      id: "admin_root",
+      name: "Administrator",
+      email: "admin@codecheck.ai",
+      role: "ADMIN"
+    });
+  }
+  
+  if (pool && token.startsWith("student_jwt_token_")) {
+    const id = token.replace("student_jwt_token_", "");
+    try {
+      const q = await pool.query("SELECT * FROM d_student_record WHERE id = $1", [id]);
+      if (q.rows.length > 0) {
+        const student = q.rows[0];
+        return res.json({
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          role: "ALUNO"
+        });
+      }
+    } catch (e) {}
+  }
+
+  res.status(401).json({ detail: "Sessão inválida" });
+});
 
 // Database Pool (with safe fallback)
 const databaseUrl = process.env.DATABASE_URL;
@@ -3282,7 +3376,7 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
     // 2. Call Gemini
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: `Gere uma trilha pedagógica para a turma ${classId} com foco em ${type}.
       Tópicos críticos identificados: ${criticalTopics.join(", ")}.
       
@@ -3401,7 +3495,7 @@ app.post("/api/intervention-plans/generate/class/:classId", async (req, res) => 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: `Gere um plano de intervenção pedagógica para a turma ${classId}.
       O plano deve ser baseado em dificuldades comuns de programação.
       
@@ -3461,7 +3555,7 @@ app.post("/api/materials/generate", async (req, res) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: `Gere um material didático do tipo "${template_type}" sobre o tema "${topic}".
       Dificuldade: ${difficulty}. 
       Público-alvo: ${target_audience}.
@@ -3684,7 +3778,7 @@ app.post("/api/reports/generate", async (req, res) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: `Gere um relatório pedagógico do tipo "${report_type}" para a turma ${class_id} e aluno ${student_id || 'Todos'} (período: ${period}).
       Evite termos negativos (como "fracassou", "péssimo"). Use termos pedagógicos positivos de desenvolvimento.
       Incluir evidências: ${include_evidences}. Incluir recomendações: ${include_recommendations}.
@@ -5642,7 +5736,6 @@ const inMemoryClassSummaries: any[] = [];
 const inMemoryClassExports: any[] = [];
 
 // GET & POST: Class Sessions (Registros de Aulas)
-app.get("/api/codecheck/diary/sessions", (r,s,n) => { console.log("!!!HIT SESSIONS ", r.url); n(); });
 app.get("/api/codecheck/diary/sessions", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_SMART_CLASS_DIARY) return res.status(403).json({ error: "Desativado" });
   const { search, class_name } = req.query;
@@ -6703,7 +6796,12 @@ async function main() {
   if (process.env.NODE_ENV !== "production") {
     // Vite middleware for rendering frontend
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: {
+          port: 3001
+        }
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

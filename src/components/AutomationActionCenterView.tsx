@@ -207,7 +207,7 @@ export default function AutomationActionCenterView({ featureFlags }: any) {
                         <span className="text-sm font-bold text-amber-400">
                           Taxa de Timeouts de Sandbox Elevada (
                           {timeoutThreshold}% Excedido) (
-                          {(
+                          {Number(
                             (sandboxMetrics.sandbox_timeouts /
                               sandboxMetrics.total_executions) *
                             100
@@ -370,7 +370,7 @@ export default function AutomationActionCenterView({ featureFlags }: any) {
                       <p className="text-xs text-slate-300 mt-3 font-medium">
                         Representa{" "}
                         <strong className="font-mono text-emerald-400">
-                          {(
+                          {Number(
                             ((sandboxMetrics.internal_errors +
                               sandboxMetrics.sandbox_timeouts) /
                               sandboxMetrics.total_executions) *
@@ -419,7 +419,7 @@ export default function AutomationActionCenterView({ featureFlags }: any) {
                           Internal Error
                         </span>
                         <span className="text-xs font-mono bg-rose-950/40 text-rose-300 border border-rose-900/30 px-2 py-0.5 rounded font-bold">
-                          {(
+                          {Number(
                             (sandboxMetrics.internal_errors /
                               sandboxMetrics.total_executions) *
                             100
@@ -449,7 +449,7 @@ export default function AutomationActionCenterView({ featureFlags }: any) {
                           Sandbox Timeout
                         </span>
                         <span className="text-xs font-mono bg-amber-950/40 text-amber-300 border border-amber-900/30 px-2 py-0.5 rounded font-bold">
-                          {(
+                          {Number(
                             (sandboxMetrics.sandbox_timeouts /
                               sandboxMetrics.total_executions) *
                             100
@@ -560,7 +560,7 @@ export default function AutomationActionCenterView({ featureFlags }: any) {
                                       : "text-emerald-400 font-bold"
                                 }
                               >
-                                {rate.toFixed(1)}%
+                                {Number(rate).toFixed(1)}%
                               </strong>
                               )
                             </span>

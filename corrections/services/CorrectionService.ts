@@ -129,14 +129,16 @@ export class CorrectionService {
     }
 
     // Is there sandbox support for this language?
-    const isSandboxSupported = ["python", "javascript", "c", "cpp"].includes(langLower);
+    const executableLangs = [
+      "python", "javascript", "js", "typescript", "ts", "node", 
+      "java", "c", "cpp", "csharp", "c#", "php", "sql", "go", "rust", "kotlin"
+    ];
+    const isSandboxSupported = executableLangs.includes(langLower);
+    const isStaticLang = ["portugol", "pseudocode", "pseudocodigo", "pseudocódigo"].includes(langLower);
 
-    // 3. Static check if the language is not executable locally, or if is static Portugol/Pseudocode
-    const isStaticOrUnavailable = !enableSandbox && ["portugol", "pseudocode", "pseudocodigo", "pseudocódigo", "java", "c", "cpp", "csharp", "php", "go", "rust", "kotlin"].includes(langLower);
-    
-    // Check if we should use Sandbox
-    if (enableSandbox && isSandboxSupported) {
-       // Route to Sandbox
+    // 3. Execution routing
+    if (enableSandbox && isSandboxSupported && !isStaticLang) {
+       // Route to Sandbox (AI Sandbox handles missing interpreters locally)
        const sbRes = await SandboxExecutor.execute(code, language, testCases);
        syntax_ok = sbRes.syntaxOk;
        compiled = sbRes.compiled;
@@ -242,7 +244,7 @@ export class CorrectionService {
          ai_pedagogical_feedback
        };
 
-    } else if (isStaticOrUnavailable) {
+    } else if (isStaticLang) {
       const staticRes = StaticLangsExecutor.analyze(code, language);
       
       const qualityAnalysis = CodeQualityAnalyzer.analyze(code, language, lintingSettings);

@@ -240,7 +240,7 @@ export default function SimilarityView() {
                       LIMITE (THRESHOLD)
                     </span>
                     <span className="text-2xl font-black text-white">
-                      {(selectedAnalysis.threshold * 100).toFixed(0)}%
+                      {Number(selectedAnalysis.threshold * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>
@@ -285,7 +285,7 @@ export default function SimilarityView() {
                             <span
                               className={`text-xl font-black ${p.similarity_score * 100 >= 90 ? "text-rose-500" : "text-amber-500"}`}
                             >
-                              {(p.similarity_score * 100).toFixed(1)}%
+                              {Number(p.similarity_score * 100).toFixed(1)}%
                             </span>
                             <span
                               className={`text-[10px] font-bold uppercase ${p.level === "critical" ? "text-rose-400" : "text-amber-400"}`}
@@ -312,7 +312,7 @@ export default function SimilarityView() {
                                 NORMALIZAÇÃO
                               </span>
                               <span className="text-[10px] text-slate-300">
-                                {(
+                                {Number(
                                   p.method_scores.normalized_text * 100
                                 ).toFixed(0)}
                                 %
@@ -323,7 +323,7 @@ export default function SimilarityView() {
                                 TOKENS
                               </span>
                               <span className="text-[10px] text-slate-300">
-                                {(p.method_scores.tokens * 100).toFixed(0)}%
+                                {Number(p.method_scores.tokens * 100).toFixed(0)}%
                               </span>
                             </div>
                             <div className="flex flex-col">
@@ -331,7 +331,10 @@ export default function SimilarityView() {
                                 ESTRUTURA
                               </span>
                               <span className="text-[10px] text-slate-300">
-                                {(p.method_scores.structure * 100).toFixed(0)}%
+                                {Number(p.method_scores.structure * 100).toFixed(
+                                  0
+                                )}
+                                %
                               </span>
                             </div>
                           </div>
@@ -388,7 +391,7 @@ export default function SimilarityView() {
                   </h3>
                   <p className="text-xs text-slate-500 font-mono">
                     Analisando similaridade de{" "}
-                    {(viewingPair.similarity_score * 100).toFixed(1)}%
+                    {Number(viewingPair.similarity_score * 100).toFixed(1)}%
                   </p>
                 </div>
                 <button
