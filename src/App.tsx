@@ -184,6 +184,8 @@ export default function App() {
   const [showCorrectorStudentWarning, setShowCorrectorStudentWarning] = useState<boolean>(false);
   const [correctorClasses, setCorrectorClasses] = useState<any[]>([]);
   const [correctorStudents, setCorrectorStudents] = useState<any[]>([]);
+  const [correctorActivities, setCorrectorActivities] = useState<any[]>([]);
+  const [selectedCorrectorActivity, setSelectedCorrectorActivity] = useState<string>('');
   const [productivityFocused, setProductivityFocused] = useState<boolean>(() => {
     try {
       return localStorage.getItem("codecheck_productivity_focused") === "true";
@@ -690,6 +692,51 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Synchronously fetch classes when the user enters the corrector tab
+  useEffect(() => {
+    if (currentTab === "corrector") {
+      fetch("/api/classes")
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setCorrectorClasses(data);
+          }
+        })
+        .catch(err => console.error("Error loading corrector classes:", err));
+    }
+  }, [currentTab]);
+
+  // Synchronously fetch students and activities for the selected corrector class
+  useEffect(() => {
+    if (selectedCorrectorClass) {
+      // 1. Fetch Students of this class
+      fetch(`/api/students?class_id=${selectedCorrectorClass}`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setCorrectorStudents(data);
+          }
+        })
+        .catch(err => console.error("Error loading corrector students:", err));
+
+      // 2. Fetch Activities for this class
+      fetch("/api/activities")
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            const filtered = data.filter((a: any) => a.class_id === selectedCorrectorClass);
+            setCorrectorActivities(filtered);
+          }
+        })
+        .catch(err => console.error("Error loading activities:", err));
+    } else {
+      setCorrectorStudents([]);
+      setCorrectorActivities([]);
+      setSelectedCorrectorStudent("");
+      setSelectedCorrectorActivity("");
+    }
+  }, [selectedCorrectorClass]);
+
   // Helper to construct historical performance data from actual database/in-memory records
   const getSubmissionsHistory = () => {
     const valid = submissions
@@ -758,7 +805,11 @@ export default function App() {
           code,
           test_cases: testCases,
           rubric: rubricWeights,
-          studentName: studentName
+          studentName: studentName,
+          className: correctorClasses.find(c => c.id === selectedCorrectorClass)?.name || null,
+          activity_id: selectedCorrectorActivity || null,
+          class_id: selectedCorrectorClass || null,
+          student_id: selectedCorrectorStudent || null
         })
       });
 
@@ -1150,9 +1201,47 @@ export default function App() {
                     {selectedCorrectorClass && (
                       <div className="mt-3">
                         <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Aluno(a)</label>
-                        <select value={selectedCorrectorStudent} onChange={e => { setSelectedCorrectorStudent(e.target.value); setShowCorrectorStudentWarning(false); }} className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer">
+                        <select 
+                          value={selectedCorrectorStudent} 
+                          onChange={e => { 
+                            const val = e.target.value;
+                            setSelectedCorrectorStudent(val); 
+                            const st = correctorStudents.find(student => student.id === val);
+                            if (st) {
+                              setStudentName(st.name);
+                            } else {
+                              setStudentName(null);
+                            }
+                            setShowCorrectorStudentWarning(false); 
+                          }} 
+                          className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer"
+                        >
                           <option value="">Selecione o Aluno...</option>
                           {correctorStudents.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    {selectedCorrectorClass && (
+                      <div className="mt-3">
+                        <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Atividade Vinculada</label>
+                        <select 
+                          value={selectedCorrectorActivity} 
+                          onChange={e => { 
+                            const actId = e.target.value;
+                            setSelectedCorrectorActivity(actId);
+                            const actObj = correctorActivities.find(a => a.id === actId);
+                            if (actObj) {
+                              if (actObj.language) {
+                                setLanguage(actObj.language);
+                              }
+                            }
+                          }} 
+                          className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer"
+                        >
+                          <option value="">Instrução Livre (Sem atividade específica)</option>
+                          {correctorActivities.map(a => (
+                            <option key={a.id} value={a.id}>{a.title} ({a.language?.toUpperCase()})</option>
+                          ))}
                         </select>
                       </div>
                     )}

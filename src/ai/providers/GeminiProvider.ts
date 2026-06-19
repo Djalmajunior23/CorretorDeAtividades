@@ -35,10 +35,10 @@ export class GeminiProvider extends BaseProvider {
             contents.push(prompt);
         }
 
-        const primaryModel = this.config.model && this.config.model !== "gemini-1.5-flash" ? this.config.model : "gemini-1.5-flash";
+        const defaultModel = process.env.AI_ACTIVITY_MODEL || "gemini-1.5-flash";
+        const primaryModel = this.config.model && this.config.model !== defaultModel ? this.config.model : defaultModel;
         const modelsToTry = Array.from(new Set([
             primaryModel,
-            "gemini-1.5-flash",
             "gemini-1.5-pro",
             "gemini-2.0-flash-exp"
         ]));
@@ -54,14 +54,18 @@ export class GeminiProvider extends BaseProvider {
                 return response.text || "";
             } catch (err: any) {
                 lastError = err;
-                const is503Or429 = err?.status === 503 || err?.status === 429 ||
-                    err?.message?.includes("503") || err?.message?.includes("429") ||
-                    err?.message?.includes("high demand") || err?.message?.includes("temporary") ||
-                    err?.message?.includes("UNAVAILABLE") || err?.message?.includes("Resource exhausted");
+                console.error(`[GeminiProvider] Request failed for model ${modelName}:`, err.message);
                 
-                if (is503Or429) {
-                    console.warn(`[GeminiProvider] Model ${modelName} failed with 503/429 temporary status. Trying next fallback model...`);
-                    // Sleep for 500ms before trying the next model
+                // Check for 503, 429, or 404 (model not found)
+                const isRetryable = err?.status === 503 || err?.status === 429 || err?.status === 404 ||
+                    err?.message?.includes("503") || err?.message?.includes("429") || err?.message?.includes("404") ||
+                    err?.message?.includes("not found") ||
+                    err?.message?.includes("high demand") || err?.message?.includes("temporary") ||
+                    err?.message?.includes("UNAVAILABLE") || err?.message?.includes("Resource exhausted") ||
+                    err?.message?.includes("fetch failed");
+                
+                if (isRetryable) {
+                    console.warn(`[GeminiProvider] Model ${modelName} failed (status ${err.status}). Trying next fallback model...`);
                     await new Promise(res => setTimeout(res, 500));
                     continue;
                 }
@@ -88,10 +92,10 @@ export class GeminiProvider extends BaseProvider {
             contents.push(prompt);
         }
 
-        const primaryModel = this.config.model && this.config.model !== "gemini-1.5-flash" ? this.config.model : "gemini-1.5-flash";
+        const defaultModel = process.env.AI_ACTIVITY_MODEL || "gemini-1.5-flash";
+        const primaryModel = this.config.model && this.config.model !== defaultModel ? this.config.model : defaultModel;
         const modelsToTry = Array.from(new Set([
             primaryModel,
-            "gemini-1.5-flash",
             "gemini-1.5-pro",
             "gemini-2.0-flash-exp"
         ]));
@@ -116,14 +120,18 @@ export class GeminiProvider extends BaseProvider {
                 return JSON.parse(response.text) as T;
             } catch (err: any) {
                 lastError = err;
-                const is503Or429 = err?.status === 503 || err?.status === 429 ||
-                    err?.message?.includes("503") || err?.message?.includes("429") ||
-                    err?.message?.includes("high demand") || err?.message?.includes("temporary") ||
-                    err?.message?.includes("UNAVAILABLE") || err?.message?.includes("Resource exhausted");
+                console.error(`[GeminiProvider] Structured extraction failed for model ${modelName}:`, err.message);
                 
-                if (is503Or429) {
-                    console.warn(`[GeminiProvider] Structured extraction failed with 503/429 on model ${modelName}. Trying next fallback model...`);
-                    // Sleep for 500ms before trying the next model
+                // Check for 503, 429, or 404 (model not found)
+                const isRetryable = err?.status === 503 || err?.status === 429 || err?.status === 404 ||
+                    err?.message?.includes("503") || err?.message?.includes("429") || err?.message?.includes("404") ||
+                    err?.message?.includes("not found") ||
+                    err?.message?.includes("high demand") || err?.message?.includes("temporary") ||
+                    err?.message?.includes("UNAVAILABLE") || err?.message?.includes("Resource exhausted") ||
+                    err?.message?.includes("fetch failed");
+                
+                if (isRetryable) {
+                    console.warn(`[GeminiProvider] Structured extraction failed with status ${err.status} on model ${modelName}. Trying next fallback model...`);
                     await new Promise(res => setTimeout(res, 500));
                     continue;
                 }

@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: codecheck-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
+      - AI_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - AI_CODE_MODEL=qwen2.5-coder:3b
+      - AI_GENERAL_MODEL=llama3.2:3b
+      - AI_FEEDBACK_MODEL=llama3.2:3b
+      - AI_ACTIVITY_MODEL=qwen2.5-coder:3b
+      - AI_REPORT_MODEL=phi3:mini
+      - STORAGE_PROVIDER=local
+      - PERSISTENT_VOLUME_PATH=/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - codecheck_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  codecheck_data:

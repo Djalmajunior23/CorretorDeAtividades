@@ -24,8 +24,12 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Copy build artifacts from builder stage
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/*.traineddata ./
 # Also copy any other needed files if server.ts needs them at runtime
 # (server.ts bundle excludes external packages but resolves relative imports)
 

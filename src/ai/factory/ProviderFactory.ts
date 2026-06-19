@@ -4,22 +4,36 @@ import { OllamaProvider } from "../providers/OllamaProvider";
 
 export class ProviderFactory {
     static createProvider(task?: string): BaseProvider {
-        const providerName = process.env.AI_PROVIDER || "gemini";
+        const providerName = process.env.AI_PROVIDER || "ollama";
         
-        let modelName = process.env.AI_MODEL || "gemini-1.5-flash";
+        let modelName = process.env.AI_ACTIVITY_MODEL || "qwen2.5-coder:3b";
         if (task) {
             switch (task) {
                 case "code_correction":
-                    modelName = process.env.AI_CODE_MODEL || "qwen2.5-coder:7b";
+                case "code":
+                    modelName = process.env.AI_CODE_MODEL || "qwen2.5-coder:3b";
                     break;
                 case "pedagogical_feedback":
-                    modelName = process.env.AI_FEEDBACK_MODEL || "gemma3:12b";
+                case "feedback":
+                case "pedagogical_analysis":
+                    modelName = process.env.AI_FEEDBACK_MODEL || "qwen2.5-coder:3b";
                     break;
                 case "report_generation":
-                    modelName = process.env.AI_REPORT_MODEL || "phi4-mini";
+                case "report":
+                    modelName = process.env.AI_REPORT_MODEL || "llama3.2:3b";
+                    break;
+                case "reasoning":
+                    modelName = process.env.AI_REASONING_MODEL || "llama3.2:3b";
                     break;
                 case "general_analysis":
+                case "chat":
                     modelName = process.env.AI_GENERAL_MODEL || "llama3.2:3b";
+                    break;
+                case "question_generation":
+                    modelName = process.env.AI_QUESTION_GENERATION_MODEL || "qwen2.5:3b";
+                    break;
+                case "ocr_analysis":
+                    modelName = process.env.AI_OCR_ANALYSIS_MODEL || "qwen2.5-coder:3b";
                     break;
             }
         }
@@ -34,16 +48,13 @@ export class ProviderFactory {
             case "gemini":
                 return new GeminiProvider(config);
             case "ollama":
+            default:
                 const ollamaConfig: AIConfig = {
                     ...config,
                     apiKey: process.env.OLLAMA_PROXY_TOKEN,
                     baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434"
                 };
                 return new OllamaProvider(ollamaConfig);
-            case "openai":
-                throw new Error("OpenAI provider not fully implemented yet. Please use Gemini.");
-            default:
-                return new GeminiProvider(config);
         }
     }
 }

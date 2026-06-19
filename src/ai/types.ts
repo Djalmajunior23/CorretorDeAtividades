@@ -3,7 +3,15 @@ export enum AITask {
     PEDAGOGICAL_FEEDBACK = "pedagogical_feedback",
     REPORT_GENERATION = "report_generation",
     IMAGE_OCR = "image_ocr",
-    GENERAL_ANALYSIS = "general_analysis"
+    GENERAL_ANALYSIS = "general_analysis",
+    CODE = "code",
+    FEEDBACK = "feedback",
+    REPORT = "report",
+    REASONING = "reasoning",
+    CHAT = "chat",
+    QUESTION_GENERATION = "question_generation",
+    OCR_ANALYSIS = "ocr_analysis",
+    PEDAGOGICAL_ANALYSIS = "pedagogical_analysis"
 }
 
 export interface CodeCorrectionRequest {
@@ -34,5 +42,8 @@ export interface AIStatusResponse {
         feedback: string;
         report: string;
         general: string;
-    };
+    } | string[];
+    base_url?: string;
+    health?: string;
+    error?: string;
 }

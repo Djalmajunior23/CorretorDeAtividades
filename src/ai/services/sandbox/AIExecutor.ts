@@ -37,7 +37,7 @@ export class AIExecutor {
       `;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: process.env.AI_ACTIVITY_MODEL || "gemini-1.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json"

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Sparkles, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { motion } from "motion/react";
 import { AIStatusResponse } from "../ai/types";
+import { getApiBaseUrl } from "../services/apiService";
 
 export const AIStatusDashboard: React.FC = () => {
   const [status, setStatus] = useState<AIStatusResponse | null>(null);
@@ -12,12 +13,24 @@ export const AIStatusDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/ai/status");
-      if (!response.ok) throw new Error("Falha ao carregar status da IA");
-      const data = await response.json();
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/ai/status`);
+      
+      const contentType = response.headers.get("content-type");
+      if (!response.ok || !contentType || !contentType.includes("application/json")) {
+        throw new Error("Não foi possível consultar o status da IA agora.");
+      }
+
+      let data: AIStatusResponse;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        throw new Error("Não foi possível consultar o status da IA agora.");
+      }
+
       setStatus(data);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Não foi possível consultar o status da IA agora.");
     } finally {
       setLoading(false);
     }
@@ -73,7 +86,16 @@ export const AIStatusDashboard: React.FC = () => {
               )}
             </div>
           </div>
-          {Object.entries(status.models).map(([key, model]) => (
+          {(Array.isArray(status.models)
+            ? status.models.map((model, i) => {
+                let key = "General Model";
+                if (model.includes("coder") || i === 0) key = "Code Model";
+                else if (model.includes("gemma") || i === 1) key = "Feedback Model";
+                else if (model.includes("phi") || i === 2) key = "Report Model";
+                return [key, model];
+              })
+            : Object.entries(status.models || {})
+          ).map(([key, model]) => (
             <div
               key={key}
               className="p-4 bg-slate-950 rounded-xl border border-slate-800"

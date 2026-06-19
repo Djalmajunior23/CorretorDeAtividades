@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, Trash } from "lucide-react";
+import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, Trash, User } from "lucide-react";
+import { StudentProfileModal } from "./StudentProfileModal";
 
 export function StudentsManagerView() {
   const [students, setStudents] = useState<any[]>([]);
@@ -12,6 +13,7 @@ export function StudentsManagerView() {
   const [editId, setEditId] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
   const [importClass, setImportClass] = useState("");
+  const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -113,7 +115,15 @@ export function StudentsManagerView() {
               <tbody>
                 {students.map(s => (
                   <tr key={s.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
-                    <td className="py-3 px-4 font-medium text-white">{s.name}</td>
+                    <td className="py-3 px-4 font-medium text-white">
+                      <button 
+                        onClick={() => setProfileStudentId(s.id)}
+                        className="text-left font-display font-semibold text-emerald-400 hover:text-emerald-300 hover:underline transition-all cursor-pointer"
+                        title="Ver Perfil do Aluno"
+                      >
+                        {s.name}
+                      </button>
+                    </td>
                     <td className="py-3 px-4 text-slate-400 font-mono text-xs">{s.enrollment_code || "-"}</td>
                     <td className="py-3 px-4 text-slate-400">{s.class_name || "Sem turma"}</td>
                     <td className="py-3 px-4 text-slate-400">{s.email || "-"}</td>
@@ -123,6 +133,13 @@ export function StudentsManagerView() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
+                      <button 
+                        onClick={() => setProfileStudentId(s.id)} 
+                        className="text-sky-400/80 hover:text-sky-400 p-1 mr-1.5 transition-all"
+                        title="Visualizar Perfil Completo"
+                      >
+                        <User className="w-5 h-5 inline-block" />
+                      </button>
                       <button onClick={() => { setEditId(s.id); setFormData({ ...s }); setShowModal(true); }} className="text-emerald-400/70 hover:text-emerald-400 p-1 mr-1">
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -206,9 +223,21 @@ export function StudentsManagerView() {
                 <label className="text-xs text-slate-400 font-medium">Observações Pedagógicas</label>
                 <textarea rows={2} value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
               </div>
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg">Cancelar</button>
+                <button type="submit" className="px-5 py-2 text-sm font-bold bg-emerald-500 text-slate-900 rounded-lg hover:bg-emerald-600">Salvar Aluno</button>
+              </div>
             </form>
           </div>
         </div>
+      )}
+
+      {profileStudentId && (
+        <StudentProfileModal 
+          studentId={profileStudentId} 
+          isOpen={!!profileStudentId} 
+          onClose={() => setProfileStudentId(null)} 
+        />
       )}
     </div>
   );

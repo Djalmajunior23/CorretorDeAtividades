@@ -1,4 +1,5 @@
 import { registerAddonEndpoints } from './server-addon';
+import { setupTeacherAPIs } from './server-apis-addon';
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -23,6 +24,10 @@ import { RubricService } from "./src/ai/services/RubricService.ts";
 import { ExecutionService } from "./src/ai/services/sandbox/execution_service.ts";
 import { SimilarityService } from "./src/ai/services/SimilarityService.ts";
 import { EducationalAnalyticsService } from "./src/ai/services/EducationalAnalyticsService.ts";
+import { ProviderFactory } from "./src/ai/factory/ProviderFactory.ts";
+import { OllamaProvider } from "./src/ai/providers/OllamaProvider.ts";
+import { GeminiProvider } from "./src/ai/providers/GeminiProvider.ts";
+import { globalBackupStatus } from "./scripts/backup_export.ts";
 import multer from "multer";
 import AdmZip from "adm-zip";
 import * as xlsx from "xlsx";
@@ -33,7 +38,7 @@ dotenv.config();
 
 const { Pool } = pg;
 const app = express();
-const PORT = Number(process.env.PORT) || 8080;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
@@ -1626,9 +1631,9 @@ async function persistFullResult(submission: any, resFull: any) {
   try {
     // 1. DB Row: Submission Model
     await pool.query(`
-      INSERT INTO d_correction_submission (id, teacher_id, student_name, class_name, language, code, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [submission.id, submission.teacher_id, submission.student_name, submission.class_name, submission.language, submission.code, submission.status]);
+      INSERT INTO d_correction_submission (id, teacher_id, student_name, class_name, language, code, status, activity_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [submission.id, submission.teacher_id, submission.student_name, submission.class_name, submission.language, submission.code, submission.status, submission.activity_id || null]);
 
     // 2. DB Row: Result Model
     const resultId = crypto.randomUUID();
@@ -2055,6 +2060,11 @@ app.get("/api/health-status", async (req, res) => {
     db_status: dbStatus,
     db_latency_ms: dbLatency,
     jwt_validation_status: "JWT_CRYPTOGRAPHICALLY_VERIFIED",
+    storage: {
+      provider: process.env.STORAGE_PROVIDER || "local",
+      path: process.env.PERSISTENT_VOLUME_PATH || "/data",
+      available: fs.existsSync(process.env.PERSISTENT_VOLUME_PATH || "/data")
+    },
     executors_status: {
       python: "READY",
       javascript: "READY",
@@ -2896,7 +2906,7 @@ app.post("/api/ai/generate-schedule", async (req, res) => {
         }
       });
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash-exp",
         contents: systemPrompt,
         config: {
           responseMimeType: "application/json"
@@ -2934,14 +2944,26 @@ app.post("/api/ai/correct-code", async (req, res) => {
 app.post("/api/ai/correct-image", async (req, res) => {
   try {
     const { image, ...metadata } = req.body;
-    const extractedText = await OCRService.extractTextFromImage(image);
-    const result = await CodeAnalysisService.correctCode({
-      ...metadata,
-      code: extractedText
-    });
-    res.json({ ...result, extractedText });
+    const { text: extractedText, aiAnalysisAvailable, error: ocrError } = await OCRService.extractTextFromImage(image);
+    
+    // Only attempt correction if AI is available, else return extracted text with a warning
+    if (aiAnalysisAvailable && !ocrError) {
+        const result = await CodeAnalysisService.correctCode({
+          ...metadata,
+          code: extractedText
+        });
+        res.json({ ...result, extractedText, ai_analysis_available: true });
+    } else {
+        res.json({ 
+            success: !ocrError, 
+            ocr_provider: "tesseract", 
+            text: extractedText, 
+            ai_analysis_available: false,
+            message: ocrError || "OCR concluído. A análise inteligente está temporariamente indisponível."
+        });
+    }
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -2963,26 +2985,361 @@ app.post("/api/ai/generate-report", async (req, res) => {
   }
 });
 
-app.get("/api/ai/status", (req, res) => {
-  res.json({
-    provider: process.env.AI_PROVIDER || "gemini",
-    available: true,
-    models: {
-      code: process.env.AI_CODE_MODEL || "qwen2.5-coder:7b",
-      feedback: process.env.AI_FEEDBACK_MODEL || "gemma3:12b",
-      report: process.env.AI_REPORT_MODEL || "phi4-mini",
-      general: process.env.AI_GENERAL_MODEL || "llama3.2:3b"
+app.get("/api/ai/status", async (req, res) => {
+  const provider = process.env.AI_PROVIDER || "ollama";
+  const start = Date.now();
+
+  try {
+    if (provider === "ollama") {
+      const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+      try {
+        const response = await fetch(ollamaUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok && response.status !== 404) {
+          throw new Error(`Ollama root retornou status ${response.status}`);
+        }
+
+      
+        // Fetch models dynamically from tags
+        const modelsList = await getOllamaModels(ollamaUrl);
+
+        return res.json({
+          provider: "ollama",
+          available: true,
+          base_url: ollamaUrl,
+          models: modelsList,
+          health: "ok"
+        });
+      } catch (e: any) {
+        clearTimeout(timeoutId);
+        console.error(`[AI STATUS OBS] Provider: ollama | Available: false | Error: ${e.message} | Duration: ${Date.now() - start}ms`);
+        return res.json({
+          provider: "ollama",
+          available: false,
+          health: "offline",
+          error: "Servidor Ollama indisponível."
+        });
+      }
+    } else {
+      // Gemini or other cloud provider
+      return res.json({
+        provider: provider,
+        available: true,
+        base_url: "",
+        models: [
+          process.env.AI_CODE_MODEL || "gemini-2.0-flash-exp",
+          process.env.AI_FEEDBACK_MODEL || "gemini-1.5-pro",
+          process.env.AI_REPORT_MODEL || "gemini-2.0-flash-exp",
+          process.env.AI_GENERAL_MODEL || "gemini-2.0-flash-exp"
+        ],
+        health: "ok"
+      });
     }
-  });
+  } catch (globalError: any) {
+    console.error("[AI STATUS] Falha crítica de status:", globalError.message);
+    return res.status(500).json({
+      provider: provider,
+      available: false,
+      health: "offline",
+      error: `Erro ao obter status: ${globalError.message}`
+    });
+  }
+});
+
+// Helper for dynamic models detection (Etapa 5)
+async function getOllamaModels(ollamaUrl: string): Promise<string[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  try {
+    const response = await fetch(`${ollamaUrl}/api/tags`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && Array.isArray(data.models)) {
+        return data.models.map((m: any) => m.name);
+      }
+    }
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    console.warn("[OLLAMA TAGS] Falha ao listar tags dinamicamente do Ollama:", error.message);
+  }
+  return [
+    process.env.AI_CODE_MODEL || "qwen2.5-coder:7b",
+    process.env.AI_FEEDBACK_MODEL || "gemma3:12b",
+    process.env.AI_REPORT_MODEL || "phi4",
+    process.env.AI_GENERAL_MODEL || "llama3.2:3b"
+  ];
+}
+
+// Helper function to map model types based on name
+function getModelType(name: string): string {
+  const lowercase = name.toLowerCase();
+  if (lowercase.includes("coder") || lowercase.includes("code")) return "code";
+  if (lowercase.includes("gemma")) return "feedback";
+  if (lowercase.includes("phi")) return "report";
+  if (lowercase.includes("deepseek") || lowercase.includes("r1")) return "reasoning";
+  if (lowercase.includes("llama")) return "chat";
+  return "general";
+}
+
+// Endpoint GET /api/ai/models (Etapa 5)
+app.get("/api/ai/models", async (req, res) => {
+  const provider = process.env.AI_PROVIDER || "ollama";
+  const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  
+  const defaultRichModels = [
+    {
+      name: process.env.AI_CODE_MODEL || "qwen2.5-coder:7b",
+      size: "4.7 GB",
+      modified_at: new Date().toISOString(),
+      family: "qwen2",
+      quantization: "Q4_K_M",
+      ram_estimated: "8.5 GB",
+      type: "code",
+      active: true
+    },
+    {
+      name: process.env.AI_FEEDBACK_MODEL || "gemma3:12b",
+      size: "7.8 GB",
+      modified_at: new Date().toISOString(),
+      family: "gemma",
+      quantization: "Q4_K_M",
+      ram_estimated: "14 GB",
+      type: "feedback",
+      active: true
+    },
+    {
+      name: process.env.AI_REPORT_MODEL || "phi4",
+      size: "8.2 GB",
+      modified_at: new Date().toISOString(),
+      family: "phi",
+      quantization: "Q4_K_M",
+      ram_estimated: "12 GB",
+      type: "report",
+      active: true
+    },
+    {
+      name: process.env.AI_GENERAL_MODEL || "llama3.2:3b",
+      size: "2.0 GB",
+      modified_at: new Date().toISOString(),
+      family: "llama",
+      quantization: "Q4_K_M",
+      ram_estimated: "4.5 GB",
+      type: "chat",
+      active: true
+    },
+    {
+      name: process.env.AI_REASONING_MODEL || "deepseek-r1:8b",
+      size: "4.9 GB",
+      modified_at: new Date().toISOString(),
+      family: "deepseek",
+      quantization: "UD-Q4_K_M",
+      ram_estimated: "9 GB",
+      type: "reasoning",
+      active: true
+    }
+  ];
+
+  if (provider === "ollama") {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(`${ollamaUrl}/api/tags`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        const tagData = await response.json();
+        if (tagData && Array.isArray(tagData.models) && tagData.models.length > 0) {
+          const formattedModels = tagData.models.map((m: any) => {
+            const sizeNum = m.size ? (m.size / (1024 * 1024 * 1024)).toFixed(1) + " GB" : "N/A";
+            const family = m.details?.family || m.details?.families?.[0] || "unknown";
+            const quant = m.details?.quantization_level || "unknown";
+            const paramSize = m.details?.parameter_size || "";
+            let ramNeeded = "4 GB";
+            if (paramSize.toLowerCase().includes("7b") || paramSize.toLowerCase().includes("8b")) ramNeeded = "8 GB";
+            else if (paramSize.toLowerCase().includes("12b") || paramSize.toLowerCase().includes("14b")) ramNeeded = "16 GB";
+            else if (paramSize.toLowerCase().includes("3b")) ramNeeded = "4.5 GB";
+
+            return {
+              name: m.name,
+              size: sizeNum,
+              modified_at: m.modified_at || m.modified || new Date().toISOString(),
+              family: family,
+              quantization: quant,
+              ram_estimated: ramNeeded,
+              type: getModelType(m.name),
+              active: true
+            };
+          });
+          return res.json({
+            provider: "ollama",
+            available: true,
+            models: formattedModels
+          });
+        }
+      }
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      console.warn("[OLLAMA HEALTH] Failed dynamic models, using default config:", error.message);
+    }
+
+    return res.json({
+      provider: "ollama",
+      available: true,
+      models: defaultRichModels
+    });
+  } else {
+    // Gemini or generic provider output format
+    return res.json({
+      provider: provider,
+      available: true,
+      models: defaultRichModels.map(m => ({
+        ...m,
+        name: m.name.startsWith("gemini") ? m.name : "gemini-1.5-flash",
+        family: "gemini",
+        quantization: "server-side"
+      }))
+    });
+  }
+});
+
+// Endpoint POST /api/ai/test (Etapa 4)
+app.post("/api/ai/test", async (req, res) => {
+  const { prompt } = req.body;
+  const start = Date.now();
+
+  try {
+    const provider = ProviderFactory.createProvider("general_analysis");
+    
+    // Simple retry mechanism (Etapa 4)
+    let lastError: any = null;
+    let responseText = "";
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        responseText = await provider.generateContent(prompt || "Olá");
+        if (responseText) {
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[AI TEST] Tentativa ${attempt}/2 falhou: ${err.message}`);
+        if (attempt === 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+
+    if (responseText) {
+      return res.json({
+        success: true,
+        response: responseText
+      });
+    } else {
+      throw lastError || new Error("IA retornou uma resposta vazia.");
+    }
+  } catch (error: any) {
+    console.error(`[AI TEST OBS] Falha geral no teste após retries em ${Date.now() - start}ms:`, error.message);
+    return res.status(500).json({
+      success: false,
+      error: `Servidor Ollama indisponível.`
+    });
+  }
+});
+
+// Endpoint POST /api/ai/test-model
+app.post("/api/ai/test-model", async (req, res) => {
+  const { model, prompt } = req.body;
+  const start = Date.now();
+  try {
+    const providerName = process.env.AI_PROVIDER || "ollama";
+    const config = {
+      provider: providerName,
+      model: model || "llama3.2:3b",
+      apiKey: providerName === "ollama" ? process.env.OLLAMA_PROXY_TOKEN : process.env.GEMINI_API_KEY,
+      baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434"
+    };
+    const provider = providerName === "ollama" ? new OllamaProvider(config) : new GeminiProvider(config);
+    const responseText = await provider.generateContent(prompt || "Olá");
+    res.json({
+      success: true,
+      response: responseText,
+      duration: Date.now() - start
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message || "Erro desconhecido ao testar modelo" });
+  }
+});
+
+// Endpoint POST /api/ai/chat
+app.post("/api/ai/chat", async (req, res) => {
+  const { message } = req.body;
+  const start = Date.now();
+  try {
+    const provider = ProviderFactory.createProvider("chat");
+    const response = await provider.generateContent(message || "Olá");
+    res.json({ response, duration: Date.now() - start });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint POST /api/ai/generate-questions
+app.post("/api/ai/generate-questions", async (req, res) => {
+  const { topic, amount } = req.body;
+  const start = Date.now();
+  try {
+    const provider = ProviderFactory.createProvider("question_generation");
+    const response = await provider.generateContent(`Gere ${amount || 3} perguntas de múltipla escolha sobre o tema: ${topic || "Algoritmos"}`);
+    res.json({ questions: response, duration: Date.now() - start });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint GET /api/ai/status
+app.get("/api/ai/status", async (req, res) => {
+  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
+  let models: string[] = [];
+  let available = false;
+  try {
+    const response = await fetch(`${baseUrl}/api/tags`);
+    if (response.ok) {
+        const data = await response.json();
+        // The structure of response.json() for /api/tags is { models: Array<{name: string, ...}> }
+        if (data.models && Array.isArray(data.models)) {
+            models = data.models.map((m: any) => m.name);
+        }
+        available = true;
+    }
+  } catch (e) {
+    available = false;
+  }
+
+  if (available) {
+      res.json({
+        provider: process.env.AI_PROVIDER || "ollama",
+        available: true,
+        base_url_configured: !!process.env.OLLAMA_BASE_URL,
+        models: models
+      });
+  } else {
+      res.status(503).json({
+        provider: process.env.AI_PROVIDER || "ollama",
+        available: false,
+        error: "Não foi possível conectar ao servidor Ollama."
+      });
+  }
 });
 
 // ==========================================
 // FASE 10: Produção Enterprise & Health Checks
 // ==========================================
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
+
 
 app.get("/ready", async (req, res) => {
   if (pool) {
@@ -3376,7 +3733,7 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
     // 2. Call Gemini
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: `Gere uma trilha pedagógica para a turma ${classId} com foco em ${type}.
       Tópicos críticos identificados: ${criticalTopics.join(", ")}.
       
@@ -3495,7 +3852,7 @@ app.post("/api/intervention-plans/generate/class/:classId", async (req, res) => 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: `Gere um plano de intervenção pedagógica para a turma ${classId}.
       O plano deve ser baseado em dificuldades comuns de programação.
       
@@ -3555,7 +3912,7 @@ app.post("/api/materials/generate", async (req, res) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: `Gere um material didático do tipo "${template_type}" sobre o tema "${topic}".
       Dificuldade: ${difficulty}. 
       Público-alvo: ${target_audience}.
@@ -3778,7 +4135,7 @@ app.post("/api/reports/generate", async (req, res) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       contents: `Gere um relatório pedagógico do tipo "${report_type}" para a turma ${class_id} e aluno ${student_id || 'Todos'} (período: ${period}).
       Evite termos negativos (como "fracassou", "péssimo"). Use termos pedagógicos positivos de desenvolvimento.
       Incluir evidências: ${include_evidences}. Incluir recomendações: ${include_recommendations}.
@@ -3877,8 +4234,13 @@ app.get("/api/system/status", (req, res) => {
     backend: "Healthy",
     database: pool ? "Healthy" : "Critical",
     ai: process.env.GEMINI_API_KEY ? "Healthy" : "Warning",
-    sandbox: "Healthy"
+    sandbox: "Healthy",
+    backup: globalBackupStatus
   });
+});
+
+app.get("/api/system/backup-status", (req, res) => {
+  res.json(globalBackupStatus);
 });
 
 app.get("/api/audit-logs", async (req, res) => {
@@ -4755,7 +5117,7 @@ app.post("/api/questions/generate", async (req, res) => {
 // Endpoint 1: Run code online
 // ==========================================
 app.post("/corrections/run", async (req, res) => {
-  const { language, code, test_cases, studentName, className, rubric } = req.body;
+  const { language, code, test_cases, studentName, className, rubric, activity_id, class_id, student_id } = req.body;
 
   if (!language || typeof code !== "string") {
     return res.status(400).json({ error: "Language and Code parameters are required" });
@@ -4769,7 +5131,8 @@ app.post("/corrections/run", async (req, res) => {
     class_name: className || null,
     language,
     code,
-    status: "failed"
+    status: "failed",
+    activity_id: activity_id || null
   };
 
   try {
@@ -4814,6 +5177,56 @@ ${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length 
     // Store in DB
     submissionData.status = serviceResult.status === "CORRECTED" ? "success" : "failed";
     await persistFullResult(submissionData, serviceResult);
+
+    // Save to unified d_corrections (Priority 4) and d_pedagogical_evidence (Priority 5)
+    if (pool && student_id && class_id) {
+      try {
+        const corrId = crypto.randomUUID();
+        await pool.query(
+          `INSERT INTO d_corrections (id, teacher_id, class_id, student_id, activity_id, code_content, language, score, feedback, correction_type, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)`,
+          [
+            corrId,
+            "teacher_1",
+            class_id,
+            student_id,
+            activity_id || null,
+            code || "",
+            language || "text",
+            serviceResult.final_score !== undefined ? serviceResult.final_score : 0,
+            legacyCompatibleResult.feedback || "",
+            "sandbox"
+          ]
+        );
+
+        // Generate Pedagogical Evidence automatically (Priority 5)
+        const evidenceId = crypto.randomUUID();
+        const evidenceTitle = `Evidência de Aprendizado: Correção Sandbox (Nota ${serviceResult.final_score})`;
+        const evidenceDesc = `Atividade corrigida via Playground Inteligente [sandbox_execution] na linguagem ${language}.`;
+        const tagsSpec = JSON.stringify(["sandbox", language, `nota-${serviceResult.final_score}`]);
+
+        await pool.query(
+          `INSERT INTO d_pedagogical_evidence (id, teacher_id, class_id, student_id, activity_id, correction_id, title, description, evidence_type, score, feedback, tags, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)`,
+          [
+            evidenceId,
+            "teacher_1",
+            class_id,
+            student_id,
+            activity_id || null,
+            corrId,
+            evidenceTitle,
+            evidenceDesc,
+            "sandbox_execution",
+            serviceResult.final_score !== undefined ? serviceResult.final_score : 0,
+            legacyCompatibleResult.feedback || "",
+            tagsSpec
+          ]
+        );
+      } catch (dbErr) {
+        console.error("Error saving automatic correction and evidence in run route:", dbErr);
+      }
+    }
 
     return res.json(legacyCompatibleResult);
 
@@ -6791,6 +7204,11 @@ async function main() {
   await initDatabase();
   if (pool) {
     analyticsService = new LearningAnalyticsService(pool);
+  }
+
+  // --- API setup ADDONS ---
+  if (pool) {
+    setupTeacherAPIs(app, pool);
   }
 
   if (process.env.NODE_ENV !== "production") {

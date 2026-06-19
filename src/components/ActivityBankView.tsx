@@ -14,6 +14,18 @@ import {
 export default function ActivityBankView({ featureFlags = {} }: any) {
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    language: "python",
+    rubric: "",
+    class_id: "",
+    deadline: "",
+    competence: "",
+    attachment_filename: ""
+  });
 
   // Filters
   const [filterLang, setFilterLang] = useState("");
@@ -22,15 +34,10 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
   const loadBank = async () => {
     setLoading(true);
     try {
-      // Usar a Nova API do Módulo 04 se ativado
-      const url = featureFlags.ENABLE_QUESTION_BANK
-        ? "/api/codecheck/module04/questions"
-        : "/api/codecheck/activities";
-
-      const res = await fetch(url);
+      const res = await fetch("/api/activities");
       if (res.ok) {
         const data = await res.json();
-        setActivities(data);
+        setActivities(data || []);
       }
     } catch (e) {
       console.error(e);
@@ -39,13 +46,52 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
     }
   };
 
+  const loadClasses = async () => {
+    try {
+      const res = await fetch("/api/classes");
+      if (res.ok) {
+        const data = await res.json();
+        setClasses(data || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     loadBank();
-  }, [featureFlags.ENABLE_QUESTION_BANK]);
+    loadClasses();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch("/api/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+      if (resp.ok) {
+        setShowModal(false);
+        setFormData({
+          title: "",
+          description: "",
+          language: "python",
+          rubric: "",
+          class_id: "",
+          deadline: "",
+          competence: "",
+          attachment_filename: ""
+        });
+        loadBank();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const filteredActs = activities.filter((a) => {
     if (filterLang && a.language !== filterLang) return false;
-    // Map 'level' or 'difficulty'
     const diff = a.level || a.difficulty;
     if (filterDiff && diff !== filterDiff) return false;
     return true;
@@ -86,6 +132,13 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
               <Search className="w-4 h-4" />
             )}
             Recarregar
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Nova Atividade
           </button>
         </div>
       </div>
@@ -131,8 +184,11 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
             <span className="text-sm font-mono text-slate-400">
               Nenhuma atividade encontrada ou banco vazio.
             </span>
-            <button className="mt-4 px-4 py-2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-2 hover:bg-emerald-500/20">
-              <Plus className="w-3 h-3" /> Nova Questão Manual
+            <button 
+              onClick={() => setShowModal(true)}
+              className="mt-4 px-4 py-2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-2 hover:bg-emerald-500/20"
+            >
+              <Plus className="w-3 h-3" /> Nova Atividade Manual
             </button>
           </div>
         ) : (
@@ -147,9 +203,9 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
                     {act.title}
                   </h3>
                   <div
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono tracking-wide shrink-0 ${act.status === "published" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/20 text-amber-400 border border-amber-500/20"}`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono tracking-wide shrink-0 ${act.status === "active" || act.status === "published" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/20 text-amber-400 border border-amber-500/20"}`}
                   >
-                    {act.status === "published" ? "PUBLICADO" : "RASCUNHO"}
+                    {act.status === "active" || act.status === "published" ? "PUBLICADA" : "RASCUNHO"}
                   </div>
                 </div>
 
@@ -162,7 +218,7 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
                   {act.language && (
                     <span className="bg-[#030712] px-2 py-1 rounded text-slate-300">
                       Lang:{" "}
-                      <span className="text-rose-400 uppercase">
+                      <span className="text-rose-400 uppercase font-bold">
                         {act.language}
                       </span>
                     </span>
@@ -177,14 +233,42 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
                   )}
                 </div>
 
-                {(act.competence || featureFlags.ENABLE_COMPETENCY_TAGGING) && (
-                  <div className="text-[11px] text-slate-400 bg-[#030712]/50 p-2 rounded-lg border border-[#1e295b]/20">
-                    <span className="text-slate-500 block mb-1 uppercase font-mono text-[9px] tracking-wider">
-                      Mapeamento de Competência
+                {/* Relational details for Class, Deadline, and Attachment Zone */}
+                {(act.class_name || act.deadline || act.attachment_filename) && (
+                  <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-[#030712]/50 border border-slate-800/80 text-[10px]">
+                    {act.class_name && (
+                      <div className="flex justify-between items-center text-slate-400">
+                        <span>Turma:</span>
+                        <span className="text-emerald-400 font-bold">{act.class_name}</span>
+                      </div>
+                    )}
+                    {act.deadline && (
+                      <div className="flex justify-between items-center text-slate-400">
+                        <span>Prazo / Entrega:</span>
+                        <span className="text-sky-400 font-mono font-bold">
+                          {act.deadline.includes("-") ? act.deadline.split("-").reverse().join("/") : act.deadline}
+                        </span>
+                      </div>
+                    )}
+                    {act.attachment_filename && (
+                      <div className="flex justify-between items-center text-slate-400">
+                        <span>Anexo:</span>
+                        <span className="text-white bg-slate-800 px-1.5 py-0.5 rounded text-[9px] truncate max-w-[124px]" title={act.attachment_filename}>
+                          {act.attachment_filename}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(act.competence || act.problem_description) && (
+                  <div className="text-[11px] text-slate-400 bg-[#030712]/50 p-2.5 rounded-lg border border-[#1e295b]/20 flex flex-col gap-1">
+                    <span className="text-slate-500 block uppercase font-mono text-[9px] tracking-wider">
+                      Descrição / Objetivos / Competências
                     </span>
-                    <span className="line-clamp-2">
-                      {act.competence || act.competency_id || "Não mapeada"}
-                    </span>
+                    <p className="line-clamp-3 text-slate-300 text-xs">
+                      {act.problem_description || act.competence || "Sem objetivos adicionais."}
+                    </p>
                   </div>
                 )}
 
@@ -201,17 +285,161 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
                   >
                     <Archive className="w-4 h-4" />
                   </button>
-                  {act.status !== "published" && (
-                    <button className="ml-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-900 rounded text-[10px] font-bold uppercase transition-colors shrink-0">
-                      Publicar p/ Turma
-                    </button>
-                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-[#030712]/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] rounded-2xl w-full max-w-2xl border border-slate-800 shadow-2xl p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto scrollbar-thin">
+            <h3 className="text-xl font-bold text-white">Criar Nova Atividade</h3>
+            <p className="text-xs text-slate-400">
+              Cadastre atividades vinculando linguagens, objetivos de competência, prazos de entrega e turmas específicas.
+            </p>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400 font-medium">Título da Atividade</label>
+                  <input 
+                    required 
+                    value={formData.title} 
+                    onChange={e => setFormData({...formData, title: e.target.value})} 
+                    className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 outline-none" 
+                    placeholder="Ex: Exercício prático de Loops"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400 font-medium">Linguagem de Programação</label>
+                  <select 
+                    value={formData.language} 
+                    onChange={e => setFormData({...formData, language: e.target.value})} 
+                    className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 outline-none"
+                  >
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="java">Java</option>
+                    <option value="c">C/C++</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400 font-medium">Vincular a uma Turma</label>
+                  <select 
+                    required
+                    value={formData.class_id} 
+                    onChange={e => setFormData({...formData, class_id: e.target.value})} 
+                    className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 outline-none"
+                  >
+                    <option value="">Selecione a turma...</option>
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400 font-medium">Prazo / Data de Entrega</label>
+                  <input 
+                    type="date"
+                    required
+                    value={formData.deadline} 
+                    onChange={e => setFormData({...formData, deadline: e.target.value})} 
+                    className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 outline-none" 
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-400 font-medium">Descrição / Enunciado do Exercício</label>
+                <textarea 
+                  required
+                  rows={3} 
+                  value={formData.description} 
+                  onChange={e => setFormData({...formData, description: e.target.value})} 
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 outline-none" 
+                  placeholder="Escreva as instruções, requisitos de entrada e de saída detalhadamente..."
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-400 font-medium">Critério de Avaliação / Rubrica Pedagógica</label>
+                <textarea 
+                  required
+                  rows={2} 
+                  value={formData.rubric} 
+                  onChange={e => setFormData({...formData, rubric: e.target.value})} 
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 outline-none" 
+                  placeholder="Critérios: Código roda perfeitamente (40%), Atende requisitos (40%), Estilo (20%)..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400 font-medium">Mapeamento de Competência / Objetivos</label>
+                  <input 
+                    value={formData.competence} 
+                    onChange={e => setFormData({...formData, competence: e.target.value})} 
+                    className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 outline-none" 
+                    placeholder="Ex: Raciocínio Lógico-Matemático, Algoritmos"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400 font-medium">Anexar Arquivo de Apoio</label>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 px-4 py-2.5 border border-slate-700 rounded-lg cursor-pointer bg-slate-900 hover:bg-slate-800 text-slate-300 text-sm transition-all w-full">
+                      <Plus className="w-4 h-4 text-emerald-400" />
+                      <span className="truncate">{formData.attachment_filename || "Selecionar arquivo (PDF, ZIP, PNG)..."}</span>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setFormData({ ...formData, attachment_filename: file.name });
+                          }
+                        }}
+                      />
+                    </label>
+                    {formData.attachment_filename && (
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData({...formData, attachment_filename: ""})} 
+                        className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-lg border border-rose-500/20"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">
+                <button 
+                  type="button" 
+                  onClick={() => setShowModal(false)} 
+                  className="px-4 py-2 text-sm text-slate-300 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-6 py-2 text-sm font-bold bg-emerald-500 text-slate-900 rounded-lg hover:bg-emerald-600 transition-all font-display"
+                >
+                  Salvar Atividade
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

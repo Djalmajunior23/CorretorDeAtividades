@@ -154,8 +154,27 @@ export interface GeneratedReport {
   student_id?: string;
   type: string;
   title: string;
+  teacher_notes?: string;
   content: any;
   status: 'draft' | 'reviewed' | 'approved' | 'exported' | 'archived';
   created_at: string;
 }
+
+export interface TeacherLibraryItem {
+  id: string;
+  teacher_id: string;
+  title: string;
+  description?: string;
+  type: string; // 'activity' | 'rubric' | 'question' | 'feedback' | 'report' | 'material' | 'mock_exam' | 'file'
+  topic?: string;
+  language?: string;
+  tags?: string[];
+  content?: string;
+  file_url?: string;
+  is_favorite: boolean;
+  status: 'active' | 'archived' | 'deleted';
+  created_at: string;
+  updated_at: string;
+}
+
 
