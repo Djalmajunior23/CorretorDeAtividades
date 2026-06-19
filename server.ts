@@ -2895,39 +2895,15 @@ app.post("/api/ai/generate-schedule", async (req, res) => {
   Retorne apenas o JSON puro, estritamente formatado como array (ex: [ { ... }, { ... } ]), sem marcação markdown e sem comentários.`;
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: systemPrompt,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-      const dataText = response.text?.trim() || "[]";
-      try {
-        const jsonParsed = JSON.parse(dataText);
-        return res.json(jsonParsed);
-      } catch (e) {
-        return res.status(500).json({ error: "Falha ao processar JSON da IA." });
-      }
-    } else {
-       // Mock response se não tiver API key
-      return res.json([
-        { week: 1, title: "Aula Simulada 1", hrs: 4, competency: "Iniciação lógica" },
-        { week: 2, title: "Aula Simulada 2", hrs: 4, competency: "Decisão" },
-      ]);
+    const dataText = await AIGateway.executeTask<string>(AITask.GENERAL_ANALYSIS, systemPrompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
     }
+    const jsonParsed = JSON.parse(jsonStr.trim() || "[]");
+    return res.json(jsonParsed);
   } catch (error) {
-    console.error("Erro na integração com Gemini:", error);
+    console.error("Erro na integração com IA:", error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -3300,46 +3276,15 @@ app.post("/api/ai/generate-questions", async (req, res) => {
   }
 });
 
-// Endpoint GET /api/ai/status
-app.get("/api/ai/status", async (req, res) => {
-  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
-  let models: string[] = [];
-  let available = false;
-  try {
-    const response = await fetch(`${baseUrl}/api/tags`);
-    if (response.ok) {
-        const data = await response.json();
-        // The structure of response.json() for /api/tags is { models: Array<{name: string, ...}> }
-        if (data.models && Array.isArray(data.models)) {
-            models = data.models.map((m: any) => m.name);
-        }
-        available = true;
-    }
-  } catch (e) {
-    available = false;
-  }
 
-  if (available) {
-      res.json({
-        provider: process.env.AI_PROVIDER || "ollama",
-        available: true,
-        base_url_configured: !!process.env.OLLAMA_BASE_URL,
-        models: models
-      });
-  } else {
-      res.status(503).json({
-        provider: process.env.AI_PROVIDER || "ollama",
-        available: false,
-        error: "Não foi possível conectar ao servidor Ollama."
-      });
-  }
-});
 
 // ==========================================
 // FASE 10: Produção Enterprise & Health Checks
 // ==========================================
 
-
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 app.get("/ready", async (req, res) => {
   if (pool) {
@@ -3730,11 +3675,8 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
 
     const criticalTopics = analytics.rows.filter(r => r.avg_score < 70).map(r => r.topic);
     
-    // 2. Call Gemini
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: `Gere uma trilha pedagógica para a turma ${classId} com foco em ${type}.
+    // 2. Call AI
+    const prompt = `Gere uma trilha pedagógica para a turma ${classId} com foco em ${type}.
       Tópicos críticos identificados: ${criticalTopics.join(", ")}.
       
       Retorne um JSON com:
@@ -3745,12 +3687,14 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
         "recommended_activities": [{"title": "Atividade", "desc": "Desc"}],
         "estimated_duration": "Tempo",
         "success_criteria": ["Critério 1"]
-      }`,
-      config: { responseMimeType: "application/json" }
-    });
+      }`;
 
-    const aiText = response.text || "{}";
-    const aiResult = JSON.parse(aiText);
+    const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
+    }
+    const aiResult = JSON.parse(jsonStr.trim() || "{}");
     
     // 3. Save as draft
     const id = crypto.randomUUID();
@@ -3850,10 +3794,8 @@ app.post("/api/intervention-plans/generate/class/:classId", async (req, res) => 
   const { classId } = req.params;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: `Gere um plano de intervenção pedagógica para a turma ${classId}.
+    // 2. Call AI
+    const prompt = `Gere um plano de intervenção pedagógica para a turma ${classId}.
       O plano deve ser baseado em dificuldades comuns de programação.
       
       Retorne um JSON com:
@@ -3865,11 +3807,14 @@ app.post("/api/intervention-plans/generate/class/:classId", async (req, res) => 
         "schedule": "2 semanas",
         "success_criteria": ["Critério 1"],
         "monitoring_strategy": "Acompanhamento no CodeCheck"
-      }`,
-      config: { responseMimeType: "application/json" }
-    });
+      }`;
 
-    const aiResult = JSON.parse(response.text || "{}");
+    const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
+    }
+    const aiResult = JSON.parse(jsonStr.trim() || "{}");
     const id = crypto.randomUUID();
     
     await pool.query(`
@@ -3910,10 +3855,7 @@ app.post("/api/materials/generate", async (req, res) => {
   const { template_type, topic, difficulty, target_audience, quantity, include_answer_key } = req.body;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: `Gere um material didático do tipo "${template_type}" sobre o tema "${topic}".
+    const prompt = `Gere um material didático do tipo "${template_type}" sobre o tema "${topic}".
       Dificuldade: ${difficulty}. 
       Público-alvo: ${target_audience}.
       Quantidade de questões (se aplicável): ${quantity}.
@@ -3932,11 +3874,14 @@ app.post("/api/materials/generate", async (req, res) => {
         "answer_key": ["Gabarito detalhado"],
         "rubric": { "criteria": ["Critério 1"], "levels": ["Bom", "Ruim"] },
         "teacher_notes": "Notas para o professor"
-      }`,
-      config: { responseMimeType: "application/json" }
-    });
+      }`;
 
-    const aiResult = JSON.parse(response.text || "{}");
+    const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
+    }
+    const aiResult = JSON.parse(jsonStr.trim() || "{}");
     const id = crypto.randomUUID();
 
     await pool.query(`
@@ -4133,10 +4078,7 @@ app.post("/api/reports/generate", async (req, res) => {
   const { report_type, student_id, class_id, period, include_evidences, include_recommendations } = req.body;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: `Gere um relatório pedagógico do tipo "${report_type}" para a turma ${class_id} e aluno ${student_id || 'Todos'} (período: ${period}).
+    const prompt = `Gere um relatório pedagógico do tipo "${report_type}" para a turma ${class_id} e aluno ${student_id || 'Todos'} (período: ${period}).
       Evite termos negativos (como "fracassou", "péssimo"). Use termos pedagógicos positivos de desenvolvimento.
       Incluir evidências: ${include_evidences}. Incluir recomendações: ${include_recommendations}.
       
@@ -4150,11 +4092,14 @@ app.post("/api/reports/generate", async (req, res) => {
         "recommendations": ["Recomendação 1"],
         "teacher_observations": "Espaço para o professor",
         "conclusion": "Conclusão"
-      }`,
-      config: { responseMimeType: "application/json" }
-    });
+      }`;
 
-    const aiResult = JSON.parse(response.text || "{}");
+    const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
+    }
+    const aiResult = JSON.parse(jsonStr.trim() || "{}");
     const id = crypto.randomUUID();
 
     await pool.query(`
@@ -4735,12 +4680,7 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
   }
 }
 
-async function generateClassBatchSummary(items: any[]) {
-  const ai = new GoogleGenAI({ 
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-  });
-  
+async function generateClassBatchSummary(items: any[]) {  
   const dataForAI = items.map(i => ({
     aluno: i.studentName,
     nota: i.score,
@@ -4760,16 +4700,14 @@ async function generateClassBatchSummary(items: any[]) {
   Responda apenas com o JSON.`;
 
   try {
-    const res = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json"
-      }
-    });
-    const text = res.text || "{}";
-    const jsonStr = text.match(/\{[\s\S]*\}/)?.[0] || "{}";
-    const data = JSON.parse(jsonStr);
+    const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
+    }
+    const text = jsonStr.trim() || "{}";
+    const parsedData = text.match(/\{[\s\S]*\}/)?.[0] || "{}";
+    const data = JSON.parse(parsedData);
     return {
       summary: data.summary || "Resumo não disponível.",
       common_errors: data.common_errors || [],
@@ -5060,11 +4998,6 @@ app.post("/api/questions", async (req, res) => {
 app.post("/api/questions/generate", async (req, res) => {
   const { topic, language, difficulty, question_type, quantity = 3 } = req.body;
   
-  const ai = new GoogleGenAI({ 
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-  });
-  
   const prompt = `Gere ${quantity} questões de programação sobre o tema "${topic}" na linguagem "${language}".
   Nível de dificuldade: ${difficulty}. Tipo de questão: ${question_type}.
   
@@ -5087,13 +5020,12 @@ app.post("/api/questions/generate", async (req, res) => {
   }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-    
-    const text = response.text || "{}";
+    const dataText = await AIGateway.executeTask<string>(AITask.QUESTION_GENERATION, prompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
+    }
+    const text = jsonStr.trim() || "{}";
     const data = JSON.parse(text);
 
     if (pool && data.questions) {
@@ -7139,33 +7071,20 @@ app.post("/api/competencies/recommend", async (req, res) => {
   Retorne apenas o JSON puro, sem marcação markdown ou blocos de comentários de código.`;
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-      const dataText = response.text?.trim() || "";
-      try {
-        const jsonParsed = JSON.parse(dataText);
-        return res.json(jsonParsed);
-      } catch (e) {
-        console.warn("JSON parsing on AI recommendations failed, falling back to heuristic JSON", e);
-      }
+    const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
+    let jsonStr = dataText as string;
+    if (jsonStr.includes("```json")) {
+       jsonStr = jsonStr.replace(/```json\n?/, "").replace(/```$/, "");
+    }
+    const dataClean = jsonStr.trim() || "";
+    try {
+      const jsonParsed = JSON.parse(dataClean);
+      return res.json(jsonParsed);
+    } catch (e) {
+      console.warn("JSON parsing on AI recommendations failed, falling back to heuristic JSON", e);
     }
   } catch (err: any) {
-    console.error("Gemini API Error in recommendations:", err.message);
+    console.error("AI Error in recommendations:", err.message);
   }
 
   // Backup heuristic recommendation generator

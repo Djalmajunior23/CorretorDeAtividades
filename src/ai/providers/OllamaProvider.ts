@@ -50,12 +50,18 @@ export class OllamaProvider extends BaseProvider {
             headers["Authorization"] = `Bearer ${this.config.apiKey}`;
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout for generation
+
         try {
             const response = await fetch(`${this.baseUrl}/api/generate`, {
                 method: "POST",
                 headers,
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
@@ -64,6 +70,7 @@ export class OllamaProvider extends BaseProvider {
             const data = await response.json();
             return data.response || "";
         } catch (err: any) {
+            clearTimeout(timeoutId);
             console.error(`[OllamaProvider] Request failed for model ${this.config.model} at ${this.baseUrl}:`, err.message);
             throw new Error(`Ollama fetch failed [${this.baseUrl}]: ${err.message}`);
         }
@@ -95,12 +102,18 @@ export class OllamaProvider extends BaseProvider {
             headers["Authorization"] = `Bearer ${this.config.apiKey}`;
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout for generation
+
         try {
             const response = await fetch(`${this.baseUrl}/api/generate`, {
                 method: "POST",
                 headers,
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
@@ -113,6 +126,7 @@ export class OllamaProvider extends BaseProvider {
             
             return JSON.parse(data.response) as T;
         } catch (err: any) {
+            clearTimeout(timeoutId);
             console.error(`[OllamaProvider] Structured extraction failed for model ${this.config.model} at ${this.baseUrl}:`, err.message);
             throw new Error(`Ollama fetch failed [${this.baseUrl}]: ${err.message}`);
         }

@@ -20,7 +20,10 @@ export class AIGateway {
             }
             
             // If error is about server indisponibilidade, don't fallback
-            if (error.message.includes("indisponível")) {
+            if (error.message.includes("indisponível") || provider instanceof OllamaProvider) {
+                if (provider instanceof OllamaProvider) {
+                   throw new Error("A IA local (Ollama) está indisponível ou falhou no momento.");
+                }
                 throw error;
             }
             
