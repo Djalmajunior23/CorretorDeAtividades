@@ -6,7 +6,6 @@ import fs from "fs";
 import { spawn, exec } from "child_process";
 import crypto from "crypto";
 import pg from "pg";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import os from "os";
 import dns from "dns";
@@ -7132,6 +7131,7 @@ async function main() {
 
   if (process.env.NODE_ENV !== "production") {
     // Vite middleware for rendering frontend
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { 
         middlewareMode: true,

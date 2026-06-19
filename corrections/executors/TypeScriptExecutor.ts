@@ -10,7 +10,7 @@ export class TypeScriptExecutor {
     fs.writeFileSync(tempFile, code);
 
     try {
-      const res = await BaseExecutor.runProcess("npx", ["tsx", tempFile], stdin);
+      const res = await BaseExecutor.runProcess("npx", ["-y", "tsx", tempFile], stdin);
       return res;
     } catch (err: any) {
       return {
