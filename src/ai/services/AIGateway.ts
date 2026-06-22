@@ -6,10 +6,13 @@ export class AIGateway {
     static async executeTask<T>(task: string, prompt: string, options?: any, imageData?: any): Promise<T> {
         try {
             // Tenta chamar o provedor principal (ex: Ollama)
-            const provider = ProviderFactory.getProvider();
+            const provider = ProviderFactory.createProvider(task);
             if (!provider) throw new Error("A IA local (Ollama) está indisponível ou falhou no momento.");
             
-            return await provider.execute(task, prompt, options, imageData) as T;
+                        if (task === AITask.IMAGE_OCR || task === AITask.GENERAL_ANALYSIS) {
+                return (await provider.generateContent(prompt, options, imageData)) as any as T;
+            }
+            return await provider.generateStructured(prompt, null, options, imageData);
         } catch (error: any) {
             console.warn("[AIGateway] Ollama falhou. Erro:", error.message);
             console.warn("[AIGateway] Iniciando Fallback Local do CodeCheck.");

@@ -320,7 +320,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   </div>
                   <div>
                     <span className="text-[9px] text-slate-500 uppercase font-bold font-mono">Motor de IA</span>
-                    <h5 className="text-xs font-bold text-slate-200 mt-0.5">Gemini 1.5 Flash</h5>
+                    <h5 className="text-xs font-bold text-slate-200 mt-0.5">IA Local</h5>
                   </div>
                 </div>
                 <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${data.status_ia === "Operacional" ? "text-emerald-400 bg-emerald-500/5 border border-emerald-500/10" : "text-amber-400 bg-amber-500/5 border border-amber-500/10"}`}>

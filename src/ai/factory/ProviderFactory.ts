@@ -1,5 +1,4 @@
 import { AIConfig, BaseProvider } from "../providers/BaseProvider";
-import { GeminiProvider } from "../providers/GeminiProvider";
 import { OllamaProvider } from "../providers/OllamaProvider";
 
 export class ProviderFactory {
@@ -46,7 +45,8 @@ export class ProviderFactory {
 
         switch (providerName.toLowerCase()) {
             case "gemini":
-                return new GeminiProvider(config);
+                // return new GeminiProvider(config);
+                // Gemini code removed to ensure local inference as requested
             case "ollama":
             default:
                 const ollamaConfig: AIConfig = {

@@ -649,11 +649,11 @@ export default function App() {
           setOcrLoadedBanner(true);
           setTimeout(() => setOcrLoadedBanner(false), 8000);
         } else {
-          alert(`Falha no processamento: ${data.error || "Erro misterioso."}`);
+          if (data.error) { console.warn("Aviso OCR:", data.error); }
         }
       } else {
         const errObj = await response.json().catch(() => ({}));
-        alert(`Erro na transcrição: ${errObj.error || "Erro desconhecido do servidor."}`);
+        alert(`Aviso de Transcrição Local: ${errObj.detail || errObj.error || "Verifique se o terminal exibiu algum erro de sistema."}`);
       }
     } catch (err: any) {
       alert(`Erro na comunicação com o servidor: ${err.message}`);
@@ -1400,7 +1400,7 @@ export default function App() {
                       <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-5 py-3 flex items-center justify-between text-xs text-emerald-400">
                         <span className="flex items-center gap-2">
                           <Sparkles className="w-4 h-4 animate-bounce shrink-0" />
-                          <span>Código extraído com sucesso da imagem pelo Gemini Flash! Veja ou ajuste no editor abaixo.</span>
+                          <span>Código extraído com sucesso da imagem pela IA! Veja ou ajuste no editor abaixo.</span>
                         </span>
                         <button 
                           onClick={() => setOcrLoadedBanner(false)}
@@ -1443,7 +1443,7 @@ export default function App() {
                             <UploadCloud className="w-12 h-12 text-slate-500 mb-3 group-hover:scale-105 transition-transform" />
                             <h4 className="text-sm font-bold text-slate-200">Arraste a foto da prova ou clique aqui</h4>
                             <p className="text-xs text-slate-400 mt-1.5 max-w-sm leading-relaxed">
-                              Suporta fotos manuscritas de alunos ou capturas de tela. O Gemini lerá a caligrafia e organizará o código-fonte automaticamente.
+                              Suporta fotos manuscritas de alunos ou capturas de tela. A IA lerá a caligrafia e organizará o código-fonte automaticamente.
                             </p>
                             <span className="mt-4 text-[10px] text-[#10b981] font-mono bg-emerald-500/5 px-2.5 py-1 rounded border border-emerald-500/10">
                               Alvo de Transpilação: {language.toUpperCase()}
@@ -1504,7 +1504,7 @@ export default function App() {
                                 {transcribing ? (
                                   <>
                                     <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                                    <span>CONVERSANDO COM O GEMINI IA...</span>
+                                    <span>PROCESSANDO ANÁLISE INTELIGENTE...</span>
                                   </>
                                 ) : (
                                   <>
@@ -1541,7 +1541,7 @@ export default function App() {
                         <>
                           <div className="flex items-center gap-2 text-emerald-400 font-bold uppercase tracking-widest font-mono text-[10px] mb-1.5">
                             <Sparkles className="w-4 h-4 animate-pulse" />
-                            Relatório Visual e Caligrafia (Gemini Flash OCR)
+                            Relatório Visual e Caligrafia (IA Local OCR)
                           </div>
                           <p className="italic leading-relaxed text-slate-200">"{visualOcrNotes}"</p>
                         </>
@@ -1986,7 +1986,7 @@ export default function App() {
                                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                                   {["security", "tests", "quality"].includes(currentStage)
                                     ? "Aguardando geração do scorecard..."
-                                    : "Acionando barramento de IA do Gemini para gerar orientações construtivas baseadas no erro do discente..."}
+                                    : "Acionando barramento de IA Local para gerar orientações construtivas baseadas no erro do discente..."}
                                 </p>
                               </div>
                             </div>

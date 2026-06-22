@@ -1,5 +1,5 @@
 import { ExecutionStatus } from "./types";
-import { ProviderFactory } from "../../factory/ProviderFactory";
+import { ProviderFactory } from "../factory/ProviderFactory";
 
 export class AIExecutor {
   static async simulate(language: string, code: string, stdin: string = ""): Promise<{ stdout: string; stderr: string; status: ExecutionStatus }> {

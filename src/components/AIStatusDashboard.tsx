@@ -87,7 +87,7 @@ export const AIStatusDashboard: React.FC = () => {
             </div>
           </div>
           {(Array.isArray(status.models)
-            ? status.models.map((model, i) => {
+            ? status.models.map((model: string, i: number) => {
                 let key = "General Model";
                 if (model.includes("coder") || i === 0) key = "Code Model";
                 else if (model.includes("gemma") || i === 1) key = "Feedback Model";
@@ -104,7 +104,7 @@ export const AIStatusDashboard: React.FC = () => {
                 {key}
               </div>
               <div className="text-sm font-bold text-slate-200 truncate">
-                {model}
+                {typeof model === "string" ? model : ((model as any)?.name || (model as any)?.id || JSON.stringify(model))}
               </div>
             </div>
           ))}

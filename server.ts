@@ -9,7 +9,6 @@ import pg from "pg";
 import dotenv from "dotenv";
 import os from "os";
 import dns from "dns";
-import { GoogleGenAI, Type } from "@google/genai";
 import { CodeAnalysisService } from "./src/ai/services/CodeAnalysisService.ts";
 import { FeedbackService } from "./src/ai/services/FeedbackService.ts";
 import { ReportService } from "./src/ai/services/ReportService.ts";
@@ -25,7 +24,6 @@ import { SimilarityService } from "./src/ai/services/SimilarityService.ts";
 import { EducationalAnalyticsService } from "./src/ai/services/EducationalAnalyticsService.ts";
 import { ProviderFactory } from "./src/ai/factory/ProviderFactory.ts";
 import { OllamaProvider } from "./src/ai/providers/OllamaProvider.ts";
-import { GeminiProvider } from "./src/ai/providers/GeminiProvider.ts";
 import { AIGateway } from "./src/ai/services/AIGateway.ts";
 import { AITask } from "./src/ai/types.ts";
 import { globalBackupStatus } from "./scripts/backup_export.ts";
@@ -2949,6 +2947,11 @@ app.get("/api/ai/status", async (req, res) => {
         const modelsList = await getOllamaModels(ollamaUrl);
 
         return res.json({
+          success: true,
+          message: "Ollama online",
+          data: { provider: "ollama", models: modelsList },
+          ai_available: true,
+          fallback_used: false,
           provider: "ollama",
           available: true,
           base_url: ollamaUrl,
@@ -2968,6 +2971,11 @@ app.get("/api/ai/status", async (req, res) => {
     } else {
       // Gemini or other cloud provider
       return res.json({
+        success: true,
+        message: "Gemini online",
+        data: {},
+        ai_available: true,
+        fallback_used: false,
         provider: provider,
         available: true,
         base_url: "",
@@ -3203,7 +3211,7 @@ app.post("/api/ai/test-model", async (req, res) => {
       apiKey: providerName === "ollama" ? process.env.OLLAMA_PROXY_TOKEN : process.env.GEMINI_API_KEY,
       baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434"
     };
-    const provider = providerName === "ollama" ? new OllamaProvider(config) : new GeminiProvider(config);
+    const provider = ProviderFactory.createProvider("chat");
     const responseText = await provider.generateContent(prompt || "Olá");
     res.json({
       success: true,
