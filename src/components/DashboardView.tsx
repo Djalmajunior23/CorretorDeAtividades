@@ -49,7 +49,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const resp = await fetch("/api/dashboard/teacher");
+      const resp = await fetch(`${window.API_BASE_URL}/api/dashboard/teacher`);
       if (resp.ok) {
         const payload = await resp.json();
         setData(payload);

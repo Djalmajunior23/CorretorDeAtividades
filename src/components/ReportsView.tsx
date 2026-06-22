@@ -54,7 +54,7 @@ export default function ReportsView() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/reports");
+      const res = await fetch(`${window.API_BASE_URL}/api/reports`);
       if (res.ok) {
         setReports(await res.json());
       }
@@ -67,7 +67,7 @@ export default function ReportsView() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch("/api/classes");
+      const res = await fetch(`${window.API_BASE_URL}/api/classes`);
       if (res.ok) {
         const data = await res.json();
         setClasses(data || []);
@@ -82,7 +82,7 @@ export default function ReportsView() {
 
   const fetchStudents = async (classId: string) => {
     try {
-      const res = await fetch(`/api/students?class_id=${classId}`);
+      const res = await fetch(`${window.API_BASE_URL}/api/students?class_id=${classId}`);
       if (res.ok) {
         const data = await res.json();
         setStudents(data || []);

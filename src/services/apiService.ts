@@ -1,23 +1,14 @@
 import axios from 'axios';
 
 export const getApiBaseUrl = (): string => {
-  if (typeof window !== "undefined") {
-    const hostname = window.location.hostname;
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname.includes(".run.app")
-    ) {
-      return "/api";
-    }
-  }
-  return import.meta.env.VITE_API_BASE_URL || "/api";
+  return import.meta.env.VITE_API_BASE_URL || "http://31.97.41.64:8080";
 };
 
 export const API_BASE_URL = getApiBaseUrl();
 
 const apiService = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -1,4 +1,10 @@
 import React, { useState, useEffect } from "react";
+
+declare global {
+  interface Window {
+    API_BASE_URL: string;
+  }
+}
 import { motion, AnimatePresence } from "motion/react";
 import { Toaster, toast } from 'sonner';
 import Sidebar from "./components/layout/Sidebar";
@@ -316,14 +322,16 @@ export default function App() {
 
   // Fetch audit logs helper (Regras de auditoria)
   const fetchAuditLogs = () => {
-    fetch("/api/audit-logs")
+    const baseUrl = window.API_BASE_URL || "http://31.97.41.64:8080";
+    fetch(`${baseUrl}/api/audit-logs`)
       .then(res => res.json())
       .then(data => setAuditLogs(data))
       .catch(e => console.error("Error loading audits:", e));
   };
 
   const fetchSandboxStatus = () => {
-    fetch("/api/execution/status")
+    const baseUrl = window.API_BASE_URL || "http://31.97.41.64:8080";
+    fetch(`${baseUrl}/api/execution/status`)
       .then(res => res.json())
       .then(data => setSandboxStatus(data))
       .catch(e => console.error("Error loading sandbox status:", e));

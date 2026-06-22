@@ -42,6 +42,30 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
+// CORS middleware
+const allowedOrigins = [
+  "https://corretor-de-atividades.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else if (!origin) {
+    // Allows calls from same-origin (same backend)
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 
 // ============================================
 // HARDENING & SECURITY MIDDLEWARES
@@ -2893,12 +2917,13 @@ app.post("/api/ai/correct-image", async (req, res) => {
         });
         res.json({ ...result, extractedText, ai_analysis_available: true });
     } else {
-        res.json({ 
-            success: !ocrError, 
-            ocr_provider: "tesseract", 
-            text: extractedText, 
+        res.json({
+            success: !ocrError,
+            ocr_provider: "tesseract",
+            text: extractedText,
             ai_analysis_available: false,
-            message: ocrError || "OCR concluído. A análise inteligente está temporariamente indisponível."
+            fallback_used: true,
+            message: "Texto extraído com sucesso. A análise inteligente está temporariamente indisponível."
         });
     }
   } catch (error: any) {

@@ -59,7 +59,7 @@ export default function SystemHealthView() {
     // Polling backup status
     const pollBackupStatus = async () => {
         try {
-            const res = await fetch("/api/system/backup-status");
+            const res = await fetch(`${window.API_BASE_URL}/api/system/backup-status`);
             if (res.ok) setBackupStatus(await res.json());
         } catch (e) {
             console.error("Backup polling failed", e);
@@ -74,8 +74,8 @@ export default function SystemHealthView() {
     setLoading(true);
     try {
       const [sRes, lRes] = await Promise.all([
-        fetch("/api/system/status"),
-        fetch("/api/audit-logs"),
+        fetch(`${window.API_BASE_URL}/api/system/status`),
+        fetch(`${window.API_BASE_URL}/api/audit-logs`),
       ]);
       const statusData = await sRes.json();
       setStatus(statusData);
@@ -90,7 +90,7 @@ export default function SystemHealthView() {
   const fetchModels = async () => {
     setLoadingModels(true);
     try {
-      const mRes = await fetch("/api/ai/models");
+      const mRes = await fetch(`${window.API_BASE_URL}/api/ai/models`);
       const mData = await mRes.json();
       if (mData && Array.isArray(mData.models)) {
         setAiModels(mData.models);
@@ -125,7 +125,7 @@ export default function SystemHealthView() {
     setBackupRunning(true);
     setBackupMessage("Preparando snapshot e varrendo tabelas no PostgreSQL...");
     try {
-      const response = await fetch("/api/backup/export", { method: "POST" });
+      const response = await fetch(`${window.API_BASE_URL}/api/backup/export`, { method: "POST" });
       const data = await response.json();
       if (response.ok && data.success) {
         setBackupMessage(`Backup gerado com sucesso! Arquivo: ${data.filename}. Tabelas empacotadas.`);
@@ -148,7 +148,7 @@ export default function SystemHealthView() {
     setTestResult(null);
     const start = Date.now();
     try {
-      const response = await fetch("/api/ai/test-model", {
+      const response = await fetch(`${window.API_BASE_URL}/api/ai/test-model`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -23,6 +23,8 @@ import {
   FileSpreadsheet,
   HelpCircle,
 } from "lucide-react";
+import { API_BASE_URL } from "../services/apiService";
+
 
 interface SmartClassDiaryViewProps {
   featureFlags: any;
@@ -117,7 +119,7 @@ export default function SmartClassDiaryView({
     try {
       // 1. Sessions
       const resSessions = await fetch(
-        `/api/codecheck/diary/sessions?class_name=${encodeURIComponent(selectedClass)}&search=${encodeURIComponent(searchQuery)}`,
+        `${API_BASE_URL}/api/codecheck/diary/sessions?class_name=${encodeURIComponent(selectedClass)}&search=${encodeURIComponent(searchQuery)}`,
       );
       if (resSessions.ok) {
         const data = await resSessions.json();
@@ -128,31 +130,31 @@ export default function SmartClassDiaryView({
       }
 
       // 2. Competencies
-      const resComps = await fetch("/api/codecheck/diary/competencies");
+      const resComps = await fetch(`${API_BASE_URL}/api/codecheck/diary/competencies`);
       if (resComps.ok) {
         setCompetencies(await resComps.json());
       }
 
       // 3. Dash metrics
-      const resDash = await fetch("/api/codecheck/diary/dashboard");
+      const resDash = await fetch(`${API_BASE_URL}/api/codecheck/diary/dashboard`);
       if (resDash.ok) {
         setDashboardMetrics(await resDash.json());
       }
 
       // 4. Integrations
-      const resInt = await fetch("/api/codecheck/diary/integrations");
+      const resInt = await fetch(`${API_BASE_URL}/api/codecheck/diary/integrations`);
       if (resInt.ok) {
         setIntegrations(await resInt.json());
       }
 
       // 5. Audit logs
-      const resAud = await fetch("/api/audit-logs");
+      const resAud = await fetch(`${API_BASE_URL}/api/audit-logs`);
       if (resAud.ok) {
         setAuditLogs(await resAud.json());
       }
 
       // 6. Observations
-      const resObs = await fetch("/api/codecheck/diary/observations");
+      const resObs = await fetch(`${API_BASE_URL}/api/codecheck/diary/observations`);
       if (resObs.ok) {
         setObservations(await resObs.json());
       }
