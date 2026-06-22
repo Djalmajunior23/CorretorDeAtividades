@@ -42,8 +42,12 @@ export default function TeacherImageCorrectionPage() {
     try {
       const data = await ocrApi.extractImage(file);
       setOcrId(data.ocr_id);
-      setExtractedText(data.extracted_text || '');
+      setExtractedText(data.extracted_text || data.text || '');
       setStatus('EXTRACTED');
+      
+      if (data.ai_analysis_available === false) {
+         setErrorMsg('Texto extraído com sucesso. A análise com IA está temporariamente indisponível.');
+      }
     } catch (err: any) {
       console.error(err);
       setStatus('ERROR');
@@ -87,10 +91,14 @@ export default function TeacherImageCorrectionPage() {
         </header>
 
         {errorMsg && (
-          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-start gap-3">
+          <div className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${
+            errorMsg.includes('sucesso') 
+              ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+              : 'bg-red-500/10 border-red-500/20 text-red-400'
+          }`}>
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-sm">Erro</p>
+              <p className="font-semibold text-sm">{errorMsg.includes('sucesso') ? 'Aviso' : 'Erro'}</p>
               <p className="text-sm">{errorMsg}</p>
             </div>
           </div>

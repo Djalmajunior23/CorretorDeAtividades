@@ -635,9 +635,16 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setCode(data.transcribedCode);
-          setVisualOcrNotes(data.visualOcrNotes);
-          setStudentName(data.studentName);
+          setCode(data.text || data.transcribedCode || '');
+          
+          if (data.ai_analysis_available === false) {
+             setVisualOcrNotes('Texto extraído com sucesso. A análise com IA está temporariamente indisponível.');
+             setStudentName('');
+          } else {
+             setVisualOcrNotes(data.visualOcrNotes);
+             setStudentName(data.studentName);
+          }
+          
           setEditorInputMode("text"); // auto-switch to view editor
           setOcrLoadedBanner(true);
           setTimeout(() => setOcrLoadedBanner(false), 8000);

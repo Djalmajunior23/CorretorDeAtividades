@@ -1,14 +1,38 @@
+import Tesseract from "tesseract.js";
 import { AIGateway } from "./AIGateway";
 import { AITask } from "../types";
-import Tesseract from "tesseract.js";
 
 export class OCRService {
-    static async extractTextFromImage(base64Image: string): Promise<{ text: string; aiAnalysisAvailable: boolean; error?: string }> {
+    static isBase64Str(str: string) {
+        return /^[a-zA-Z0-9+/]+={0,2}$/.test(str);
+    }
+
+    static async extractTextFromImage(base64Image: string): Promise<{ text: string; aiAnalysisAvailable: boolean; aiError?: string; error?: string }> {
+        let extractedText = "";
+        
         try {
-            // First attempt: use AI Vision (Ollama or Gemini)
-            const prompt = "Extraia todo o texto desta imagem. Se houver código, preserve a indentação e a estrutura. Retorne apenas o texto extraído.";
+            // Primeiro: OCR local com Tesseract
+            const isBase64 = this.isBase64Str(base64Image);
+            const source = isBase64 && !base64Image.startsWith('data:') 
+                ? `data:image/png;base64,${base64Image}` 
+                : base64Image;
+
+            const result = await Tesseract.recognize(source, 'por+eng');
+            extractedText = result.data.text;
+        } catch (tesseractError) {
+            console.error("[OCRService] Tesseract failed:", tesseractError);
+            return {
+                text: "",
+                aiAnalysisAvailable: false,
+                error: "OCR local (Tesseract) falhou na extração do texto."
+            };
+        }
+
+        try {
+            // Segundo: uso opcional da IA
+            const prompt = "Corrija formatação e erros do código/texto extraído:\n\n" + extractedText;
             const imageData = {
-                mimeType: "image/png", // Assuming PNG, but should be dynamic in a real app
+                mimeType: "image/png", 
                 base64: base64Image.replace(/^data:image\/\w+;base64,/, "")
             };
             
@@ -23,25 +47,13 @@ export class OCRService {
                 return { text: aiResult, aiAnalysisAvailable: true };
             }
             throw new Error("AI Vision returned insufficient results");
-        } catch (error) {
-            console.warn("[OCRService] AI Vision failed or Ollama unavailable, falling back to Tesseract.");
-            
-            try {
-                // Fallback: Tesseract.js
-                const result = await Tesseract.recognize(base64Image, 'por+eng');
-                
-                return { 
-                    text: result.data.text, 
-                    aiAnalysisAvailable: false 
-                };
-            } catch (tesseractError) {
-                console.error("[OCRService] Tesseract also failed:", tesseractError);
-                return {
-                    text: "",
-                    aiAnalysisAvailable: false,
-                    error: "Tanto a IA quanto o Tesseract falharam na extração do texto."
-                };
-            }
+        } catch (error: any) {
+            console.warn("[OCRService] AI Vision failed or Ollama unavailable, returning Tesseract result.");
+            return { 
+                text: extractedText, 
+                aiAnalysisAvailable: false,
+                aiError: error.message || "IA local indisponível no momento."
+            };
         }
     }
 }

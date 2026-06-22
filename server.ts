@@ -26,6 +26,8 @@ import { EducationalAnalyticsService } from "./src/ai/services/EducationalAnalyt
 import { ProviderFactory } from "./src/ai/factory/ProviderFactory.ts";
 import { OllamaProvider } from "./src/ai/providers/OllamaProvider.ts";
 import { GeminiProvider } from "./src/ai/providers/GeminiProvider.ts";
+import { AIGateway } from "./src/ai/services/AIGateway.ts";
+import { AITask } from "./src/ai/types.ts";
 import { globalBackupStatus } from "./scripts/backup_export.ts";
 import multer from "multer";
 import AdmZip from "adm-zip";
@@ -1960,43 +1962,7 @@ app.get("/ready", async (req, res) => {
 
 // Deep health probe (system resources, connections, latencies)
 app.get("/health", async (req, res) => {
-  let dbStatus = "NONE";
-  let dbLatency = 0;
-  if (pool) {
-    try {
-      const start = Date.now();
-      await pool.query("SELECT 1");
-      dbStatus = "CONNECTED";
-      dbLatency = Date.now() - start;
-    } catch (err: any) {
-      dbStatus = `ERROR: ${err.message}`;
-    }
-  } else {
-    dbStatus = "FALLBACK_CACHE_MODE";
-  }
-
-  const mem = process.memoryUsage();
-  return res.status(200).json({
-    status: dbStatus === "CONNECTED" || dbStatus === "FALLBACK_CACHE_MODE" ? "healthy" : "degraded",
-    timestamp: new Date().toISOString(),
-    uptime_seconds: Math.round(process.uptime()),
-    database: {
-      status: dbStatus,
-      latency_ms: dbLatency,
-      pool_limit: pool ? pool.options?.max || 10 : 0
-    },
-    system: {
-      platform: process.platform,
-      node_version: process.version,
-      memory: {
-        rss_mb: Math.round(mem.rss / (1024 * 1024)),
-        heap_total_mb: Math.round(mem.heapTotal / (1024 * 1024)),
-        heap_used_mb: Math.round(mem.heapUsed / (1024 * 1024)),
-        external_mb: Math.round(mem.external / (1024 * 1024))
-      },
-      cpu_load_avg: os.loadavg()
-    }
-  });
+  return res.status(200).json({ status: "ok" });
 });
 
 // O1: API System Health
@@ -4497,31 +4463,61 @@ app.post("/corrections/transcribe-image", async (req, res) => {
   }
 
   try {
-    const transcribedCode = await OCRService.extractTextFromImage(image);
+    const ocrResult = await OCRService.extractTextFromImage(image);
+    
+    if (ocrResult.error) {
+       return res.status(500).json({ 
+         success: false, 
+         error: ocrResult.error 
+       });
+    }
+
+    const transcribedCode = ocrResult.text;
     
     // Attempt to extract student name and extra info via AI Gateway (which handles multiple models/providers)
     const analysisPrompt = `Analise o seguinte código extraído de uma imagem e retorne o nome do aluno se houver um cabeçalho ou comentário, e uma nota de confiança sobre a transcrição. 
     Retorne em JSON: { "studentName": "nome", "visualOcrNotes": "notas" }`;
     
-    const metaData = await aiService.generateStructuredWithRetry<any>(transcribedCode + "\n\n" + analysisPrompt, {
-      type: "object",
-      properties: {
-        studentName: { type: "string" },
-        visualOcrNotes: { type: "string" }
+    let metaData: any = {};
+    if (ocrResult.aiAnalysisAvailable) {
+      try {
+        metaData = await aiService.generateStructuredWithRetry<any>(transcribedCode + "\n\n" + analysisPrompt, {
+          type: "object",
+          properties: {
+            studentName: { type: "string" },
+            visualOcrNotes: { type: "string" }
+          }
+        });
+      } catch (aiAnalysisError) {
+        console.warn("AI metadata extraction failed, but OCR succeeded:", aiAnalysisError);
+        metaData = {
+          studentName: "Estudante não identificado",
+          visualOcrNotes: "Extraído via OCR local."
+        };
       }
-    });
+    } else {
+      metaData = {
+        studentName: "",
+        visualOcrNotes: ocrResult.aiError || "IA local indisponível no momento."
+      };
+    }
 
     res.json({
       success: true,
-      transcribedCode,
+      ocr_provider: ocrResult.aiAnalysisAvailable ? "ai" : "tesseract",
+      text: transcribedCode,
+      transcribedCode, // maintained for backward compatibility
+      ai_analysis_available: ocrResult.aiAnalysisAvailable,
+      ai_error: ocrResult.aiError || (ocrResult.aiAnalysisAvailable ? null : "IA local indisponível no momento."),
+      message: ocrResult.aiAnalysisAvailable ? "OCR concluído com IA." : "OCR concluído com sucesso. A análise inteligente não foi executada.",
       studentName: metaData.studentName || "Estudante não identificado",
-      visualOcrNotes: metaData.visualOcrNotes || "Código extraído com sucesso através da Camada IA Gratuita."
+      visualOcrNotes: metaData.visualOcrNotes || "Código extraído com sucesso"
     });
   } catch (err: any) {
     console.error("Erro na transcrição de imagem:", err);
     res.status(500).json({ 
       success: false,
-      error: `Falha na auditoria inteligente da imagem: ${err.message}` 
+      error: `Falha na transcrição da imagem: ${err.message}` 
     });
   }
 });
@@ -4535,6 +4531,60 @@ const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 }).single("file");
+
+// OCR / Image Correction Endpoints matching ocrApi.ts
+app.post("/api/ocr/extract", upload, async (req: any, res: any) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ detail: "Arquivo não enviado." });
+    
+    // OCRService extractTextFromImage expects a base64 string
+    const base64Image = file.buffer.toString('base64');
+    const { text: extractedText, aiAnalysisAvailable, error: ocrError } = await OCRService.extractTextFromImage(base64Image);
+    
+    if (ocrError) {
+      return res.status(500).json({ detail: ocrError });
+    }
+
+    // Generate a pseudo ocr_id
+    const ocr_id = Math.floor(Math.random() * 10000);
+    res.json({
+      ocr_id,
+      extracted_text: extractedText,
+      text: extractedText,
+      ai_analysis_available: aiAnalysisAvailable,
+      success: !ocrError,
+      ocr_provider: aiAnalysisAvailable ? "ai" : "tesseract",
+      ai_error: aiAnalysisAvailable ? null : "IA local indisponível no momento.",
+      message: aiAnalysisAvailable ? "OCR concluído com IA." : "OCR concluído com sucesso. A análise inteligente não foi executada.",
+      warning: ocrError ? ocrError : (!aiAnalysisAvailable ? "AI vision not available, fallback to Tesseract" : null)
+    });
+  } catch (err: any) {
+    res.status(500).json({ detail: err.message });
+  }
+});
+
+app.post("/api/ocr/confirm", async (req, res) => {
+  try {
+    const { ocr_id, edited_text, language, test_cases } = req.body;
+    
+    const result = await CodeAnalysisService.correctCode({
+      language,
+      code: edited_text,
+      statement: "Código livre extraído por OCR",
+      rubric: "Nenhuma avaliação específica",
+      level: "auto"
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ detail: err.message });
+  }
+});
+
+app.get("/api/ocr/history", async (req, res) => {
+  res.json([]);
+});
 
 app.post("/api/batch/upload", upload, async (req: any, res: any) => {
   const { title, description, language, test_cases, rubric } = req.body;

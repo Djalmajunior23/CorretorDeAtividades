@@ -1,51 +1,34 @@
+import { LocalRuleEngine } from "../../services/localRuleEngine";
 import { AITask } from "../types";
 import { ProviderFactory } from "../factory/ProviderFactory";
-import { BaseProvider } from "../providers/BaseProvider";
-import { OllamaProvider } from "../providers/OllamaProvider";
 
 export class AIGateway {
-    static async executeTask<T>(task: AITask, prompt: string, schema?: any, imageData?: { mimeType: string, base64: string }): Promise<T | string> {
-        const provider = ProviderFactory.createProvider(task);
-        
+    static async executeTask<T>(task: string, prompt: string, options?: any, imageData?: any): Promise<T> {
         try {
-            if (schema) {
-                return await provider.generateStructured<T>(prompt, schema, {}, imageData);
-            } else {
-                return await provider.generateContent(prompt, {}, imageData);
-            }
+            // Tenta chamar o provedor principal (ex: Ollama)
+            const provider = ProviderFactory.getProvider();
+            if (!provider) throw new Error("A IA local (Ollama) está indisponível ou falhou no momento.");
+            
+            return await provider.execute(task, prompt, options, imageData) as T;
         } catch (error: any) {
-            // Only log if it's not the "indisponível" error, to reduce noise
-            if (!error.message.includes("indisponível")) {
-                console.error(`[AIGateway] Error executing task ${task}:`, error.message);
+            console.warn("[AIGateway] Ollama falhou. Erro:", error.message);
+            console.warn("[AIGateway] Iniciando Fallback Local do CodeCheck.");
+
+            if (task === AITask.IMAGE_OCR) {
+                // Deixa falhar para que o OCRService assuma apenas com Tesseract
+                throw new Error("A IA local (Ollama) está indisponível no momento.");
             }
+
+            // O LocalRuleEngine é acionado caso seja uma correção/validação.
+            // Extraímos a linguagem e o código do prompt para a análise básica.
+            let lang = 'python';
+            if (prompt.toLowerCase().includes('java')) lang = 'java';
+            else if (prompt.toLowerCase().includes('javascript') || prompt.toLowerCase().includes('typescript')) lang = 'javascript';
+
+            // Usamos uma heurística para pegar o que parece ser código do prompt, ou enviamos tudo
+            const fallbackResult = LocalRuleEngine.analyzeCode(lang, prompt);
             
-            // If error is about server indisponibilidade, don't fallback
-            if (error.message.includes("indisponível") || provider instanceof OllamaProvider) {
-                if (provider instanceof OllamaProvider) {
-                   throw new Error("A IA local (Ollama) está indisponível ou falhou no momento.");
-                }
-                throw error;
-            }
-            
-            // Fallback strategy: Always try Ollama if primary fails
-            try {
-                const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
-                const ollamaConfig = {
-                    provider: "ollama",
-                    model: process.env.AI_ACTIVITY_MODEL || "qwen2.5-coder:3b",
-                    apiKey: process.env.OLLAMA_PROXY_TOKEN,
-                    baseUrl: baseUrl
-                };
-                const fallbackProvider = new OllamaProvider(ollamaConfig);
-                if (schema) {
-                    return await fallbackProvider.generateStructured<T>(prompt, schema, {}, imageData);
-                } else {
-                    return await fallbackProvider.generateContent(prompt, {}, imageData);
-                }
-            } catch (fallbackError: any) {
-                 console.error(`[AIGateway] Fallback also failed for task ${task}:`, fallbackError.message);
-                 throw new Error("A IA local está indisponível no momento. Verifique a conexão com o Ollama.");
-            }
+            return fallbackResult as any as T;
         }
     }
 }
