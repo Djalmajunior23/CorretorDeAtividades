@@ -4437,31 +4437,71 @@ app.get("/api/teacher-analytics", async (req, res) => {
   });
 });
 
-// Endpoint: Image assessment transcription with Gemini Flash OCR
-app.post("/corrections/transcribe-image", async (req, res) => {
-  const { image } = req.body;
+// Define custom fields for OCR upload parsing to handle any client form names
+const ocrUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
+}).fields([
+  { name: "image", maxCount: 1 },
+  { name: "file", maxCount: 1 },
+  { name: "screenshot", maxCount: 1 },
+  { name: "photo", maxCount: 1 }
+]);
 
-  if (!image) {
-    return res.status(400).json({ error: "O parâmetro de imagem base64 é obrigatório." });
-  }
-
+// Endpoint: Image assessment transcription with Gemini/Ollama or local Tesseract OCR
+const handleTranscribeImage = async (req: express.Request, res: express.Response) => {
   try {
-    const ocrResult = await OCRService.extractTextFromImage(image);
+    let base64Image = "";
+    const reqAny = req as any;
+
+    // 1. Extract image if sent as multipart file upload
+    if (reqAny.files) {
+      const files = reqAny.files;
+      const uploadedFile = (files["image"]?.[0] || files["file"]?.[0] || files["screenshot"]?.[0] || files["photo"]?.[0]);
+      if (uploadedFile) {
+        base64Image = uploadedFile.buffer.toString("base64");
+      }
+    }
+
+    // 2. Extract image if sent as base64 string in JSON / urlencoded body
+    if (!base64Image && req.body) {
+      const rawImage = req.body.image || req.body.file || req.body.screenshot || req.body.photo || req.body.base64 || req.body.base64Image;
+      if (rawImage && typeof rawImage === "string") {
+        base64Image = rawImage;
+      }
+    }
+
+    if (!base64Image) {
+      console.warn("[OCR] No image data found in request.");
+      return res.status(400).json({
+        success: false,
+        error: "Não foi possível extrair texto da imagem.",
+        message: "Envie uma imagem mais nítida ou digite o código manualmente."
+      });
+    }
+
+    console.log("[OCR URL]", req.originalUrl, "Payload size:", base64Image.length);
+
+    // 3. Perform OCR
+    const ocrResult = await OCRService.extractTextFromImage(base64Image);
     
-    if (ocrResult.error) {
-       return res.status(500).json({ 
+    if (ocrResult.error || !ocrResult.text) {
+       return res.status(200).json({ 
          success: false, 
-         error: ocrResult.error 
+         error: ocrResult.error || "Não foi possível extrair texto da imagem.",
+         message: "Envie uma imagem mais nítida ou digite o código manualmente."
        });
     }
 
     const transcribedCode = ocrResult.text;
-    
-    // Attempt to extract student name and extra info via AI Gateway (which handles multiple models/providers)
+
+    // 4. Perform AI metadata analysis if OCRService enabled AI analysis
     const analysisPrompt = `Analise o seguinte código extraído de uma imagem e retorne o nome do aluno se houver um cabeçalho ou comentário, e uma nota de confiança sobre a transcrição. 
     Retorne em JSON: { "studentName": "nome", "visualOcrNotes": "notas" }`;
     
     let metaData: any = {};
+    let aiSuccess = false;
+
     if (ocrResult.aiAnalysisAvailable) {
       try {
         metaData = await aiService.generateStructuredWithRetry<any>(transcribedCode + "\n\n" + analysisPrompt, {
@@ -4471,38 +4511,97 @@ app.post("/corrections/transcribe-image", async (req, res) => {
             visualOcrNotes: { type: "string" }
           }
         });
+        aiSuccess = true;
       } catch (aiAnalysisError) {
         console.warn("AI metadata extraction failed, but OCR succeeded:", aiAnalysisError);
-        metaData = {
-          studentName: "Estudante não identificado",
-          visualOcrNotes: "Extraído via OCR local."
-        };
       }
-    } else {
-      metaData = {
-        studentName: "",
-        visualOcrNotes: ocrResult.aiError || "IA local indisponível no momento."
-      };
     }
 
-    res.json({
-      success: true,
-      ocr_provider: ocrResult.aiAnalysisAvailable ? "ai" : "tesseract",
-      text: transcribedCode,
-      transcribedCode, // maintained for backward compatibility
-      ai_analysis_available: ocrResult.aiAnalysisAvailable,
-      ai_error: ocrResult.aiError || (ocrResult.aiAnalysisAvailable ? null : "IA local indisponível no momento."),
-      message: ocrResult.aiAnalysisAvailable ? "OCR concluído com IA." : "OCR concluído com sucesso. A análise inteligente não foi executada.",
-      studentName: metaData.studentName || "Estudante não identificado",
-      visualOcrNotes: metaData.visualOcrNotes || "Código extraído com sucesso"
-    });
+    // 5. Structure and send final response (fully compatible with frontend App.tsx handles)
+    if (aiSuccess) {
+      res.json({
+        success: true,
+        ocr_provider: "ai",
+        text: transcribedCode,
+        transcribedCode, // maintained for backward compatibility
+        ai_analysis_available: true,
+        message: "OCR concluído com IA.",
+        studentName: metaData.studentName || "Estudante não identificado",
+        visualOcrNotes: metaData.visualOcrNotes || "Código extraído com sucesso"
+      });
+    } else {
+      res.json({
+        success: true,
+        text: transcribedCode,
+        transcribedCode, // maintained for backward compatibility
+        ocr_provider: "tesseract",
+        ai_analysis_available: false,
+        fallback_used: true,
+        message: "Texto extraído com sucesso. A análise inteligente está temporariamente indisponível.",
+        studentName: "Estudante não identificado",
+        visualOcrNotes: "Extraído via OCR local com Tesseract."
+      });
+    }
   } catch (err: any) {
     console.error("Erro na transcrição de imagem:", err);
     res.status(500).json({ 
       success: false,
-      error: `Falha na transcrição da imagem: ${err.message}` 
+      error: `Falha na transcrição: ${err.message}`,
+      message: "Envie uma imagem mais nítida ou digite o código manualmente."
     });
   }
+};
+
+app.post("/corrections/transcribe-image", ocrUpload, handleTranscribeImage);
+app.post("/api/corrections/transcribe-image", ocrUpload, handleTranscribeImage);
+
+// Standardized OCR endpoints (CORS and Vercel compatible)
+const handleStandardizedOcr = async (req: express.Request, res: express.Response) => {
+  const image = req.body.image || req.body.file || req.body.base64 || req.body.base64Image;
+
+  if (!image) {
+    return res.status(400).json({ success: false, error: "O parâmetro de imagem base64 é obrigatório." });
+  }
+
+  try {
+    console.log("[OCR URL]", req.originalUrl);
+    const ocrResult = await OCRService.extractTextFromImage(image);
+    
+    if (ocrResult.error) {
+       return res.status(500).json({ 
+         success: false, 
+         error: ocrResult.error 
+       });
+    }
+
+    res.json({
+      success: true,
+      text: ocrResult.text,
+      provider: ocrResult.aiAnalysisAvailable ? "ai" : "tesseract",
+      fallback: !ocrResult.aiAnalysisAvailable
+    });
+  } catch (err: any) {
+    console.error("Erro OCR:", err);
+    res.status(500).json({
+      success: false,
+      error: `Falha na transcrição: ${err.message}`
+    });
+  }
+};
+
+app.post("/api/ocr", handleStandardizedOcr);
+app.post("/api/transcribe", handleStandardizedOcr);
+app.post("/api/transcribe/image", handleStandardizedOcr);
+app.post("/api/vision", handleStandardizedOcr);
+app.post("/api/vision/analyze", handleStandardizedOcr);
+
+app.get("/api/ocr/status", (req, res) => {
+  res.json({
+    success: true,
+    status: "online",
+    provider: "tesseract",
+    fallback: false
+  });
 });
 
 // ==========================================
@@ -5080,7 +5179,7 @@ app.post("/api/questions/generate", async (req, res) => {
 // ==========================================
 // Endpoint 1: Run code online
 // ==========================================
-app.post("/corrections/run", async (req, res) => {
+app.post(["/corrections/run", "/api/corrections/run"], async (req, res) => {
   const { language, code, test_cases, studentName, className, rubric, activity_id, class_id, student_id } = req.body;
 
   if (!language || typeof code !== "string") {
