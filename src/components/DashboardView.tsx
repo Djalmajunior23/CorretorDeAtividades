@@ -1,3 +1,4 @@
+import { apiUrl, API_BASE_URL } from "../config/api";
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -49,7 +50,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const resp = await fetch(`${window.API_BASE_URL}/api/dashboard/teacher`);
+      const resp = await fetch(apiUrl("/api/dashboard/teacher"));
       if (resp.ok) {
         const payload = await resp.json();
         setData(payload);

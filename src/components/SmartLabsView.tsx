@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 interface SmartLab {
   id: string;
@@ -77,8 +78,8 @@ export default function SmartLabsView() {
     setLoading(true);
     try {
       const [labsRes, tempsRes] = await Promise.all([
-        fetch("/api/smart-labs"),
-        fetch("/api/smart-labs/templates"),
+        fetch(apiUrl("/api/smart-labs")),
+        fetch(apiUrl("/api/smart-labs/templates")),
       ]);
       setLabs(await labsRes.json());
       setTemplates(await tempsRes.json());
@@ -91,7 +92,7 @@ export default function SmartLabsView() {
 
   const createLabFromTemplate = async (template: Template) => {
     try {
-      const res = await fetch("/api/smart-labs", {
+      const res = await fetch(apiUrl("/api/smart-labs"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -372,7 +373,7 @@ function LabDetailView({
   const fetchSubmissions = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/smart-labs/${lab.id}/submissions`);
+      const res = await fetch(apiUrl(`/api/smart-labs/${lab.id}/submissions`));
       setSubmissions(await res.json());
     } catch (e) {
       toast.error("Erro ao carregar submissões.");
@@ -384,7 +385,7 @@ function LabDetailView({
   const runCorrection = async (subId: string) => {
     setCorrecting(subId);
     try {
-      const res = await fetch(`/api/smart-labs/submissions/${subId}/correct`, {
+      const res = await fetch(apiUrl(`/api/smart-labs/submissions/${subId}/correct`), {
         method: "POST",
       });
       if (res.ok) {
@@ -615,7 +616,7 @@ function ClassSettingsModal({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/classes/${encodeURIComponent(className)}/linting-settings`)
+    fetch(apiUrl(`/api/classes/${encodeURIComponent(className)}/linting-settings`))
       .then((r) => r.json())
       .then((data) => {
         setSettings(data);
@@ -627,8 +628,7 @@ function ClassSettingsModal({
   const save = async () => {
     setSaving(true);
     try {
-      const res = await fetch(
-        `/api/classes/${encodeURIComponent(className)}/linting-settings`,
+      const res = await fetch(apiUrl(`/api/classes/${encodeURIComponent(className)}/linting-settings`),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

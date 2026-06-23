@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import {
   Loader2,
   FileText,
@@ -41,26 +42,24 @@ export default function ReportsInterventionsView({ featureFlags = {} }: any) {
     setInterventionPlan(null);
     try {
       if (subTab === "class" && featureFlags.ENABLE_CLASS_ANALYTICS) {
-        const res = await fetch("/api/codecheck/module05/class-report");
+        const res = await fetch(apiUrl("/api/codecheck/module05/class-report"));
         if (res.ok) setClassData(await res.json());
       } else if (
         subTab === "student" &&
         featureFlags.ENABLE_STUDENT_ANALYTICS
       ) {
-        const res = await fetch(
-          `/api/codecheck/module05/student-report/${selectedStudent}`,
+        const res = await fetch(apiUrl(`/api/codecheck/module05/student-report/${selectedStudent}`),
         );
         if (res.ok) setStudentData(await res.json());
       } else if (
         subTab === "coordinator" &&
         featureFlags.ENABLE_COORDINATOR_DASHBOARD
       ) {
-        const res = await fetch(
-          "/api/codecheck/module05/coordinator-dashboard",
+        const res = await fetch(apiUrl("/api/codecheck/module05/coordinator-dashboard"),
         );
         if (res.ok) setCoordinatorData(await res.json());
       } else if (subTab === "risk" && featureFlags.ENABLE_STUDENT_ANALYTICS) {
-        const res = await fetch("/api/codecheck/module05/risk-profiles");
+        const res = await fetch(apiUrl("/api/codecheck/module05/risk-profiles"));
         if (res.ok) setRiskData(await res.json());
       }
     } catch (e) {
@@ -72,7 +71,7 @@ export default function ReportsInterventionsView({ featureFlags = {} }: any) {
   const loadAIOpinion = async () => {
     setLoadingAI(true);
     try {
-      const res = await fetch("/api/codecheck/module05/pedagogical-opinion", {
+      const res = await fetch(apiUrl("/api/codecheck/module05/pedagogical-opinion"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentName: selectedStudent }),
@@ -90,7 +89,7 @@ export default function ReportsInterventionsView({ featureFlags = {} }: any) {
   const loadInterventionPlan = async (competency: string) => {
     setLoadingAI(true);
     try {
-      const res = await fetch("/api/codecheck/module05/intervention-plan", {
+      const res = await fetch(apiUrl("/api/codecheck/module05/intervention-plan"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ competency }),

@@ -37,6 +37,8 @@ import {
   UserCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { getApiUrl } from "../utils/api";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import {
   ResponsiveContainer,
   LineChart,
@@ -181,7 +183,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
   // Fetch Services
   const fetchCompetencies = async () => {
     try {
-      const res = await fetch("/api/competencies");
+      const res = await fetch(apiUrl("/api/competencies"));
       if (res.ok) {
         setCompetencies(await res.json());
       }
@@ -193,7 +195,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
   const fetchCoverage = async () => {
     try {
       const res = await fetch(
-        `/api/competencies/coverage?class_name=${encodeURIComponent(selectedClass)}`,
+        apiUrl(`/api/competencies/coverage?class_name=${encodeURIComponent(selectedClass)}`),
       );
       if (res.ok) {
         setCoverageData(await res.json());
@@ -206,7 +208,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
   const fetchHeatmap = async () => {
     try {
       const res = await fetch(
-        `/api/competencies/heatmap?class_name=${encodeURIComponent(selectedClass)}`,
+        apiUrl(`/api/competencies/heatmap?class_name=${encodeURIComponent(selectedClass)}`),
       );
       if (res.ok) {
         setHeatmapData(await res.json());
@@ -219,7 +221,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
   const fetchObservatory = async () => {
     try {
       const res = await fetch(
-        `/api/competencies/observatory?class_name=${encodeURIComponent(selectedClass)}`,
+        apiUrl(`/api/competencies/observatory?class_name=${encodeURIComponent(selectedClass)}`),
       );
       if (res.ok) {
         setObservatoryData(await res.json());
@@ -232,7 +234,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
   const fetchAlerts = async () => {
     try {
       const res = await fetch(
-        `/api/competencies/alerts?class_name=${encodeURIComponent(selectedClass)}`,
+        apiUrl(`/api/competencies/alerts?class_name=${encodeURIComponent(selectedClass)}`),
       );
       if (res.ok) {
         setAlerts(await res.json());
@@ -244,7 +246,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
 
   const fetchReports = async () => {
     try {
-      const res = await fetch("/api/competencies/reports");
+      const res = await fetch(apiUrl("/api/competencies/reports"));
       if (res.ok) {
         setReports(await res.json());
       }
@@ -256,7 +258,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
   const fetchEvolution = async () => {
     try {
       const res = await fetch(
-        `/api/competencies/evolution?class_name=${encodeURIComponent(selectedClass)}`,
+        apiUrl(`/api/competencies/evolution?class_name=${encodeURIComponent(selectedClass)}`),
       );
       if (res.ok) {
         setEvolutionData(await res.json());
@@ -271,8 +273,8 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
     e.preventDefault();
     const payload = editingComp || newComp;
     const url = editingComp
-      ? `/api/competencies/${editingComp.id}`
-      : "/api/competencies";
+      ? apiUrl(`/api/competencies/${editingComp.id}`)
+      : apiUrl("/api/competencies");
     const method = editingComp ? "PUT" : "POST";
 
     try {
@@ -310,7 +312,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
     )
       return;
     try {
-      const res = await fetch(`/api/competencies/${id}`, { method: "DELETE" });
+      const res = await fetch(apiUrl(`/api/competencies/${id}`), { method: "DELETE" });
       if (res.ok) {
         fetchCompetencies();
         fetchObservatory();
@@ -323,7 +325,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
   // Alert Dismiss implementation
   const handleToggleAlert = async (id: string, currentlyChecked: boolean) => {
     try {
-      const res = await fetch("/api/competencies/alerts/check", {
+      const res = await fetch(apiUrl("/api/competencies/alerts/check"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, checked: !currentlyChecked }),
@@ -354,7 +356,7 @@ export default function CompetenciesManagerView({ featureFlags }: any) {
       : observatoryData.criticalComps.map((c: any) => c.name);
 
     try {
-      const res = await fetch("/api/competencies/recommend", {
+      const res = await fetch(apiUrl("/api/competencies/recommend"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -413,7 +415,7 @@ Código Chave de Autenticação: CC-${Math.floor(Math.random() * 900000 + 100000
 ========================================================`;
 
     try {
-      const res = await fetch("/api/competencies/reports", {
+      const res = await fetch(apiUrl("/api/competencies/reports"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

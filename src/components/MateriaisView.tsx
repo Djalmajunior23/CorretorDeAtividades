@@ -33,6 +33,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { EducationalTemplate, GeneratedMaterial } from "../types";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 const TEMPLATE_TYPES = [
   { id: "exercise_list", label: "Lista de Exercícios" },
@@ -87,8 +88,8 @@ export default function MateriaisDidaticosView() {
     setLoading(true);
     try {
       const [tRes, mRes] = await Promise.all([
-        fetch("/api/educational-templates"),
-        fetch("/api/materials"),
+        fetch(apiUrl("/api/educational-templates")),
+        fetch(apiUrl("/api/materials")),
       ]);
       setTemplates(await tRes.json());
       setMaterials(await mRes.json());
@@ -102,7 +103,7 @@ export default function MateriaisDidaticosView() {
   const generateMaterial = async () => {
     setIsGenerating(true);
     try {
-      const res = await fetch("/api/materials/generate", {
+      const res = await fetch(apiUrl("/api/materials/generate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -124,7 +125,7 @@ export default function MateriaisDidaticosView() {
 
   const approveMaterial = async (id: string) => {
     try {
-      await fetch(`/api/materials/${id}/approve`, { method: "POST" });
+      await fetch(apiUrl(`/api/materials/${id}/approve`), { method: "POST" });
       toast.success("Material aprovado.");
       fetchData();
     } catch (e) {

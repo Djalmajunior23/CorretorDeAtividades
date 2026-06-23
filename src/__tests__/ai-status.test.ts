@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { getApiBaseUrl } from '../services/apiService';
+import { apiUrl, API_BASE_URL } from '../config/api';
 
 describe('AI Status Endpoint and Frontend Integration Tests', () => {
   beforeEach(() => {
@@ -7,7 +7,7 @@ describe('AI Status Endpoint and Frontend Integration Tests', () => {
   });
 
   it('Deve resolver a URL de API correta para status', () => {
-    const baseUrl = getApiBaseUrl();
+    const baseUrl = API_BASE_URL;
     expect(baseUrl).toBeDefined();
     // No ambiente do contêiner ou localhost, o apiBaseUrl padrão é "/api" ou o configurado na variável de ambiente
     expect(typeof baseUrl).toBe('string');

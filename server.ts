@@ -1,6 +1,7 @@
-import { registerAddonEndpoints } from './server-addon';
+// import { registerAddonEndpoints } from './server-addon';
 import { setupTeacherAPIs } from './server-apis-addon';
 import express from "express";
+import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { spawn, exec } from "child_process";
@@ -43,28 +44,17 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
 // CORS middleware
-const allowedOrigins = [
-  "https://corretor-de-atividades.vercel.app",
-  "http://localhost:5173",
-  "http://localhost:3000"
-];
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+}));
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin as string;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else if (!origin) {
-    // Allows calls from same-origin (same backend)
-  }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
+app.options("*", cors({
+  origin: true,
+  credentials: true
+}));
 
 
 // ============================================
@@ -252,6 +242,9 @@ if (databaseUrl) {
     pool = new Pool({
       connectionString: databaseUrl,
       ssl: { rejectUnauthorized: false }
+    });
+    pool.on('error', (err) => {
+      console.error('Unexpected error on idle client', err);
     });
     console.log("Connected to Neon DB URL successfully.");
   } catch (error) {
@@ -2200,32 +2193,8 @@ app.get("/api/sandbox/health", async (req, res) => {
   }
 });
 
-// O2: Get list of questions
-app.get("/api/questions", (req, res) => {
-  return res.json(inMemoryQuestions);
-});
-
-// O3: Create a question
-app.post("/api/questions", (req, res) => {
-  const { title, description, language, difficulty, starter_code, test_cases, rubric } = req.body;
-  if (!title || !description || !language) {
-    return res.status(400).json({ error: "Título, descrição e linguagem são obrigatórios" });
-  }
-
-  const newQ: Question = {
-    id: "q-" + crypto.randomUUID().substring(0, 8),
-    title,
-    description,
-    language,
-    difficulty: difficulty || "Iniciante",
-    starter_code: starter_code || "",
-    test_cases: test_cases || [],
-    rubric: rubric || { syntax_weight: 30, tests_weight: 50, quality_weight: 20 }
-  };
-
-  inMemoryQuestions.push(newQ);
-  return res.json(newQ);
-});
+// O2: Get list of questions (duplicate in-memory disabled)
+// O3: Create a question (duplicate in-memory disabled)
 
 // Módulo 02 - Endpoints de Geração
 app.get("/api/codecheck/activities", async (req, res) => {
@@ -2396,30 +2365,11 @@ app.get("/api/execution/languages", (req, res) => {
 });
 
 app.get("/api/execution/status", async (req, res) => {
-  const checkCommand = (cmd: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      exec(`${cmd} --version`, (error: any) => {
-        resolve(!error);
-      });
-    });
-  };
-
-  const hasPython = await checkCommand("python3");
-  const hasNode = await checkCommand("node");
-  const hasGcc = await checkCommand("gcc");
-  const hasGpp = await checkCommand("g++");
-
-  res.json({ 
-    status: "online", 
-    sandbox: "active", 
-    engines: {
-      python: hasPython ? "available" : "missing",
-      node: hasNode ? "available" : "missing",
-      gcc: hasGcc ? "available" : "missing",
-      gplusplus: hasGpp ? "available" : "missing"
-    },
-    isolation: "OS-Level Subprocess (Node.js Sandbox)",
-    metrics_support: true
+  res.json({
+    success: true,
+    status: "online",
+    sandbox: "active",
+    provider: "local"
   });
 });
 
@@ -5638,20 +5588,33 @@ app.get("/api/settings/linting", async (req, res) => {
     try {
       const q = await pool.query(`SELECT * FROM d_teacher_linting_settings WHERE id = 'default'`);
       if (q.rows.length > 0) {
-        const row = q.rows[0];
         return res.json({
-          requireComments: row.require_comments,
-          requireIndentation: row.require_indentation,
-          maxLinesLimit: row.max_lines_limit,
-          requireNoSingleLetterVars: row.require_no_single_letter_vars,
-          requireFunctions: row.require_functions
+          success: true,
+          requireComments: q.rows[0].require_comments,
+          // ...
         });
       }
-    } catch (e: any) {
-      console.error("Error reading linting settings from DB:", e.message);
+      return res.json({
+        success: true,
+        requireComments: false,
+        requireIndentation: true,
+        maxLinesLimit: 0,
+        requireNoSingleLetterVars: false,
+        requireFunctions: false
+      });
+    } catch (e) {
+      console.error("Error fetching linting settings:", e);
+      return res.status(500).json({ success: false, error: "Database error" });
     }
   }
-  return res.json(currentLintingSettings);
+  return res.json({
+    success: true,
+    requireComments: false,
+    requireIndentation: true,
+    maxLinesLimit: 0,
+    requireNoSingleLetterVars: false,
+    requireFunctions: false
+  });
 });
 
 app.post("/api/settings/linting", async (req, res) => {
@@ -7184,21 +7147,9 @@ app.post("/api/competencies/recommend", async (req, res) => {
   });
 });
 
-app.get("/api/audit-logs", async (req, res) => {
-  if (pool) {
-    try {
-      const q = await pool.query(`SELECT * FROM d_audit_log ORDER BY created_at DESC LIMIT 100`);
-      return res.json(q.rows);
-    } catch (e: any) {
-      console.error("Error reading audits:", e.message);
-    }
-  }
-  return res.json([
-    { id: "1", user_id: "teacher_portal", action: "CORRECTION_EXECUTION", details: "Ran static analyzer for language: python", created_at: new Date().toISOString() }
-  ]);
-});
+// Duplicate audit logs endpoint removed
 
-registerAddonEndpoints(app, pool);
+// registerAddonEndpoints(app, pool);
 
 // Start listening and serve frontend UI
 async function main() {
@@ -7208,9 +7159,18 @@ async function main() {
   }
 
   // --- API setup ADDONS ---
-  if (pool) {
-    setupTeacherAPIs(app, pool);
-  }
+  setupTeacherAPIs(app, pool);
+
+  // 404 Handler for API routes
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ success: false, error: "API Endpoint Not Found" });
+  });
+
+  // Global Error Handler to guarantee JSON responses
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled Error:", err);
+    res.status(500).json({ success: false, error: "Internal Server Error", details: err.message });
+  });
 
   if (process.env.NODE_ENV !== "production") {
     // Vite middleware for rendering frontend

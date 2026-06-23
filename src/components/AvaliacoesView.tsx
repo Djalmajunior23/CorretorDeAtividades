@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function AvaliacoesView() {
   const [subTab, setSubTab] = useState<
@@ -155,7 +156,7 @@ export default function AvaliacoesView() {
     setAiSuggestedExam(null);
 
     try {
-      const resp = await fetch("/api/codecheck/module06/simulated-exam", {
+      const resp = await fetch(apiUrl("/api/codecheck/module06/simulated-exam"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

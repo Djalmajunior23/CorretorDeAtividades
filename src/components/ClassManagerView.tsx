@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search, Edit2, Archive, Trash, MoreVertical } from "lucide-react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export function ClassManagerView() {
   const [classes, setClasses] = useState<any[]>([]);
@@ -11,7 +12,7 @@ export function ClassManagerView() {
   const fetchClasses = async () => {
     setLoading(true);
     try {
-      const resp = await fetch("/api/classes");
+      const resp = await fetch(apiUrl("/api/classes"));
       const data = await resp.json();
       setClasses(data || []);
     } catch (e) {
@@ -28,13 +29,13 @@ export function ClassManagerView() {
     e.preventDefault();
     try {
       if (editId) {
-        await fetch(`/api/classes/${editId}`, {
+        await fetch(apiUrl(`/api/classes/${editId}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...formData, status: "active" })
         });
       } else {
-        await fetch("/api/classes", {
+        await fetch(apiUrl("/api/classes"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData)
@@ -52,14 +53,14 @@ export function ClassManagerView() {
   const handleDelete = async (id: string) => {
     if (!confirm("Confirmar exclusão desta turma?")) return;
     try {
-      await fetch(`/api/classes/${id}`, { method: "DELETE" });
+      await fetch(apiUrl(`/api/classes/${id}`), { method: "DELETE" });
       fetchClasses();
     } catch (e) {}
   };
 
   const handleArchive = async (id: string, currentData: any) => {
     try {
-      await fetch(`/api/classes/${id}`, {
+      await fetch(apiUrl(`/api/classes/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...currentData, status: "archived" })

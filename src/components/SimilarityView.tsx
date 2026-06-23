@@ -17,6 +17,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function SimilarityView() {
   const [batches, setBatches] = useState<any[]>([]);
@@ -34,7 +35,7 @@ export default function SimilarityView() {
 
   const fetchBatches = async () => {
     try {
-      const res = await fetch("/api/batch");
+      const res = await fetch(apiUrl("/api/batch"));
       const data = await res.json();
       setBatches(data.filter((b: any) => b.status === "completed"));
     } catch (e) {
@@ -44,7 +45,7 @@ export default function SimilarityView() {
 
   const fetchAnalyses = async () => {
     try {
-      const res = await fetch("/api/similarity");
+      const res = await fetch(apiUrl("/api/similarity"));
       const data = await res.json();
       setAnalyses(data);
     } catch (e) {
@@ -55,7 +56,7 @@ export default function SimilarityView() {
   const startAnalysis = async (batchId: string, language: string) => {
     setAnalyzing(true);
     try {
-      const res = await fetch("/api/similarity/analyze", {
+      const res = await fetch(apiUrl("/api/similarity/analyze"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ batch_id: batchId, language, threshold: 0.75 }),
@@ -76,7 +77,7 @@ export default function SimilarityView() {
     setSelectedAnalysis(analysis);
     setLoading(true);
     try {
-      const res = await fetch(`/api/similarity/${analysis.id}/pairs`);
+      const res = await fetch(apiUrl(`/api/similarity/${analysis.id}/pairs`));
       const data = await res.json();
       setPairs(data);
     } catch (e) {

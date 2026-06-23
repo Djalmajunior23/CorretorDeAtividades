@@ -1,3 +1,4 @@
+import { apiUrl, API_BASE_URL } from "../config/api";
 import React, { useState, useEffect } from "react";
 import { FileCheck, Search, Filter, Download, ArrowUpRight } from "lucide-react";
 
@@ -10,10 +11,10 @@ export function EvidencesManagerView() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const clsResp = await fetch(`${window.API_BASE_URL}/api/classes`);
+      const clsResp = await fetch(apiUrl("/api/classes"));
       setClasses(await clsResp.json() || []);
       
-      const q = filterClass ? `${window.API_BASE_URL}/api/evidences/class/${filterClass}` : `${window.API_BASE_URL}/api/evidences`;
+      const q = filterClass ? `${API_BASE_URL}/api/evidences/class/${filterClass}` : `${API_BASE_URL}/api/evidences`;
       const evResp = await fetch(q);
       setEvidences(await evResp.json() || []);
     } catch (e) {

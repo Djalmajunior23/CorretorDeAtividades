@@ -1,13 +1,8 @@
 import axios from 'axios';
-
-export const getApiBaseUrl = (): string => {
-  return import.meta.env.VITE_API_BASE_URL || "http://31.97.41.64:8080";
-};
-
-export const API_BASE_URL = getApiBaseUrl();
+import { API_BASE_URL } from '../config/api';
 
 const apiService = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: `${API_BASE_URL}/api`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

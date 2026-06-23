@@ -23,7 +23,7 @@ import {
   FileSpreadsheet,
   HelpCircle,
 } from "lucide-react";
-import { API_BASE_URL } from "../services/apiService";
+import { apiUrl, safeJsonResponse, API_BASE_URL } from "../config/api";
 
 
 interface SmartClassDiaryViewProps {
@@ -130,31 +130,31 @@ export default function SmartClassDiaryView({
       }
 
       // 2. Competencies
-      const resComps = await fetch(`${API_BASE_URL}/api/codecheck/diary/competencies`);
+      const resComps = await fetch(apiUrl("/api/codecheck/diary/competencies"));
       if (resComps.ok) {
         setCompetencies(await resComps.json());
       }
 
       // 3. Dash metrics
-      const resDash = await fetch(`${API_BASE_URL}/api/codecheck/diary/dashboard`);
+      const resDash = await fetch(apiUrl("/api/codecheck/diary/dashboard"));
       if (resDash.ok) {
         setDashboardMetrics(await resDash.json());
       }
 
       // 4. Integrations
-      const resInt = await fetch(`${API_BASE_URL}/api/codecheck/diary/integrations`);
+      const resInt = await fetch(apiUrl("/api/codecheck/diary/integrations"));
       if (resInt.ok) {
         setIntegrations(await resInt.json());
       }
 
       // 5. Audit logs
-      const resAud = await fetch(`${API_BASE_URL}/api/audit-logs`);
+      const resAud = await fetch(apiUrl("/api/audit-logs"));
       if (resAud.ok) {
         setAuditLogs(await resAud.json());
       }
 
       // 6. Observations
-      const resObs = await fetch(`${API_BASE_URL}/api/codecheck/diary/observations`);
+      const resObs = await fetch(apiUrl("/api/codecheck/diary/observations"));
       if (resObs.ok) {
         setObservations(await resObs.json());
       }
@@ -174,8 +174,7 @@ export default function SmartClassDiaryView({
   // Fetch Attendance records when selected session ID changes
   useEffect(() => {
     if (selectedAttendanceSessionId) {
-      fetch(
-        `/api/codecheck/diary/attendance?session_id=${selectedAttendanceSessionId}`,
+      fetch(apiUrl(`/api/codecheck/diary/attendance?session_id=${selectedAttendanceSessionId}`),
       )
         .then((res) => {
           if (res.ok) return res.json();
@@ -247,13 +246,13 @@ export default function SmartClassDiaryView({
     try {
       let res;
       if (editingSessionId) {
-        res = await fetch(`/api/codecheck/diary/sessions/${editingSessionId}`, {
+        res = await fetch(apiUrl(`/api/codecheck/diary/sessions/${editingSessionId}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        res = await fetch("/api/codecheck/diary/sessions", {
+        res = await fetch(apiUrl("/api/codecheck/diary/sessions"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -344,7 +343,7 @@ export default function SmartClassDiaryView({
     )
       return;
     try {
-      const res = await fetch(`/api/codecheck/diary/sessions/${id}`, {
+      const res = await fetch(apiUrl(`/api/codecheck/diary/sessions/${id}`), {
         method: "DELETE",
       });
       if (res.ok) {
@@ -374,7 +373,7 @@ export default function SmartClassDiaryView({
     );
 
     try {
-      const res = await fetch("/api/codecheck/diary/ai-summary", {
+      const res = await fetch(apiUrl("/api/codecheck/diary/ai-summary"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -447,7 +446,7 @@ export default function SmartClassDiaryView({
     }
     setIsSavingAttendance(true);
     try {
-      const res = await fetch("/api/codecheck/diary/attendance", {
+      const res = await fetch(apiUrl("/api/codecheck/diary/attendance"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -489,7 +488,7 @@ export default function SmartClassDiaryView({
     };
 
     try {
-      const res = await fetch("/api/codecheck/diary/observations", {
+      const res = await fetch(apiUrl("/api/codecheck/diary/observations"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -516,7 +515,7 @@ export default function SmartClassDiaryView({
   const triggerExport = async (format: "PDF" | "Excel" | "CSV") => {
     showToast(`Preparando compilação do relatório em ${format}...`, "info");
     try {
-      const res = await fetch("/api/codecheck/diary/export", {
+      const res = await fetch(apiUrl("/api/codecheck/diary/export"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1885,8 +1884,7 @@ export default function SmartClassDiaryView({
                     <button
                       onClick={async () => {
                         if (window.confirm("Excluir observação?")) {
-                          const r = await fetch(
-                            `/api/codecheck/diary/observations/${obs.id}`,
+                          const r = await fetch(apiUrl(`/api/codecheck/diary/observations/${obs.id}`),
                             { method: "DELETE" },
                           );
                           if (r.ok) {

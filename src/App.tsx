@@ -64,6 +64,7 @@ import {
   Moon
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
+import { apiUrl, safeJsonResponse } from "./config/api";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -184,6 +185,7 @@ const INITIAL_TEST_CASES: TestCase[] = [
 ];
 
 export default function App() {
+  console.log("API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
   const [currentTab, setTab] = useState<string>("dashboard");
   const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
   const [selectedCorrectorStudent, setSelectedCorrectorStudent] = useState<string>('');
@@ -322,19 +324,26 @@ export default function App() {
 
   // Fetch audit logs helper (Regras de auditoria)
   const fetchAuditLogs = () => {
-    const baseUrl = window.API_BASE_URL || "http://31.97.41.64:8080";
-    fetch(`${baseUrl}/api/audit-logs`)
-      .then(res => res.json())
+    fetch(apiUrl("/api/audit-logs"))
+      .then(res => safeJsonResponse(res))
       .then(data => setAuditLogs(data))
       .catch(e => console.error("Error loading audits:", e));
   };
 
   const fetchSandboxStatus = () => {
-    const baseUrl = window.API_BASE_URL || "http://31.97.41.64:8080";
-    fetch(`${baseUrl}/api/execution/status`)
-      .then(res => res.json())
+    fetch(apiUrl("/api/execution/status"))
+      .then(res => safeJsonResponse(res))
       .then(data => setSandboxStatus(data))
-      .catch(e => console.error("Error loading sandbox status:", e));
+      .catch(e => {
+        console.warn("Sandbox connection failed, using fallback:", e);
+        setSandboxStatus({
+          success: false,
+          available: false,
+          enabled: false,
+          status: "offline",
+          message: "Sandbox indisponível no momento."
+        });
+      });
   };
 
   const handleCompareClasses = async () => {
@@ -345,10 +354,10 @@ export default function App() {
 
     setLoadingComparison(true);
     try {
-      const resA = await fetch(`/api/analytics/class-average?name=${encodeURIComponent(classA)}`);
+      const resA = await fetch(apiUrl(`/api/analytics/class-average?name=${encodeURIComponent(classA)}`));
       const dataA = await resA.json();
       
-      const resB = await fetch(`/api/analytics/class-average?name=${encodeURIComponent(classB)}`);
+      const resB = await fetch(apiUrl(`/api/analytics/class-average?name=${encodeURIComponent(classB)}`));
       const dataB = await resB.json();
 
       setComparisonData([
@@ -367,11 +376,11 @@ export default function App() {
   const fetchHealthStatus = async () => {
     setLoadingHealth(true);
     try {
-      const res = await fetch("/api/health-status");
+      const res = await fetch(apiUrl("/api/health-status"));
       if (res.ok) {
         const ct = res.headers.get("content-type");
         if (ct && ct.includes("application/json")) {
-          const data = await res.json();
+          const data = await safeJsonResponse(res);
           setHealthData(data);
         } else {
           console.warn("[App] Received non-JSON status response during server standby/startup");
@@ -387,11 +396,11 @@ export default function App() {
   // Fetch teaching questions bank
   const fetchQuestions = async () => {
     try {
-      const res = await fetch("/api/questions");
+      const res = await fetch(apiUrl("/api/questions"));
       if (res.ok) {
         const ct = res.headers.get("content-type");
         if (ct && ct.includes("application/json")) {
-          const data = await res.json();
+          const data = await safeJsonResponse(res);
           setQuestions(data);
         }
       }
@@ -404,11 +413,11 @@ export default function App() {
   const fetchTeacherAnalytics = async () => {
     setLoadingAnalytics(true);
     try {
-      const res = await fetch("/api/teacher-analytics");
+      const res = await fetch(apiUrl("/api/teacher-analytics"));
       if (res.ok) {
         const ct = res.headers.get("content-type");
         if (ct && ct.includes("application/json")) {
-          const data = await res.json();
+          const data = await safeJsonResponse(res);
           setAnalyticsData(data);
         } else {
           console.warn("[App] Received non-JSON analytics response during server standby/startup");
@@ -425,9 +434,9 @@ export default function App() {
   const fetchComparisonAnalytics = async () => {
     setLoadingComparison(true);
     try {
-      const res = await fetch("/api/class-comparison-analytics");
+      const res = await fetch(apiUrl("/api/class-comparison-analytics"));
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJsonResponse(res);
         setComparisonData(data);
         if (data.length >= 2) {
           if (!classA) setClassA(data[0].class_name);
@@ -446,13 +455,13 @@ export default function App() {
     fetchSandboxStatus();
     
     // Fetch initial feature flags and linting settings
-    fetch("/api/feature-flags")
-      .then(res => res.json())
+    fetch(apiUrl("/api/feature-flags"))
+      .then(res => safeJsonResponse(res))
       .then(data => setFeatureFlags(data))
       .catch(e => console.error("Error loading features:", e));
 
-    fetch("/api/settings/linting")
-      .then(res => res.json())
+    fetch(apiUrl("/api/settings/linting"))
+      .then(res => safeJsonResponse(res))
       .then(data => setLintSettings(data))
       .catch(e => console.error("Error loading linting settings:", e));
   }, []);
@@ -480,8 +489,8 @@ export default function App() {
       // Fetch Class error analytics
       if (featureFlags.ENABLE_CLASS_ERROR_DASHBOARD) {
         setLoadingClassErrors(true);
-        fetch("/api/class-error-analytics")
-          .then(res => res.json())
+        fetch(apiUrl("/api/class-error-analytics"))
+          .then(res => safeJsonResponse(res))
           .then(data => {
             setClassErrorData(data);
             setLoadingClassErrors(false);
@@ -497,8 +506,8 @@ export default function App() {
   useEffect(() => {
     if ((currentTab === "analytics" && featureFlags.ENABLE_STUDENT_EVOLUTION) && selectedStudent) {
       setLoadingStudentPromo(true);
-      fetch(`/api/student-evolution?studentName=${encodeURIComponent(selectedStudent)}`)
-        .then(res => res.json())
+      fetch(apiUrl(`/api/student-evolution?studentName=${encodeURIComponent(selectedStudent)}`))
+        .then(res => safeJsonResponse(res))
         .then(data => {
           setStudentEvolutionData(data);
           setLoadingStudentPromo(false);
@@ -524,7 +533,7 @@ export default function App() {
   const handleSaveLintSettings = async () => {
     setSavingSettings(true);
     try {
-      const res = await fetch("/api/settings/linting", {
+      const res = await fetch(apiUrl("/api/settings/linting"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(lintSettings)
@@ -546,7 +555,7 @@ export default function App() {
     const updatedFlags = { ...featureFlags, [flagName]: val };
     setFeatureFlags(updatedFlags);
     try {
-      await fetch("/api/feature-flags", {
+      await fetch(apiUrl("/api/feature-flags"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedFlags)
@@ -628,7 +637,7 @@ export default function App() {
     setVisualOcrNotes(null);
     setStudentName(null);
     try {
-      const response = await fetch("/corrections/transcribe-image", {
+      const response = await fetch(apiUrl("/api/corrections/transcribe-image"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -686,11 +695,11 @@ export default function App() {
   // Fetch histories on mount/tab swap
   const fetchSubmissions = async () => {
     try {
-      const res = await fetch("/api/submissions");
+      const res = await fetch(apiUrl("/api/submissions"));
       if (res.ok) {
         const ct = res.headers.get("content-type");
         if (ct && ct.includes("application/json")) {
-          const data = await res.json();
+          const data = await safeJsonResponse(res);
           setSubmissions(data);
           setDbConnected(true);
         }
@@ -710,8 +719,8 @@ export default function App() {
   // Synchronously fetch classes when the user enters the corrector tab
   useEffect(() => {
     if (currentTab === "corrector") {
-      fetch("/api/classes")
-        .then(res => res.json())
+      fetch(apiUrl("/api/classes"))
+        .then(res => safeJsonResponse(res))
         .then(data => {
           if (Array.isArray(data)) {
             setCorrectorClasses(data);
@@ -725,8 +734,8 @@ export default function App() {
   useEffect(() => {
     if (selectedCorrectorClass) {
       // 1. Fetch Students of this class
-      fetch(`/api/students?class_id=${selectedCorrectorClass}`)
-        .then(res => res.json())
+      fetch(apiUrl(`/api/students?class_id=${selectedCorrectorClass}`))
+        .then(res => safeJsonResponse(res))
         .then(data => {
           if (Array.isArray(data)) {
             setCorrectorStudents(data);
@@ -735,8 +744,8 @@ export default function App() {
         .catch(err => console.error("Error loading corrector students:", err));
 
       // 2. Fetch Activities for this class
-      fetch("/api/activities")
-        .then(res => res.json())
+      fetch(apiUrl("/api/activities"))
+        .then(res => safeJsonResponse(res))
         .then(data => {
           if (Array.isArray(data)) {
             const filtered = data.filter((a: any) => a.class_id === selectedCorrectorClass);
@@ -810,7 +819,7 @@ export default function App() {
     }, 600);
 
     try {
-      const response = await fetch("/corrections/run", {
+      const response = await fetch(apiUrl("/api/corrections/run"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -2239,7 +2248,7 @@ export default function App() {
                       }
 
                       try {
-                        const res = await fetch("/api/questions", {
+                        const res = await fetch(apiUrl("/api/questions"), {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({

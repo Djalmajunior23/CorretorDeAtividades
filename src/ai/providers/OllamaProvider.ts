@@ -5,7 +5,7 @@ export class OllamaProvider extends BaseProvider {
 
     constructor(config: AIConfig) {
         super(config);
-        const baseUrl = config.baseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+        const baseUrl = config.baseUrl || process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434";
         this.baseUrl = baseUrl.replace(/\/$/, "");
     }
 

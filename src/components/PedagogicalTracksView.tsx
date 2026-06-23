@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { PedagogicalTrack, InterventionPlan } from "../types";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function PedagogicalTracksView() {
   const [tracks, setTracks] = useState<PedagogicalTrack[]>([]);
@@ -45,8 +46,8 @@ export default function PedagogicalTracksView() {
     setLoading(true);
     try {
       const [tracksRes, plansRes] = await Promise.all([
-        fetch("/api/pedagogical-tracks"),
-        fetch("/api/intervention-plans"),
+        fetch(apiUrl("/api/pedagogical-tracks")),
+        fetch(apiUrl("/api/intervention-plans")),
       ]);
       setTracks(await tracksRes.json());
       setPlans(await plansRes.json());
@@ -60,8 +61,7 @@ export default function PedagogicalTracksView() {
   const generateTrackIA = async (type: string) => {
     setIsGenerating(true);
     try {
-      const res = await fetch(
-        `/api/pedagogical-tracks/generate/class/${encodeURIComponent(currentClass)}`,
+      const res = await fetch(apiUrl(`/api/pedagogical-tracks/generate/class/${encodeURIComponent(currentClass)}`),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -89,7 +89,7 @@ export default function PedagogicalTracksView() {
   const deleteTrack = async (id: string) => {
     if (!confirm("Deseja realmente excluir esta trilha?")) return;
     try {
-      await fetch(`/api/pedagogical-tracks/${id}`, { method: "DELETE" });
+      await fetch(apiUrl(`/api/pedagogical-tracks/${id}`), { method: "DELETE" });
       toast.success("Trilha excluída.");
       fetchData();
     } catch (e) {

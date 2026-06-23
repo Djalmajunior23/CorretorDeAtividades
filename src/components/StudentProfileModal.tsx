@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import { 
   X, User, BookOpen, TrendingUp, Award, CheckCircle, 
   AlertCircle, ChevronRight, FileText, Activity 
@@ -24,7 +25,7 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
     if (!isOpen || !studentId) return;
 
     setLoading(true);
-    fetch(`/api/students/${studentId}/profile`)
+    fetch(apiUrl(`/api/students/${studentId}/profile`))
       .then(res => {
         if (!res.ok) throw new Error("Não foi possível carregar o perfil do aluno.");
         return res.json();

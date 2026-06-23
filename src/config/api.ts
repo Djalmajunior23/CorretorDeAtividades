@@ -1,0 +1,24 @@
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://api.teacherjuniors.com.br";
+
+export const apiUrl = (path: string) => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+};
+
+export async function safeJsonResponse(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`HTTP ${response.status}: ${text.slice(0, 120)}`);
+  }
+
+  if (!contentType.includes("application/json")) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Resposta não JSON: ${text.slice(0, 120)}`);
+  }
+
+  return response.json();
+}

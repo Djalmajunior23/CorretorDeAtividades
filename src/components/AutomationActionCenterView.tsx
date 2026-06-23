@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import {
   BellRing,
   Mail,
@@ -24,15 +25,14 @@ export default function AutomationActionCenterView({ featureFlags }: any) {
 
   useEffect(() => {
     if (activeTab === "alerts" || activeTab === "resource_metrics") {
-      fetch("/api/codecheck/module07/alerts")
+      fetch(apiUrl("/api/codecheck/module07/alerts"))
         .then((res) => res.json())
         .then((data) => {
           if (!data.error) setAlerts(data);
         })
         .catch(console.error);
 
-      fetch(
-        `/api/codecheck/module07/sandbox-metrics?activityId=${selectedActivity}`,
+      fetch(apiUrl(`/api/codecheck/module07/sandbox-metrics?activityId=${selectedActivity}`),
       )
         .then((res) => res.json())
         .then((data) => {
@@ -40,7 +40,7 @@ export default function AutomationActionCenterView({ featureFlags }: any) {
         })
         .catch(console.error);
     } else if (activeTab === "communication") {
-      fetch("/api/codecheck/module07/notifications")
+      fetch(apiUrl("/api/codecheck/module07/notifications"))
         .then((res) => res.json())
         .then((data) => {
           if (!data.error) setNotifications(data);

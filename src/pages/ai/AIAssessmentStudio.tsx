@@ -1,13 +1,14 @@
+import { apiUrl, API_BASE_URL } from "../../config/api";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PenTool, Brain, SearchCheck, Layers, FileDown, Plus } from 'lucide-react';
-import { getApiBaseUrl } from '../../services/apiService';
+
 
 export default function AIAssessmentStudio() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/assessment-studio/dashboard`)
+    fetch(`${API_BASE_URL}/assessment-studio/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

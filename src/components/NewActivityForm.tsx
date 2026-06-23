@@ -1,6 +1,7 @@
+import { apiUrl, API_BASE_URL } from "../config/api";
 import React, { useState } from "react";
 import { Upload, Code, CheckCircle, AlertCircle } from "lucide-react";
-import { getApiBaseUrl } from "../services/apiService";
+
 
 export default function NewActivityForm() {
   const [inputType, setInputType] = useState<"typed" | "image">("typed");
@@ -16,7 +17,7 @@ export default function NewActivityForm() {
     // Na prática, deve haver uma base_url configurada nas variáveis de ambiente.
     // Usando endpoint simulado que refletirá a estrutura criada no backend.
     try {
-      const baseUrl = getApiBaseUrl();
+      const baseUrl = API_BASE_URL;
       const url = `${baseUrl.replace(/\/+$/, "")}/submissions/`;
       const response = await fetch(url, {
         method: "POST",

@@ -24,7 +24,23 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { ResourceLibraryItem } from "../types";
+import { API_BASE_URL } from "../config/api";
+import { apiUrl, safeJsonResponse } from "../config/api";
+
+export interface ResourceLibraryItem {
+  id: string;
+  title: string;
+  description?: string;
+  type?: string;
+  url?: string;
+  tags?: string[];
+  is_favorite?: boolean;
+  status?: string;
+  topic?: string;
+  language?: string;
+  content?: string;
+  created_at?: string;
+}
 
 export default function ResourceLibraryView() {
   const [resources, setResources] = useState<ResourceLibraryItem[]>([]);
@@ -92,7 +108,7 @@ export default function ResourceLibraryView() {
         is_favorite: false
       };
 
-      const res = await fetch("/api/library", {
+      const res = await fetch(apiUrl("/api/library"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -128,7 +144,7 @@ export default function ResourceLibraryView() {
         status: editingItem.status
       };
 
-      const res = await fetch(`/api/library/${editingItem.id}`, {
+      const res = await fetch(apiUrl(`/api/library/${editingItem.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -150,7 +166,7 @@ export default function ResourceLibraryView() {
   const handleFavorite = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/api/library/${id}/favorite`, { method: "POST" });
+      const res = await fetch(apiUrl(`/api/library/${id}/favorite`), { method: "POST" });
       if (res.ok) {
         toast.success("Favoritado atualizado");
         fetchData();
@@ -163,7 +179,7 @@ export default function ResourceLibraryView() {
   const handleArchive = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/api/library/${id}/archive`, { method: "POST" });
+      const res = await fetch(apiUrl(`/api/library/${id}/archive`), { method: "POST" });
       if (res.ok) {
         toast.success("Recurso arquivado na biblioteca");
         fetchData();
@@ -176,7 +192,7 @@ export default function ResourceLibraryView() {
   const handleDuplicate = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/api/library/${id}/duplicate`, { method: "POST" });
+      const res = await fetch(apiUrl(`/api/library/${id}/duplicate`), { method: "POST" });
       if (res.ok) {
         toast.success("Recurso duplicado com sucesso!");
         fetchData();
@@ -190,7 +206,7 @@ export default function ResourceLibraryView() {
     e.stopPropagation();
     if (!confirm("Tem certeza que deseja remover este recurso? (Soft Delete)")) return;
     try {
-      const res = await fetch(`/api/library/${id}`, { method: "DELETE" });
+      const res = await fetch(apiUrl(`/api/library/${id}`), { method: "DELETE" });
       if (res.ok) {
         toast.success("Recurso removido com sucesso.");
         fetchData();
@@ -209,7 +225,7 @@ export default function ResourceLibraryView() {
     setEditingItem(item);
     setFormTitle(item.title);
     setFormDescription(item.description || "");
-    setFormType(item.type);
+    setFormType(item.type || "atividade");
     setFormTopic(item.topic || "");
     setFormLanguage(item.language || "javascript");
     setFormTags(item.tags ? item.tags.join(", ") : "");
@@ -437,7 +453,7 @@ export default function ResourceLibraryView() {
                   <div className="mt-auto pt-3 flex items-center justify-between text-[9px] text-slate-500 font-mono">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {new Date(r.created_at).toLocaleDateString("pt-BR")}
+                      {new Date(r.created_at || Date.now()).toLocaleDateString("pt-BR")}
                     </span>
                     <span className="max-w-[120px] truncate text-slate-500 font-bold uppercase">
                       {r.topic || "Geral"}

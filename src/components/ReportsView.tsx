@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { GeneratedReport } from "../types";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function ReportsView() {
   const [reports, setReports] = useState<GeneratedReport[]>([]);
@@ -54,7 +55,7 @@ export default function ReportsView() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${window.API_BASE_URL}/api/reports`);
+      const res = await fetch(apiUrl("/api/reports"));
       if (res.ok) {
         setReports(await res.json());
       }
@@ -67,7 +68,7 @@ export default function ReportsView() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch(`${window.API_BASE_URL}/api/classes`);
+      const res = await fetch(apiUrl("/api/classes"));
       if (res.ok) {
         const data = await res.json();
         setClasses(data || []);
@@ -82,7 +83,7 @@ export default function ReportsView() {
 
   const fetchStudents = async (classId: string) => {
     try {
-      const res = await fetch(`${window.API_BASE_URL}/api/students?class_id=${classId}`);
+      const res = await fetch(apiUrl("/api/students?class_id=${classId}"));
       if (res.ok) {
         const data = await res.json();
         setStudents(data || []);
@@ -117,7 +118,7 @@ export default function ReportsView() {
         teacher_notes: teacherNotes || undefined
       };
 
-      const res = await fetch("/api/reports/generate", {
+      const res = await fetch(apiUrl("/api/reports/generate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -19,6 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function BatchCorrectionView() {
   const [title, setTitle] = useState("");
@@ -48,7 +49,7 @@ export default function BatchCorrectionView() {
 
   const fetchBatches = async () => {
     try {
-      const res = await fetch("/api/batch");
+      const res = await fetch(apiUrl("/api/batch"));
       const data = await res.json();
       setBatches(data);
     } catch (e) {
@@ -58,7 +59,7 @@ export default function BatchCorrectionView() {
 
   const fetchBatchStatus = async (id: string) => {
     try {
-      const res = await fetch(`/api/batch/${id}`);
+      const res = await fetch(apiUrl(`/api/batch/${id}`));
       const data = await res.json();
 
       if (data.status === "completed" || data.status === "failed") {
@@ -81,7 +82,7 @@ export default function BatchCorrectionView() {
 
   const fetchBatchResults = async (id: string) => {
     try {
-      const res = await fetch(`/api/batch/${id}/results`);
+      const res = await fetch(apiUrl(`/api/batch/${id}/results`));
       const data = await res.json();
       setBatchResults(data);
     } catch (e) {
@@ -106,7 +107,7 @@ export default function BatchCorrectionView() {
     formData.append("rubric", JSON.stringify({}));
 
     try {
-      const res = await fetch("/api/batch/upload", {
+      const res = await fetch(apiUrl("/api/batch/upload"), {
         method: "POST",
         body: formData,
       });
@@ -129,7 +130,7 @@ export default function BatchCorrectionView() {
   const deleteBatch = async (id: string) => {
     if (!confirm("Deseja excluir este lote permanentemente?")) return;
     try {
-      await fetch(`/api/batch/${id}`, { method: "DELETE" });
+      await fetch(apiUrl(`/api/batch/${id}`), { method: "DELETE" });
       fetchBatches();
       if (selectedBatch?.id === id) setSelectedBatch(null);
     } catch (e) {

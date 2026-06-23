@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Sparkles, Loader2, Save, Send } from "lucide-react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function GeneratorView() {
   const [formData, setFormData] = useState({
@@ -19,7 +20,7 @@ export default function GeneratorView() {
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/codecheck/activities/generate", {
+      const res = await fetch(apiUrl("/api/codecheck/activities/generate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -50,7 +51,7 @@ export default function GeneratorView() {
         status: "draft",
       };
 
-      const res = await fetch("/api/codecheck/activities", {
+      const res = await fetch(apiUrl("/api/codecheck/activities"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

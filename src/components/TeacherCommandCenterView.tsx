@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import {
   Terminal,
   Map,
@@ -224,7 +225,7 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
   const [selectedCohortB, setSelectedCohortB] = useState("turma_1b");
 
   useEffect(() => {
-    fetch("/api/codecheck/module08/overview")
+    fetch(apiUrl("/api/codecheck/module08/overview"))
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) setOverviewData(data);

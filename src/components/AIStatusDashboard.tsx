@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Sparkles, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { motion } from "motion/react";
 import { AIStatusResponse } from "../ai/types";
-import { getApiBaseUrl } from "../services/apiService";
+import { API_BASE_URL, apiUrl } from "../config/api";
 
 export const AIStatusDashboard: React.FC = () => {
   const [status, setStatus] = useState<AIStatusResponse | null>(null);
@@ -13,8 +13,7 @@ export const AIStatusDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/ai/status`);
+      const response = await fetch(apiUrl("/api/ai/status"));
       
       const contentType = response.headers.get("content-type");
       if (!response.ok || !contentType || !contentType.includes("application/json")) {

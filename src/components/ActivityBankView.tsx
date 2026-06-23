@@ -11,6 +11,9 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { getApiUrl } from "../utils/api";
+import { apiUrl, safeJsonResponse } from "../config/api";
+
 export default function ActivityBankView({ featureFlags = {} }: any) {
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +37,7 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
   const loadBank = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/activities");
+      const res = await fetch(apiUrl("/api/activities"));
       if (res.ok) {
         const data = await res.json();
         setActivities(data || []);
@@ -48,7 +51,7 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
 
   const loadClasses = async () => {
     try {
-      const res = await fetch("/api/classes");
+      const res = await fetch(apiUrl("/api/classes"));
       if (res.ok) {
         const data = await res.json();
         setClasses(data || []);
@@ -66,7 +69,7 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const resp = await fetch("/api/activities", {
+      const resp = await fetch(apiUrl("/api/activities"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)

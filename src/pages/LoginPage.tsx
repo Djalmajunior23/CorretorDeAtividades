@@ -1,9 +1,10 @@
+import { apiUrl, API_BASE_URL } from "../config/api";
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Code, LogIn, Sparkles, Terminal, ShieldAlert, BadgeCheck } from "lucide-react";
 import { normalizeRole } from "../utils/roles";
-import { getApiBaseUrl } from "../services/apiService";
+
 import { motion, AnimatePresence } from "motion/react";
 
 const INSTITUTIONAL_SLIDES = [
@@ -60,7 +61,7 @@ export default function LoginPage() {
     setError("");
 
     let response: Response | null = null;
-    const API_BASE_URL = getApiBaseUrl();
+    
     const url = API_BASE_URL.endsWith("/auth/login") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/login`;
 
     try {

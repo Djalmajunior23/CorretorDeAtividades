@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function PlanejamentoView() {
   const [course, setCourse] = useState(
@@ -217,7 +218,7 @@ export default function PlanejamentoView() {
     setAiGenerating(true);
     setSuggestedResult(null);
     try {
-      const response = await fetch("/api/ai/generate-schedule", {
+      const response = await fetch(apiUrl("/api/ai/generate-schedule"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: aiPrompt }),
@@ -312,7 +313,7 @@ export default function PlanejamentoView() {
 
     try {
       // Send to backend
-      await fetch("/api/codecheck/schedules", {
+      await fetch(apiUrl("/api/codecheck/schedules"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ schedules: items }),

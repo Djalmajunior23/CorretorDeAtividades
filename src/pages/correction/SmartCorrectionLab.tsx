@@ -1,3 +1,4 @@
+import { apiUrl, API_BASE_URL } from "../../config/api";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -21,7 +22,7 @@ import {
 import Editor from "@monaco-editor/react";
 import { cn } from "../../utils/cn";
 import Sidebar from "../../components/layout/Sidebar";
-import { getApiBaseUrl } from "../../services/apiService";
+
 import { exportHtmlToPDF } from "../../utils/export";
 
 const LANGUAGES = [
@@ -69,7 +70,7 @@ export default function SmartCorrectionLab() {
     });
 
     try {
-      const API_BASE_URL = getApiBaseUrl();
+      
       const url = API_BASE_URL.endsWith("/corrections/run") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/corrections/run`;
 
       const response = await fetch(url, {

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from "react";
+import { apiUrl, safeJsonResponse } from "../../config/api";
 import { 
   PlusCircle, 
   Target, 
@@ -38,8 +39,8 @@ export default function PedagogicalDashboard() {
     const fetchData = async () => {
       try {
         const [resSummary, resClasses] = await Promise.all([
-            fetch("/api/pedagogical/dashboard-summary"),
-            fetch("/api/class-comparison-analytics")
+            fetch(apiUrl("/api/pedagogical/dashboard-summary")),
+            fetch(apiUrl("/api/class-comparison-analytics"))
         ]);
 
         if (resSummary.ok) setData(await resSummary.json());
@@ -57,7 +58,7 @@ export default function PedagogicalDashboard() {
     const fetchIntelligence = async () => {
       if (!selectedClass) return;
       try {
-        const res = await fetch(`/api/pedagogical/class-intelligence/${encodeURIComponent(selectedClass)}`);
+        const res = await fetch(apiUrl(`/api/pedagogical/class-intelligence/${encodeURIComponent(selectedClass)}`));
         if (res.ok) setIntelligence(await res.json());
       } catch (e) {
         console.error("Error loading intelligence", e);

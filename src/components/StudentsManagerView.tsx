@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, Trash, User } from "lucide-react";
 import { StudentProfileModal } from "./StudentProfileModal";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export function StudentsManagerView() {
   const [students, setStudents] = useState<any[]>([]);
@@ -19,8 +20,8 @@ export function StudentsManagerView() {
     setLoading(true);
     try {
       const [clsResp, stdResp] = await Promise.all([
-        fetch("/api/classes"),
-        fetch(`/api/students${selectedClass ? `?class_id=${selectedClass}` : ''}`)
+        fetch(apiUrl("/api/classes")),
+        fetch(apiUrl(`/api/students${selectedClass ? `?class_id=${selectedClass}` : ''}`))
       ]);
       setClasses(await clsResp.json() || []);
       setStudents(await stdResp.json() || []);
@@ -34,9 +35,9 @@ export function StudentsManagerView() {
     e.preventDefault();
     try {
       if (editId) {
-        await fetch(`/api/students/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...formData, status: "active" }) });
+        await fetch(apiUrl(`/api/students/${editId}`), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...formData, status: "active" }) });
       } else {
-        await fetch("/api/students", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+        await fetch(apiUrl("/api/students"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
       }
       setShowModal(false); setEditId(null);
       setFormData({ class_id: "", name: "", enrollment_code: "", email: "", notes: "" });
@@ -47,7 +48,7 @@ export function StudentsManagerView() {
   const handleImport = async () => {
     if (!importClass || !importText) return alert("Preencha turma e CSV.");
     try {
-      const res = await fetch("/api/students/import-csv", {
+      const res = await fetch(apiUrl("/api/students/import-csv"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ class_id: importClass, csv_data: importText })
@@ -62,11 +63,11 @@ export function StudentsManagerView() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Confirmar exclusão deste aluno?")) return;
-    try { await fetch(`/api/students/${id}`, { method: "DELETE" }); fetchData(); } catch (e) {}
+    try { await fetch(apiUrl(`/api/students/${id}`), { method: "DELETE" }); fetchData(); } catch (e) {}
   };
 
   const handleArchive = async (id: string, currentData: any) => {
-    try { await fetch(`/api/students/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...currentData, status: "archived" }) }); fetchData(); } catch (e) {}
+    try { await fetch(apiUrl(`/api/students/${id}`), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...currentData, status: "archived" }) }); fetchData(); } catch (e) {}
   };
 
   return (

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import {
   LineChart,
   Line,
@@ -43,9 +44,9 @@ export default function EducationalAnalyticsView() {
     setLoading(true);
     try {
       const [overRes, classRes, studRes] = await Promise.all([
-        fetch("/api/analytics/overview"),
-        fetch("/api/analytics/classes"),
-        fetch("/api/analytics/students"),
+        fetch(apiUrl("/api/analytics/overview")),
+        fetch(apiUrl("/api/analytics/classes")),
+        fetch(apiUrl("/api/analytics/students")),
       ]);
       setOverview(await overRes.json());
       setClasses(await classRes.json());
@@ -60,7 +61,7 @@ export default function EducationalAnalyticsView() {
   const recalculate = async () => {
     setRecalculating(true);
     try {
-      const res = await fetch("/api/analytics/recalculate", { method: "POST" });
+      const res = await fetch(apiUrl("/api/analytics/recalculate"), { method: "POST" });
       if (res.ok) {
         toast.success("Analytics recalculado com sucesso!");
         fetchData();

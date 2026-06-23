@@ -1,14 +1,15 @@
+import { apiUrl, API_BASE_URL } from "../../config/api";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Map, Layers, LayoutList, Workflow } from 'lucide-react';
-import { getApiBaseUrl } from '../../services/apiService';
+
 import Sidebar from '../../components/layout/Sidebar';
 
 export default function CurriculumDashboard() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/curriculum/dashboard`)
+    fetch(`${API_BASE_URL}/curriculum/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

@@ -1,14 +1,15 @@
+import { apiUrl, API_BASE_URL } from "../../config/api";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Target, ListChecks, ArrowUpRight, Activity } from 'lucide-react';
-import { getApiBaseUrl } from '../../services/apiService';
+
 import Sidebar from '../../components/layout/Sidebar';
 
 export default function SAEPDashboard() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/saep/dashboard`)
+    fetch(`${API_BASE_URL}/saep/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

@@ -1,15 +1,16 @@
+import { apiUrl, API_BASE_URL } from "../../config/api";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, TrendingUp, AlertTriangle, BarChart4, Users } from 'lucide-react';
 import { cn } from '../../utils/cn';
-import { getApiBaseUrl } from '../../services/apiService';
+
 import Sidebar from '../../components/layout/Sidebar';
 
 export default function AcademicCommandCenter() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/academic-command-center/dashboard`)
+    fetch(`${API_BASE_URL}/academic-command-center/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

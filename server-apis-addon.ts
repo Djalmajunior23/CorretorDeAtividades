@@ -14,7 +14,7 @@ function uuidv4() {
   return crypto.randomUUID();
 }
 
-export function setupTeacherAPIs(app: express.Application, pool: Pool) {
+export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   // --- DATABASE MIGRATIONS FOR THE NEW COLUMNS ---
   if (pool) {
     // 1. Migrate activities
@@ -292,85 +292,85 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool) {
   });
 
   // --- RESOURCES (Biblioteca do Professor) ---
-  app.get("/api/resources", async (req, res) => {
-    try {
-      if(!pool) return res.json([]);
-      const result = await pool.query(`SELECT * FROM d_resource_library_item WHERE status != 'deleted' ORDER BY created_at DESC`);
-      res.json(result.rows);
-    } catch (e: any) { res.status(500).json({ error: e.message }); }
-  });
+//   app.get("/api/resources", async (req, res) => {
+//     try {
+//       if(!pool) return res.json([]);
+//       const result = await pool.query(`SELECT * FROM d_resource_library_item WHERE status != 'deleted' ORDER BY created_at DESC`);
+//       res.json(result.rows);
+//     } catch (e: any) { res.status(500).json({ error: e.message }); }
+//   });
 
-  app.post("/api/resources/:id/favorite", async (req, res) => {
-    try {
-      if(!pool) return res.json({ success: true });
-      await pool.query(`UPDATE d_resource_library_item SET is_favorite = NOT is_favorite WHERE id = $1`, [req.params.id]);
-      res.json({ success: true });
-    } catch (e: any) { res.status(500).json({ error: e.message }); }
-  });
+//   app.post("/api/resources/:id/favorite", async (req, res) => {
+//     try {
+//       if(!pool) return res.json({ success: true });
+//       await pool.query(`UPDATE d_resource_library_item SET is_favorite = NOT is_favorite WHERE id = $1`, [req.params.id]);
+//       res.json({ success: true });
+//     } catch (e: any) { res.status(500).json({ error: e.message }); }
+//   });
 
-  app.delete("/api/resources/:id", async (req, res) => {
-    try {
-      if(!pool) return res.json({ success: true });
-      await pool.query(`UPDATE d_resource_library_item SET status = 'deleted' WHERE id = $1`, [req.params.id]);
-      res.json({ success: true });
-    } catch (e: any) { res.status(500).json({ error: e.message }); }
-  });
+//   app.delete("/api/resources/:id", async (req, res) => {
+//     try {
+//       if(!pool) return res.json({ success: true });
+//       await pool.query(`UPDATE d_resource_library_item SET status = 'deleted' WHERE id = $1`, [req.params.id]);
+//       res.json({ success: true });
+//     } catch (e: any) { res.status(500).json({ error: e.message }); }
+//   });
 
   // --- SYSTEM HEALTH ---
-  app.get("/api/system/status", async (req, res) => {
-    try {
-      const dbStatus = pool ? 'Healthy' : 'Error';
-      // In a real scenario we could ping Ollama, Docker, etc. For now we mock based on process conditions.
-      res.json({
-        frontend: 'Healthy',
-        backend: 'Healthy',
-        database: dbStatus,
-        ai: 'Healthy',
-        sandbox: 'Warning' 
-      });
-    } catch { res.json({ error: true }); }
-  });
+//   app.get("/api/system/status", async (req, res) => {
+//     try {
+//       const dbStatus = pool ? 'Healthy' : 'Error';
+//       // In a real scenario we could ping Ollama, Docker, etc. For now we mock based on process conditions.
+//       res.json({
+//         frontend: 'Healthy',
+//         backend: 'Healthy',
+//         database: dbStatus,
+//         ai: 'Healthy',
+//         sandbox: 'Warning' 
+//       });
+//     } catch { res.json({ error: true }); }
+//   });
 
-  app.get("/api/audit-logs", async (req, res) => {
-    try {
-      if(!pool) return res.json([]);
-      const result = await pool.query(`SELECT * FROM d_audit_log ORDER BY created_at DESC LIMIT 50`);
-      res.json(result.rows);
-    } catch (e: any) { res.status(500).json({ error: e.message }); }
-  });
+//   app.get("/api/audit-logs", async (req, res) => {
+//     try {
+//       if(!pool) return res.json([]);
+//       const result = await pool.query(`SELECT * FROM d_audit_log ORDER BY created_at DESC LIMIT 50`);
+//       res.json(result.rows);
+//     } catch (e: any) { res.status(500).json({ error: e.message }); }
+//   });
 
   // --- ANALYTICS ---
-  app.get("/api/analytics/overview", async (req, res) => {
-    try {
-      res.json({
-        totalClasses: await getCount(pool, "d_class_group"),
-        totalStudents: await getCount(pool, "d_student_record"),
-        globalAverage: 7.8,
-        criticalCount: 2
-      });
-    } catch { res.json(null); }
-  });
+//   app.get("/api/analytics/overview", async (req, res) => {
+//     try {
+//       res.json({
+//         totalClasses: await getCount(pool, "d_class_group"),
+//         totalStudents: await getCount(pool, "d_student_record"),
+//         globalAverage: 7.8,
+//         criticalCount: 2
+//       });
+//     } catch { res.json(null); }
+//   });
 
-  app.get("/api/analytics/classes", async (req, res) => {
-    try {
-      if(!pool) return res.json([]);
-      const result = await pool.query("SELECT * FROM d_class_group WHERE status != 'deleted'");
-      res.json(result.rows.map(r => ({ id: r.id, name: r.name, average: 7.5, studentsCount: 10 })));
-    } catch { res.json([]); }
-  });
+//   app.get("/api/analytics/classes", async (req, res) => {
+//     try {
+//       if(!pool) return res.json([]);
+//       const result = await pool.query("SELECT * FROM d_class_group WHERE status != 'deleted'");
+//       res.json(result.rows.map(r => ({ id: r.id, name: r.name, average: 7.5, studentsCount: 10 })));
+//     } catch { res.json([]); }
+//   });
 
-  app.get("/api/analytics/students", async (req, res) => {
-    try {
-      if(!pool) return res.json([]);
-      const result = await pool.query("SELECT * FROM d_student_record WHERE status != 'deleted'");
-      res.json(result.rows.map(r => ({ ...r, average: 8.0, performance: 'good' })));
-    } catch { res.json([]); }
-  });
+//   app.get("/api/analytics/students", async (req, res) => {
+//     try {
+//       if(!pool) return res.json([]);
+//       const result = await pool.query("SELECT * FROM d_student_record WHERE status != 'deleted'");
+//       res.json(result.rows.map(r => ({ ...r, average: 8.0, performance: 'good' })));
+//     } catch { res.json([]); }
+//   });
 
-  app.post("/api/analytics/recalculate", async (req, res) => {
-    // mock recalculation
-    setTimeout(() => res.json({ success: true }), 1000);
-  });
+//   app.post("/api/analytics/recalculate", async (req, res) => {
+//     // mock recalculation
+//     setTimeout(() => res.json({ success: true }), 1000);
+//   });
 
   // --- BACKUP & EXPORT ---
   app.post("/api/backup/export", async (req, res) => {
@@ -1069,139 +1069,139 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool) {
   });
 
   // --- PRIORIDADE 9: RELATÓRIOS PRÁTICOS (TEACHER-ONLY) ---
-  app.post("/api/reports/generate", async (req, res) => {
-    if (!pool) return res.status(503).json({ error: "DB not connected" });
-    const teacher_id = "teacher_1";
-    const { type, class_id, student_id, title, teacher_notes } = req.body;
+//   app.post("/api/reports/generate", async (req, res) => {
+//     if (!pool) return res.status(503).json({ error: "DB not connected" });
+//     const teacher_id = "teacher_1";
+//     const { type, class_id, student_id, title, teacher_notes } = req.body;
+// 
+//     if (!type || !class_id) {
+//       return res.status(400).json({ error: "Tipo de relatório e Turma são obrigatórios" });
+//     }
+// 
+//     try {
+//       let reportTitle = title || `Relatório ${type}`;
+//       let calculatedContent: any = {};
+//       let studentName = null;
+//       let className = "Turma Geral";
+// 
+//       // Class Name check
+//       const classQ = await pool.query("SELECT name FROM d_class_group WHERE id = $1", [class_id]);
+//       if (classQ.rows.length > 0) className = classQ.rows[0].name;
+// 
+//       if (student_id) {
+//         const studentQ = await pool.query("SELECT name FROM d_student_record WHERE id = $1", [student_id]);
+//         if (studentQ.rows.length > 0) {
+//           studentName = studentQ.rows[0].name;
+//           reportTitle = title || `Parecer Pedagógico: ${studentName}`;
+//         }
+//       }
+// 
+//       if (type === "student_summary" && student_id) {
+//         const corrs = await pool.query(
+//           "SELECT * FROM d_corrections WHERE student_id = $1 AND class_id = $2",
+//           [student_id, class_id]
+//         );
+//         const corrected_activities = corrs.rows.length;
+//         let totalScore = 0;
+//         corrs.rows.forEach(r => totalScore += parseFloat(r.score || 0));
+//         const average = corrected_activities > 0 ? parseFloat((totalScore / corrected_activities).toFixed(1)) : 0.0;
+// 
+//         const evs = await pool.query(
+//           "SELECT * FROM d_pedagogical_evidence WHERE student_id = $1 AND class_id = $2",
+//           [student_id, class_id]
+//         );
+//         const evidences_list = evs.rows.map(e => e.title || "Evidência de execução");
+// 
+//         calculatedContent = {
+//           student_name: studentName,
+//           class_name: className,
+//           activities_corrected: corrected_activities,
+//           average_score: average,
+//           evidences: evidences_list.length > 0 ? evidences_list : ["Nenhuma evidência registrada de maneira explícita"],
+//           strengths: average >= 75 ? ["Domínio da sintaxe", "Implementação de loops funcionais", "Interpretação correta de algoritmos"] : ["Engajamento inicial nas aulas", "Interesse em sanar dúvidas pedagógicas"],
+//           improvements: average < 60 ? ["Revisão de lógica condicional integrada", "Reescrever algoritmos em papel antes da codificação"] : ["Otimização de complexidade de código", "Documentação e identação avançada"],
+//           recommendations: average < 60 ? ["Participar da monitoria semanal", "Completar trilha de recuperação rápida"] : ["Explorar desafios de programação avançada de nível bronze na trilha pedagógica"]
+//         };
+//       } else if (type === "class_summary") {
+//         const studentsInClass = await pool.query("SELECT id FROM d_student_record WHERE class_id = $1 AND status != 'deleted'", [class_id]);
+//         const classStudentsCount = studentsInClass.rows.length;
+// 
+//         const classCorrections = await pool.query("SELECT score FROM d_corrections WHERE class_id = $1", [class_id]);
+//         const classActivitiesCount = classCorrections.rows.length;
+//         let totalClassScore = 0;
+//         classCorrections.rows.forEach(r => totalClassScore += parseFloat(r.score));
+//         const classAverage = classActivitiesCount > 0 ? parseFloat((totalClassScore / classActivitiesCount).toFixed(1)) : 70.0;
+// 
+//         calculatedContent = {
+//           class_name: className,
+//           students_count: classStudentsCount || 10,
+//           activities_count: classActivitiesCount || 5,
+//           class_average: classAverage,
+//           critical_concepts: classAverage < 65 ? ["Recursão", "Manipulação de Matrizes bidimensionais"] : ["Análise de Complexidade de Algoritmos"],
+//           recommendations: ["Agendar reforço extracurricular sobre os conteúdos de menor rendimento geral", "Reforçar o uso de checklists lógicos antes de submeter códigos no corretor"]
+//         };
+//       } else {
+//         calculatedContent = {
+//           class_name: className,
+//           student_name: studentName || "Todos",
+//           summary: "Análise agregada de progresso e engajamento das ferramentas.",
+//           average_score: 75.0,
+//           strengths: ["Lógica estrutural"],
+//           improvements: ["Falta de testes exaustivos"],
+//           recommendations: ["Trilha padrão de atividades extras"]
+//         };
+//       }
+// 
+//       // Gemini AI enhancement if present
+//       try {
+//         if (process.env.GEMINI_API_KEY) {
+//           const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+//           const response = await ai.models.generateContent({
+//             model: process.env.AI_ACTIVITY_MODEL || "gemini-1.5-flash",
+//             contents: `Gere um pequeno comentário e recomendações pedagógicas formais em português para o relatório tipo "${type}".
+//             Nome: ${studentName || 'Turma Geral ' + className}.
+//             Média: ${calculatedContent.average_score || calculatedContent.class_average || 70.0}.
+//             Pontos lógicos fornecidos: ${JSON.stringify(calculatedContent)}
+//             
+//             Retorne estritamente um JSON estruturado com os campos: "remarks" (comentário de conclusão formatado) e "recommendations" (um array de strings com 3 sugestões pedagógicas). Sem trecho markdown extra.`,
+//             config: { responseMimeType: "application/json" }
+//           });
+//           const textResults = JSON.parse(response.text || "{}");
+//           if (textResults.remarks) {
+//             calculatedContent.summary = textResults.remarks;
+//           }
+//           if (textResults.recommendations && textResults.recommendations.length > 0) {
+//             calculatedContent.recommendations = textResults.recommendations;
+//           }
+//         }
+//       } catch (aiErr) {
+//         console.warn("AI enhancement omitted for report, falling back to local formulas:", aiErr);
+//       }
+// 
+//       const id = crypto.randomUUID();
+//       await pool.query(`
+//         INSERT INTO d_generated_report (
+//           id, teacher_id, class_id, student_id, type, title, content, teacher_notes, status
+//         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft')
+//       `, [id, teacher_id, class_id, student_id || null, type, reportTitle, JSON.stringify(calculatedContent), teacher_notes || null]);
+// 
+//       res.status(201).json({ success: true, id, data: calculatedContent });
+//     } catch (e: any) {
+//       console.error("Generate report failed:", e);
+//       res.status(500).json({ error: "Falha na geração do parecer do relatório" });
+//     }
+//   });
 
-    if (!type || !class_id) {
-      return res.status(400).json({ error: "Tipo de relatório e Turma são obrigatórios" });
-    }
-
-    try {
-      let reportTitle = title || `Relatório ${type}`;
-      let calculatedContent: any = {};
-      let studentName = null;
-      let className = "Turma Geral";
-
-      // Class Name check
-      const classQ = await pool.query("SELECT name FROM d_class_group WHERE id = $1", [class_id]);
-      if (classQ.rows.length > 0) className = classQ.rows[0].name;
-
-      if (student_id) {
-        const studentQ = await pool.query("SELECT name FROM d_student_record WHERE id = $1", [student_id]);
-        if (studentQ.rows.length > 0) {
-          studentName = studentQ.rows[0].name;
-          reportTitle = title || `Parecer Pedagógico: ${studentName}`;
-        }
-      }
-
-      if (type === "student_summary" && student_id) {
-        const corrs = await pool.query(
-          "SELECT * FROM d_corrections WHERE student_id = $1 AND class_id = $2",
-          [student_id, class_id]
-        );
-        const corrected_activities = corrs.rows.length;
-        let totalScore = 0;
-        corrs.rows.forEach(r => totalScore += parseFloat(r.score || 0));
-        const average = corrected_activities > 0 ? parseFloat((totalScore / corrected_activities).toFixed(1)) : 0.0;
-
-        const evs = await pool.query(
-          "SELECT * FROM d_pedagogical_evidence WHERE student_id = $1 AND class_id = $2",
-          [student_id, class_id]
-        );
-        const evidences_list = evs.rows.map(e => e.title || "Evidência de execução");
-
-        calculatedContent = {
-          student_name: studentName,
-          class_name: className,
-          activities_corrected: corrected_activities,
-          average_score: average,
-          evidences: evidences_list.length > 0 ? evidences_list : ["Nenhuma evidência registrada de maneira explícita"],
-          strengths: average >= 75 ? ["Domínio da sintaxe", "Implementação de loops funcionais", "Interpretação correta de algoritmos"] : ["Engajamento inicial nas aulas", "Interesse em sanar dúvidas pedagógicas"],
-          improvements: average < 60 ? ["Revisão de lógica condicional integrada", "Reescrever algoritmos em papel antes da codificação"] : ["Otimização de complexidade de código", "Documentação e identação avançada"],
-          recommendations: average < 60 ? ["Participar da monitoria semanal", "Completar trilha de recuperação rápida"] : ["Explorar desafios de programação avançada de nível bronze na trilha pedagógica"]
-        };
-      } else if (type === "class_summary") {
-        const studentsInClass = await pool.query("SELECT id FROM d_student_record WHERE class_id = $1 AND status != 'deleted'", [class_id]);
-        const classStudentsCount = studentsInClass.rows.length;
-
-        const classCorrections = await pool.query("SELECT score FROM d_corrections WHERE class_id = $1", [class_id]);
-        const classActivitiesCount = classCorrections.rows.length;
-        let totalClassScore = 0;
-        classCorrections.rows.forEach(r => totalClassScore += parseFloat(r.score));
-        const classAverage = classActivitiesCount > 0 ? parseFloat((totalClassScore / classActivitiesCount).toFixed(1)) : 70.0;
-
-        calculatedContent = {
-          class_name: className,
-          students_count: classStudentsCount || 10,
-          activities_count: classActivitiesCount || 5,
-          class_average: classAverage,
-          critical_concepts: classAverage < 65 ? ["Recursão", "Manipulação de Matrizes bidimensionais"] : ["Análise de Complexidade de Algoritmos"],
-          recommendations: ["Agendar reforço extracurricular sobre os conteúdos de menor rendimento geral", "Reforçar o uso de checklists lógicos antes de submeter códigos no corretor"]
-        };
-      } else {
-        calculatedContent = {
-          class_name: className,
-          student_name: studentName || "Todos",
-          summary: "Análise agregada de progresso e engajamento das ferramentas.",
-          average_score: 75.0,
-          strengths: ["Lógica estrutural"],
-          improvements: ["Falta de testes exaustivos"],
-          recommendations: ["Trilha padrão de atividades extras"]
-        };
-      }
-
-      // Gemini AI enhancement if present
-      try {
-        if (process.env.GEMINI_API_KEY) {
-          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-          const response = await ai.models.generateContent({
-            model: process.env.AI_ACTIVITY_MODEL || "gemini-1.5-flash",
-            contents: `Gere um pequeno comentário e recomendações pedagógicas formais em português para o relatório tipo "${type}".
-            Nome: ${studentName || 'Turma Geral ' + className}.
-            Média: ${calculatedContent.average_score || calculatedContent.class_average || 70.0}.
-            Pontos lógicos fornecidos: ${JSON.stringify(calculatedContent)}
-            
-            Retorne estritamente um JSON estruturado com os campos: "remarks" (comentário de conclusão formatado) e "recommendations" (um array de strings com 3 sugestões pedagógicas). Sem trecho markdown extra.`,
-            config: { responseMimeType: "application/json" }
-          });
-          const textResults = JSON.parse(response.text || "{}");
-          if (textResults.remarks) {
-            calculatedContent.summary = textResults.remarks;
-          }
-          if (textResults.recommendations && textResults.recommendations.length > 0) {
-            calculatedContent.recommendations = textResults.recommendations;
-          }
-        }
-      } catch (aiErr) {
-        console.warn("AI enhancement omitted for report, falling back to local formulas:", aiErr);
-      }
-
-      const id = crypto.randomUUID();
-      await pool.query(`
-        INSERT INTO d_generated_report (
-          id, teacher_id, class_id, student_id, type, title, content, teacher_notes, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft')
-      `, [id, teacher_id, class_id, student_id || null, type, reportTitle, JSON.stringify(calculatedContent), teacher_notes || null]);
-
-      res.status(201).json({ success: true, id, data: calculatedContent });
-    } catch (e: any) {
-      console.error("Generate report failed:", e);
-      res.status(500).json({ error: "Falha na geração do parecer do relatório" });
-    }
-  });
-
-  app.get("/api/reports", async (req, res) => {
-    try {
-      if (!pool) return res.json([]);
-      const teacher_id = "teacher_1";
-      const q = await pool.query("SELECT * FROM d_generated_report WHERE teacher_id = $1 ORDER BY created_at DESC", [teacher_id]);
-      res.json(q.rows);
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+//   app.get("/api/reports", async (req, res) => {
+//     try {
+//       if (!pool) return res.json([]);
+//       const teacher_id = "teacher_1";
+//       const q = await pool.query("SELECT * FROM d_generated_report WHERE teacher_id = $1 ORDER BY created_at DESC", [teacher_id]);
+//       res.json(q.rows);
+//     } catch (e: any) {
+//       res.status(500).json({ error: e.message });
+//     }
+//   });
 
   app.get("/api/reports/:id", async (req, res) => {
     try {
@@ -1215,98 +1215,98 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool) {
     }
   });
 
-  app.get("/api/reports/:id/export/pdf", async (req, res) => {
-    if (!pool) return res.status(503).json({ error: "DB not connected" });
-    const teacher_id = "teacher_1";
-    try {
-      const q = await pool.query("SELECT * FROM d_generated_report WHERE id = $1 AND teacher_id = $2", [req.params.id, teacher_id]);
-      if (q.rows.length === 0) return res.status(404).send("Report not found");
-      const report = q.rows[0];
-      const content = typeof report.content === 'string' ? JSON.parse(report.content) : report.content;
-
-      const doc = new PDFDocument({ margin: 50 });
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=relatorio_${report.id}.pdf`);
-      doc.pipe(res);
-
-      doc.fillColor("#0284c7").fontSize(20).text(report.title || "PARECER PEDAGÓGICO", { align: "center", underline: true });
-      doc.moveDown(1.5);
-
-      doc.fillColor("#1e293b").fontSize(12).text(`Identificador: ${report.id}`);
-      doc.text(`Data de Geração: ${new Date(report.created_at).toLocaleDateString("pt-BR")}`);
-      doc.text(`Tipo: ${report.type.toUpperCase()}`);
-      doc.moveDown(1.2);
-
-      doc.strokeColor("#e2e8f0").lineWidth(1).moveTo(50, doc.y).lineTo(550, doc.y).stroke();
-      doc.moveDown(1.2);
-
-      if (content.student_name) {
-        doc.fillColor("#0ea5e9").fontSize(14).text("Informações do Aluno", { underline: true });
-        doc.moveDown(0.5);
-        doc.fillColor("#334155").fontSize(11).text(`Nome: ${content.student_name}`);
-        doc.text(`Turma correspondente: ${content.class_name || "Geral"}`);
-        doc.text(`Exercícios corrigidos: ${content.activities_corrected || 0}`);
-        doc.text(`Média geral: ${content.average_score || "N/A"}`);
-        doc.moveDown(1.2);
-      } else if (content.class_name) {
-        doc.fillColor("#0ea5e9").fontSize(14).text("Informações da Turma", { underline: true });
-        doc.moveDown(0.5);
-        doc.fillColor("#334155").fontSize(11).text(`Turma: ${content.class_name}`);
-        doc.text(`Quantidade de Alunos: ${content.students_count || 0}`);
-        doc.text(`Exercícios Avaliados: ${content.activities_count || 0}`);
-        doc.text(`Média Final Geral: ${content.class_average || "N/A"}`);
-        doc.moveDown(1.2);
-      }
-
-      if (content.evidences && content.evidences.length > 0) {
-        doc.fillColor("#0ea5e9").fontSize(14).text("Evidências Pedagógicas Identificadas");
-        doc.moveDown(0.5);
-        content.evidences.forEach((ev: string) => {
-          doc.fillColor("#475569").fontSize(11).text(`• ${ev}`, { indent: 15 });
-        });
-        doc.moveDown(1.2);
-      }
-
-      if (content.strengths && content.strengths.length > 0) {
-        doc.fillColor("#10b981").fontSize(14).text("Pontos Fortes Pedagógicos");
-        doc.moveDown(0.5);
-        content.strengths.forEach((st: string) => {
-          doc.fillColor("#475569").fontSize(11).text(`• ${st}`, { indent: 15 });
-        });
-        doc.moveDown(1.2);
-      }
-
-      if (content.improvements && content.improvements.length > 0) {
-        doc.fillColor("#ef4444").fontSize(14).text("Oportunidades de Melhoria");
-        doc.moveDown(0.5);
-        content.improvements.forEach((imp: string) => {
-          doc.fillColor("#475569").fontSize(11).text(`• ${imp}`, { indent: 15 });
-        });
-        doc.moveDown(1.2);
-      }
-
-      if (content.recommendations && content.recommendations.length > 0) {
-        doc.fillColor("#0284c7").fontSize(14).text("Diretrizes Pedagógicas Recomendadas");
-        doc.moveDown(0.5);
-        content.recommendations.forEach((rec: string) => {
-          doc.fillColor("#334155").fontSize(11).text(`• ${rec}`, { indent: 15 });
-        });
-        doc.moveDown(1.2);
-      }
-
-      if (report.teacher_notes) {
-        doc.fillColor("#0f172a").fontSize(13).text("Observações Customizadas do Professor");
-        doc.moveDown(0.5);
-        doc.fillColor("#475569").fontSize(11).text(report.teacher_notes, { indent: 10 });
-        doc.moveDown(1.2);
-      }
-
-      doc.end();
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).send("Export failed");
-    }
-  });
+//   app.get("/api/reports/:id/export/pdf", async (req, res) => {
+//     if (!pool) return res.status(503).json({ error: "DB not connected" });
+//     const teacher_id = "teacher_1";
+//     try {
+//       const q = await pool.query("SELECT * FROM d_generated_report WHERE id = $1 AND teacher_id = $2", [req.params.id, teacher_id]);
+//       if (q.rows.length === 0) return res.status(404).send("Report not found");
+//       const report = q.rows[0];
+//       const content = typeof report.content === 'string' ? JSON.parse(report.content) : report.content;
+// 
+//       const doc = new PDFDocument({ margin: 50 });
+//       res.setHeader("Content-Type", "application/pdf");
+//       res.setHeader("Content-Disposition", `attachment; filename=relatorio_${report.id}.pdf`);
+//       doc.pipe(res);
+// 
+//       doc.fillColor("#0284c7").fontSize(20).text(report.title || "PARECER PEDAGÓGICO", { align: "center", underline: true });
+//       doc.moveDown(1.5);
+// 
+//       doc.fillColor("#1e293b").fontSize(12).text(`Identificador: ${report.id}`);
+//       doc.text(`Data de Geração: ${new Date(report.created_at).toLocaleDateString("pt-BR")}`);
+//       doc.text(`Tipo: ${report.type.toUpperCase()}`);
+//       doc.moveDown(1.2);
+// 
+//       doc.strokeColor("#e2e8f0").lineWidth(1).moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+//       doc.moveDown(1.2);
+// 
+//       if (content.student_name) {
+//         doc.fillColor("#0ea5e9").fontSize(14).text("Informações do Aluno", { underline: true });
+//         doc.moveDown(0.5);
+//         doc.fillColor("#334155").fontSize(11).text(`Nome: ${content.student_name}`);
+//         doc.text(`Turma correspondente: ${content.class_name || "Geral"}`);
+//         doc.text(`Exercícios corrigidos: ${content.activities_corrected || 0}`);
+//         doc.text(`Média geral: ${content.average_score || "N/A"}`);
+//         doc.moveDown(1.2);
+//       } else if (content.class_name) {
+//         doc.fillColor("#0ea5e9").fontSize(14).text("Informações da Turma", { underline: true });
+//         doc.moveDown(0.5);
+//         doc.fillColor("#334155").fontSize(11).text(`Turma: ${content.class_name}`);
+//         doc.text(`Quantidade de Alunos: ${content.students_count || 0}`);
+//         doc.text(`Exercícios Avaliados: ${content.activities_count || 0}`);
+//         doc.text(`Média Final Geral: ${content.class_average || "N/A"}`);
+//         doc.moveDown(1.2);
+//       }
+// 
+//       if (content.evidences && content.evidences.length > 0) {
+//         doc.fillColor("#0ea5e9").fontSize(14).text("Evidências Pedagógicas Identificadas");
+//         doc.moveDown(0.5);
+//         content.evidences.forEach((ev: string) => {
+//           doc.fillColor("#475569").fontSize(11).text(`• ${ev}`, { indent: 15 });
+//         });
+//         doc.moveDown(1.2);
+//       }
+// 
+//       if (content.strengths && content.strengths.length > 0) {
+//         doc.fillColor("#10b981").fontSize(14).text("Pontos Fortes Pedagógicos");
+//         doc.moveDown(0.5);
+//         content.strengths.forEach((st: string) => {
+//           doc.fillColor("#475569").fontSize(11).text(`• ${st}`, { indent: 15 });
+//         });
+//         doc.moveDown(1.2);
+//       }
+// 
+//       if (content.improvements && content.improvements.length > 0) {
+//         doc.fillColor("#ef4444").fontSize(14).text("Oportunidades de Melhoria");
+//         doc.moveDown(0.5);
+//         content.improvements.forEach((imp: string) => {
+//           doc.fillColor("#475569").fontSize(11).text(`• ${imp}`, { indent: 15 });
+//         });
+//         doc.moveDown(1.2);
+//       }
+// 
+//       if (content.recommendations && content.recommendations.length > 0) {
+//         doc.fillColor("#0284c7").fontSize(14).text("Diretrizes Pedagógicas Recomendadas");
+//         doc.moveDown(0.5);
+//         content.recommendations.forEach((rec: string) => {
+//           doc.fillColor("#334155").fontSize(11).text(`• ${rec}`, { indent: 15 });
+//         });
+//         doc.moveDown(1.2);
+//       }
+// 
+//       if (report.teacher_notes) {
+//         doc.fillColor("#0f172a").fontSize(13).text("Observações Customizadas do Professor");
+//         doc.moveDown(0.5);
+//         doc.fillColor("#475569").fontSize(11).text(report.teacher_notes, { indent: 10 });
+//         doc.moveDown(1.2);
+//       }
+// 
+//       doc.end();
+//     } catch (e: any) {
+//       console.error(e);
+//       res.status(500).send("Export failed");
+//     }
+//   });
 
   app.get("/api/reports/:id/export/docx", async (req, res) => {
     if (!pool) return res.status(503).json({ error: "DB not connected" });

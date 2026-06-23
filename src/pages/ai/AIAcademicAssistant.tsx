@@ -1,13 +1,14 @@
+import { apiUrl, API_BASE_URL } from "../../config/api";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkles, Bot, MessageSquare, Database, FileText } from 'lucide-react';
-import { getApiBaseUrl } from '../../services/apiService';
+
 
 export default function AIAcademicAssistant() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/ai-academic-assistant/dashboard`)
+    fetch(`${API_BASE_URL}/ai-academic-assistant/dashboard`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(e => console.error(e));

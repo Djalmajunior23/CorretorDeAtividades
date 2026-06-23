@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import {
   Loader2,
   LayoutGrid,
@@ -19,7 +20,7 @@ export default function CompetencyMapView() {
     const fetchCompetencies = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/teacher-analytics/competencies");
+        const res = await fetch(apiUrl("/api/teacher-analytics/competencies"));
         if (res.ok) {
           const json = await res.json();
           setData(json);

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Trash2, CheckCircle2, AlertCircle, Save } from "lucide-react";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 interface Criterion {
   name: string;
@@ -47,7 +48,7 @@ export const RubricCreator = ({
     }, {});
 
     try {
-      const res = await fetch("/api/pedagogical/rubrics", {
+      const res = await fetch(apiUrl("/api/pedagogical/rubrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, criteria: criteriaObj }),

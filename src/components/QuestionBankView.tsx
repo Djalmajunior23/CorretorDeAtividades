@@ -20,6 +20,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function QuestionBankView() {
   const [questions, setQuestions] = useState<any[]>([]);
@@ -43,7 +44,7 @@ export default function QuestionBankView() {
   const fetchQuestions = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/questions");
+      const res = await fetch(apiUrl("/api/questions"));
       const data = await res.json();
       setQuestions(data);
     } catch (e) {
@@ -56,7 +57,7 @@ export default function QuestionBankView() {
   const generateWithIA = async () => {
     setGenerating(true);
     try {
-      const res = await fetch("/api/questions/generate", {
+      const res = await fetch(apiUrl("/api/questions/generate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(genParams),
