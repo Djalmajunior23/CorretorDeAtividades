@@ -2,8 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { API_BASE_URL } from './config/api';
 
-window.API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://31.97.41.64:8080";
+window.API_BASE_URL = API_BASE_URL;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

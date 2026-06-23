@@ -332,7 +332,12 @@ export default function App() {
 
   const fetchSandboxStatus = () => {
     fetch(apiUrl("/api/execution/status"))
-      .then(res => safeJsonResponse(res))
+      .then(res => {
+        if (!res.ok && res.status >= 500) {
+          throw new Error(`Server Error ${res.status}`);
+        }
+        return safeJsonResponse(res);
+      })
       .then(data => setSandboxStatus(data))
       .catch(e => {
         console.warn("Sandbox connection failed, using fallback:", e);
@@ -703,6 +708,12 @@ export default function App() {
           setSubmissions(data);
           setDbConnected(true);
         }
+      } else if (res.status >= 500) {
+        console.warn("DB offline fallback reading active (Server Error 500+):", res.status);
+        setDbConnected(false);
+      } else {
+        // Successful response but not OK (e.g. 401, 404), do not claim DB is offline
+        setDbConnected(true);
       }
     } catch (err) {
       console.warn("DB offline fallback reading active", err);
