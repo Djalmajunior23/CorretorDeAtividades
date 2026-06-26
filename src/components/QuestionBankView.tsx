@@ -66,21 +66,48 @@ export default function QuestionBankView() {
     }
   };
 
+  const normalizeGeneratedQuestions = (response: any) => {
+    if (Array.isArray(response?.questions)) return response.questions;
+    if (Array.isArray(response?.data?.questions)) return response.data.questions;
+    if (response?.data?.question) return [response.data.question];
+    if (response?.question) return [response.question];
+    return [];
+  };
+
   const generateWithIA = async () => {
+    if (!genParams.topic) {
+      toast.error("Informe o tema da questão.");
+      return;
+    }
+
     setGenerating(true);
     try {
+      const payload = {
+        topic: genParams.topic,
+        language: genParams.language || "python",
+        difficulty: genParams.difficulty || "Iniciante",
+        question_type: genParams.question_type || "prática",
+        quantity: genParams.quantity || 3,
+      };
+
       const res = await fetch(apiUrl("/api/questions/generate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(genParams),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (data.questions) {
-        toast.success(`${data.questions.length} questões geradas com sucesso!`);
-        setShowGenModal(false);
-        fetchQuestions();
+      
+      const generatedQuestions = normalizeGeneratedQuestions(data);
+
+      if (generatedQuestions.length === 0) {
+        toast.error("Nenhuma questão foi gerada. Tente novamente ou altere os parâmetros.");
+        return;
       }
-    } catch (e) {
+
+      toast.success(`${generatedQuestions.length} questões geradas com sucesso!`);
+      setShowGenModal(false);
+      fetchQuestions();
+    } catch (e: any) {
       toast.error("Erro ao gerar questões com IA.");
     } finally {
       setGenerating(false);

@@ -7138,15 +7138,35 @@ app.post("/api/questions/generate", async (req, res) => {
       console.warn("Falha ao gerar questões com IA:", err);
       fallbackUsed = true;
       provider = "local";
-      questionsData = [{
-        title: "Soma de dois números",
-        statement: "Crie um programa que leia dois números e exiba a soma.",
-        language: language,
-        difficulty: difficulty,
-        reference_solution: "a = int(input())\nb = int(input())\nprint(a + b)",
-        test_cases: [{ input: "2\n3", expected_output: "5" }],
-        rubric: { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
-      }];
+      questionsData = [
+        {
+          title: "Soma de dois números",
+          statement: `Crie um programa que leia dois números e exiba a soma usando os fundamentos do tema ${topic}.`,
+          language: language,
+          difficulty: difficulty,
+          reference_solution: "a = int(input())\nb = int(input())\nprint(a + b)",
+          test_cases: [{ input: "2\n3", expected_output: "5" }],
+          rubric: { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+        },
+        {
+          title: `Verificação simples sobre ${topic}`,
+          statement: `Escreva um algoritmo utilizando conceitos básicos de ${topic} que receba um número e o multiplique por 2.`,
+          language: language,
+          difficulty: difficulty,
+          reference_solution: "x = int(input())\nprint(x * 2)",
+          test_cases: [{ input: "5", expected_output: "10" }],
+          rubric: { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+        },
+        {
+          title: `Aplicação prática de ${topic}`,
+          statement: `Desenvolva um código em ${language} com os conceitos de ${topic} que valide se um valor de entrada atende aos requisitos mínimos.`,
+          language: language,
+          difficulty: difficulty,
+          reference_solution: "v = int(input())\nif v >= 10: print('ok')\nelse: print('fail')",
+          test_cases: [{ input: "10", expected_output: "ok" }],
+          rubric: { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+        }
+      ];
     }
 
     const resultQuestions = questionsData.map((q: any) => {
@@ -7167,6 +7187,8 @@ app.post("/api/questions/generate", async (req, res) => {
           INSERT INTO questions (id, title, description, language, difficulty, starter_code, test_cases, rubric)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `, [id, mappedQ.title, mappedQ.description, mappedQ.language, mappedQ.difficulty, mappedQ.starter_code, JSON.stringify(mappedQ.test_cases), JSON.stringify(mappedQ.rubric)]).catch(console.error);
+      } else {
+        questionsMemoryDb.unshift(mappedQ);
       }
       
       return mappedQ;
@@ -7174,14 +7196,20 @@ app.post("/api/questions/generate", async (req, res) => {
 
     return res.json({
       success: true,
-      data: { question: resultQuestions[0] },
+      message: "Questões geradas com sucesso.",
+      data: { questions: resultQuestions },
+      questions: resultQuestions,
       ai_available: aiAvailable,
       fallback_used: fallbackUsed,
       provider: provider
     });
   } catch (e: any) {
     console.warn("Erro crítico ao gerar questões:", e.message);
-    return res.status(500).json({ success: false, error: e.message });
+    return res.json({
+      success: false,
+      error: "Falha na geração de questões",
+      message: e.message
+    });
   }
 });
 
