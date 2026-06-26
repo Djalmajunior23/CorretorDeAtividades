@@ -185,7 +185,6 @@ const INITIAL_TEST_CASES: TestCase[] = [
 ];
 
 export default function App() {
-  console.log("API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
   const [currentTab, setTab] = useState<string>("dashboard");
   const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
   const [selectedCorrectorStudent, setSelectedCorrectorStudent] = useState<string>('');
@@ -657,7 +656,15 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setCode(data.text || data.transcribedCode || '');
+          const extractedText = (data.text || data.transcribedCode || '').trim();
+          
+          // Validação de densidade de texto do OCR (mínimo 5 caracteres significativos)
+          if (extractedText.length < 5) {
+            alert("Imagem ilegível: Pouco ou nenhum texto foi detectado na imagem. Por favor, certifique-se de que a imagem está nítida, bem iluminada e que o código está legível.");
+            return;
+          }
+
+          setCode(extractedText);
           
           if (data.ai_analysis_available === false) {
              setVisualOcrNotes('Texto extraído com sucesso. A análise com IA está temporariamente indisponível.');
@@ -697,8 +704,24 @@ export default function App() {
     }
   }, [language]);
 
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [submissionsPollActive, setSubmissionsPollActive] = useState<boolean>(true);
+  const [submissionRetryCount, setSubmissionRetryCount] = useState<number>(0);
+
   // Fetch histories on mount/tab swap
   const fetchSubmissions = async () => {
+    // 1. Não buscar se o módulo não estiver ativo
+    const isModuleActive = featureFlags?.ENABLE_RUBRIC_CORRECTION !== false;
+    if (!isModuleActive) {
+      console.log("[fetchSubmissions] Módulo de submissões desativado.");
+      return;
+    }
+
+    // 2. Não buscar se o polling foi desativado ou se não estiver autenticado
+    if (!submissionsPollActive) {
+      return;
+    }
+
     try {
       const res = await fetch(apiUrl("/api/submissions"));
       if (res.ok) {
@@ -707,25 +730,49 @@ export default function App() {
           const data = await safeJsonResponse(res);
           setSubmissions(data);
           setDbConnected(true);
+          setSubmissionsError(null);
+          setSubmissionRetryCount(0); // reset on success
         }
-      } else if (res.status >= 500) {
-        console.warn("DB offline fallback reading active (Server Error 500+):", res.status);
-        setDbConnected(false);
+      } else if (res.status === 401 || res.status === 403) {
+        // Não buscar se o usuário não estiver autenticado
+        console.warn("Usuário não autenticado para buscar submissões (401/403):", res.status);
+        setSubmissionsError("Sessão expirada ou não autenticada. Por favor, faça login.");
+        setSubmissionsPollActive(false); // para polling imediatamente
       } else {
-        // Successful response but not OK (e.g. 401, 404), do not claim DB is offline
-        setDbConnected(true);
+        // Outros erros (ex: 500)
+        setSubmissionRetryCount(prev => {
+          const nextCount = prev + 1;
+          if (nextCount >= 1) { // retry máximo 1
+            setSubmissionsPollActive(false); // não fazer polling infinito quando houver erro
+            setSubmissionsError("Não foi possível carregar as submissões. Tente recarregar a página.");
+          }
+          return nextCount;
+        });
+        if (res.status >= 500) {
+          setDbConnected(false);
+        }
       }
     } catch (err) {
       console.warn("DB offline fallback reading active", err);
+      setSubmissionRetryCount(prev => {
+        const nextCount = prev + 1;
+        if (nextCount >= 1) { // retry máximo 1
+          setSubmissionsPollActive(false); // não fazer polling infinito quando houver erro
+          setSubmissionsError("Conexão com o servidor perdida. Tentativas suspensas.");
+        }
+        return nextCount;
+      });
       setDbConnected(false);
     }
   };
 
   useEffect(() => {
     fetchSubmissions();
-    const interval = setInterval(fetchSubmissions, 10000);
+    const interval = setInterval(() => {
+      fetchSubmissions();
+    }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [submissionsPollActive, featureFlags?.ENABLE_RUBRIC_CORRECTION]);
 
   // Synchronously fetch classes when the user enters the corrector tab
   useEffect(() => {
@@ -743,9 +790,16 @@ export default function App() {
 
   // Synchronously fetch students and activities for the selected corrector class
   useEffect(() => {
-    if (selectedCorrectorClass) {
+    const isInvalidClassId = (cid: string | undefined) => {
+      if (!cid) return true;
+      if (typeof cid !== "string") return true;
+      if (cid.includes("$") || cid.includes("{") || cid.includes("}")) return true;
+      return false;
+    };
+
+    if (selectedCorrectorClass && !isInvalidClassId(selectedCorrectorClass)) {
       // 1. Fetch Students of this class
-      fetch(apiUrl(`/api/students?class_id=${selectedCorrectorClass}`))
+      fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedCorrectorClass)}`))
         .then(res => safeJsonResponse(res))
         .then(data => {
           if (Array.isArray(data)) {
@@ -1232,6 +1286,11 @@ export default function App() {
                         <option value="">(Selecione a Turma)</option>
                         {correctorClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
+                      {!selectedCorrectorClass && (
+                        <p className="text-xs text-amber-500/80 mt-1.5 font-sans">
+                          Selecione uma turma para carregar os alunos.
+                        </p>
+                      )}
                     </div>
                     {selectedCorrectorClass && (
                       <div className="mt-3">

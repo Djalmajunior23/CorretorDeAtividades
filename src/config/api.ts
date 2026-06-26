@@ -2,10 +2,12 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "https://api.teacherjuniors.com.br";
 
-console.log(
-  "[API BASE URL]",
-  import.meta.env.VITE_API_BASE_URL
-);
+if (import.meta.env.DEV) {
+  console.log(
+    "[API BASE URL]",
+    import.meta.env.VITE_API_BASE_URL
+  );
+}
 
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;

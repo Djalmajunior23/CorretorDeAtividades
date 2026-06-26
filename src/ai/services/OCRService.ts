@@ -30,7 +30,7 @@ export class OCRService {
 
         try {
             // Segundo: uso opcional da IA
-            const prompt = "Corrija formatação e erros do código/texto extraído:\n\n" + extractedText;
+            const prompt = "Corrija formatação e erros do código extraído pela imagem. ATENÇÃO: Retorne APENAS o código fonte extraído e corrigido de forma limpa, sem qualquer introdução, explicação, texto em markdown ou delimitadores de código (como ```). O resultado deve ser diretamente executável.\n\nCódigo extraído:\n" + extractedText;
             const imageData = {
                 mimeType: "image/png", 
                 base64: base64Image.replace(/^data:image\/\w+;base64,/, "")
@@ -44,7 +44,27 @@ export class OCRService {
             ) as string;
 
             if (aiResult && aiResult.trim().length > 10) {
-                return { text: aiResult, aiAnalysisAvailable: true };
+                let cleanedResult = aiResult.trim();
+                if (cleanedResult.includes("```")) {
+                    const regex = /```(?:[a-zA-Z0-9+#-]+)?\n([\s\S]*?)```/g;
+                    let match;
+                    let extractedCode = "";
+                    while ((match = regex.exec(cleanedResult)) !== null) {
+                        extractedCode += match[1] + "\n";
+                    }
+                    if (extractedCode.trim()) {
+                        cleanedResult = extractedCode.trim();
+                    } else {
+                        const parts = cleanedResult.split("```");
+                        if (parts.length >= 3) {
+                            cleanedResult = parts[1].replace(/^[a-zA-Z0-9+#-]+\n/, "").trim();
+                        }
+                    }
+                }
+                // Strip any loose backticks if any remain
+                cleanedResult = cleanedResult.replace(/^```[a-zA-Z0-9+#-]*\n?/, "").replace(/```$/, "").trim();
+                
+                return { text: cleanedResult, aiAnalysisAvailable: true };
             }
             throw new Error("AI Vision returned insufficient results");
         } catch (error: any) {

@@ -82,8 +82,21 @@ export default function ReportsView() {
   };
 
   const fetchStudents = async (classId: string) => {
+    const isInvalidClassId = (cid: string | undefined) => {
+      if (!cid) return true;
+      if (typeof cid !== "string") return true;
+      if (cid.includes("$") || cid.includes("{") || cid.includes("}")) return true;
+      return false;
+    };
+
+    if (isInvalidClassId(classId)) {
+      setStudents([]);
+      setSelectedStudentId("");
+      return;
+    }
+
     try {
-      const res = await fetch(apiUrl("/api/students?class_id=${classId}"));
+      const res = await fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(classId)}`));
       if (res.ok) {
         const data = await res.json();
         setStudents(data || []);
@@ -358,7 +371,11 @@ export default function ReportsView() {
                         {students.map((s) => (
                           <option key={s.id} value={s.id}>{s.name} ({s.enrollment_code})</option>
                         ))}
-                        {students.length === 0 && <option value="">Sem alunos nesta turma</option>}
+                        {students.length === 0 && (
+                          <option value="">
+                            {!selectedClassId ? "Selecione uma turma para carregar os alunos." : "Sem alunos nesta turma"}
+                          </option>
+                        )}
                       </select>
                     </div>
                   )}

@@ -28,6 +28,8 @@ export default function QuestionBankView() {
   const [generating, setGenerating] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [showGenModal, setShowGenModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const [genParams, setGenParams] = useState({
     topic: "Lógica de Programação",
@@ -35,6 +37,16 @@ export default function QuestionBankView() {
     difficulty: "easy",
     question_type: "code_challenge",
     quantity: 3,
+  });
+
+  const [newQuestion, setNewQuestion] = useState({
+    title: "",
+    description: "",
+    language: "python",
+    difficulty: "Iniciante",
+    starter_code: "",
+    test_cases: [],
+    rubric: {}
   });
 
   useEffect(() => {
@@ -75,6 +87,32 @@ export default function QuestionBankView() {
     }
   };
 
+  const createQuestion = async () => {
+    if (!newQuestion.title || !newQuestion.description || !newQuestion.language || !newQuestion.difficulty) {
+      toast.error("Preencha todos os campos obrigatórios.");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch(apiUrl("/api/questions"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newQuestion),
+      });
+      if (res.ok) {
+        toast.success("Questão criada com sucesso!");
+        setShowCreateModal(false);
+        fetchQuestions();
+      } else {
+        toast.error("Erro ao criar questão.");
+      }
+    } catch (e) {
+      toast.error("Erro de conexão ao criar questão.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-end">
@@ -93,7 +131,10 @@ export default function QuestionBankView() {
           >
             <Sparkles className="w-4 h-4" /> Gerar com IA
           </button>
-          <button className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold transition-all border border-slate-700/50">
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold transition-all border border-slate-700/50"
+          >
             <Plus className="w-4 h-4" /> Nova Questão
           </button>
         </div>
@@ -193,7 +234,7 @@ export default function QuestionBankView() {
                     {q.title}
                   </h4>
                   <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed h-8">
-                    {q.statement}
+                    {q.description || q.statement}
                   </p>
 
                   <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
@@ -348,6 +389,96 @@ export default function QuestionBankView() {
                     <BrainCircuit className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
                   )}
                   {generating ? "Gerando Questões..." : "Gerar com IA"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Modal Criar Manual */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#030712]/90 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-slate-900 border border-slate-800 rounded-[32px] w-full max-w-2xl p-8 overflow-y-auto max-h-[90vh] shadow-2xl relative custom-scrollbar"
+          >
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center">
+                <Plus className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-white">Criar Questão</h3>
+                <p className="text-sm text-slate-400">Adicione uma nova questão manualmente.</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400">Título *</label>
+                <input
+                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  value={newQuestion.title}
+                  onChange={(e) => setNewQuestion({ ...newQuestion, title: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400">Enunciado *</label>
+                <textarea
+                  rows={4}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  value={newQuestion.description}
+                  onChange={(e) => setNewQuestion({ ...newQuestion, description: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400">Linguagem *</label>
+                  <select
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none appearance-none"
+                    value={newQuestion.language}
+                    onChange={(e) => setNewQuestion({ ...newQuestion, language: e.target.value })}
+                  >
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="sql">SQL</option>
+                    <option value="html">HTML</option>
+                    <option value="css">CSS</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400">Dificuldade *</label>
+                  <select
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none appearance-none"
+                    value={newQuestion.difficulty}
+                    onChange={(e) => setNewQuestion({ ...newQuestion, difficulty: e.target.value })}
+                  >
+                    <option value="Iniciante">Iniciante</option>
+                    <option value="Intermediário">Intermediário</option>
+                    <option value="Avançado">Avançado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400">Código Base (Starter Code)</label>
+                <textarea
+                  rows={3}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-emerald-500/50"
+                  value={newQuestion.starter_code}
+                  onChange={(e) => setNewQuestion({ ...newQuestion, starter_code: e.target.value })}
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <button onClick={() => setShowCreateModal(false)} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold transition-all">Cancelar</button>
+                <button onClick={createQuestion} disabled={creating} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold transition-all">
+                  {creating ? "Criando..." : "Salvar Questão"}
                 </button>
               </div>
             </div>

@@ -224,7 +224,13 @@ export default function PlanejamentoView() {
         body: JSON.stringify({ prompt: aiPrompt }),
       });
 
-      const data = await response.json();
+      const responseData = await response.json();
+      
+      // Handle both raw array (legacy) and standardized object response
+      let data = responseData;
+      if (responseData && typeof responseData === 'object' && !Array.isArray(responseData) && responseData.data) {
+        data = responseData.data;
+      }
 
       if (Array.isArray(data) && data.length > 0) {
         setSuggestedResult(data);
@@ -252,10 +258,12 @@ export default function PlanejamentoView() {
       }
       setAiGenerating(false);
     } catch (err: any) {
-      console.warn(
-        "Generating planner with placeholder details due to network layout:",
-        err.message,
-      );
+      if (err?.message && !err.message.includes("Failed to fetch")) {
+        console.warn(
+          "Generating planner with placeholder details due to network layout:",
+          err.message,
+        );
+      }
       setSuggestedResult([
         {
           week: 1,

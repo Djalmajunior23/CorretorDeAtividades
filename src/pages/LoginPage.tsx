@@ -65,10 +65,6 @@ export default function LoginPage() {
     const url = API_BASE_URL.endsWith("/auth/login") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/login`;
 
     try {
-      console.log("LOGIN REQUEST");
-      console.log(email);
-      console.log("API URL:", API_BASE_URL);
-
       response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

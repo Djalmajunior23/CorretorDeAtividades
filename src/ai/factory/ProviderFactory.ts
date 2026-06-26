@@ -1,41 +1,12 @@
 import { AIConfig, BaseProvider } from "../providers/BaseProvider";
 import { OllamaProvider } from "../providers/OllamaProvider";
+import { getModelForTask } from "../../services/aiRouter";
 
 export class ProviderFactory {
     static createProvider(task?: string): BaseProvider {
         const providerName = process.env.AI_PROVIDER || "ollama";
         
-        let modelName = process.env.AI_ACTIVITY_MODEL || "qwen2.5-coder:3b";
-        if (task) {
-            switch (task) {
-                case "code_correction":
-                case "code":
-                    modelName = process.env.AI_CODE_MODEL || "qwen2.5-coder:3b";
-                    break;
-                case "pedagogical_feedback":
-                case "feedback":
-                case "pedagogical_analysis":
-                    modelName = process.env.AI_FEEDBACK_MODEL || "qwen2.5-coder:3b";
-                    break;
-                case "report_generation":
-                case "report":
-                    modelName = process.env.AI_REPORT_MODEL || "llama3.2:3b";
-                    break;
-                case "reasoning":
-                    modelName = process.env.AI_REASONING_MODEL || "llama3.2:3b";
-                    break;
-                case "general_analysis":
-                case "chat":
-                    modelName = process.env.AI_GENERAL_MODEL || "llama3.2:3b";
-                    break;
-                case "question_generation":
-                    modelName = process.env.AI_QUESTION_GENERATION_MODEL || "qwen2.5:3b";
-                    break;
-                case "ocr_analysis":
-                    modelName = process.env.AI_OCR_ANALYSIS_MODEL || "qwen2.5-coder:3b";
-                    break;
-            }
-        }
+        const modelName = getModelForTask(task);
 
         const config: AIConfig = {
             provider: providerName,

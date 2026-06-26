@@ -19,12 +19,22 @@ export function StudentsManagerView() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [clsResp, stdResp] = await Promise.all([
-        fetch(apiUrl("/api/classes")),
-        fetch(apiUrl(`/api/students${selectedClass ? `?class_id=${selectedClass}` : ''}`))
-      ]);
+      const clsResp = await fetch(apiUrl("/api/classes"));
       setClasses(await clsResp.json() || []);
-      setStudents(await stdResp.json() || []);
+
+      const isInvalidClassId = (cid: string | undefined) => {
+        if (!cid) return true;
+        if (typeof cid !== "string") return true;
+        if (cid.includes("$") || cid.includes("{") || cid.includes("}")) return true;
+        return false;
+      };
+
+      if (!isInvalidClassId(selectedClass)) {
+        const stdResp = await fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedClass)}`));
+        setStudents(await stdResp.json() || []);
+      } else {
+        setStudents([]);
+      }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -155,7 +165,9 @@ export function StudentsManagerView() {
                 ))}
                 {students.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-slate-500">Nenhum aluno encontrado para este filtro.</td>
+                    <td colSpan={6} className="text-center py-8 text-slate-500">
+                      {!selectedClass ? "Selecione uma turma para carregar os alunos." : "Nenhum aluno encontrado para este filtro."}
+                    </td>
                   </tr>
                 )}
               </tbody>

@@ -38,6 +38,28 @@ export default function SmartCorrectionLab() {
     'def hello_world():\n    print("Hello, World!")\n\nhello_world()',
   );
   const [isExecuting, setIsExecuting] = useState(false);
+  const [sandboxStatus, setSandboxStatus] = useState<any>(null);
+
+  React.useEffect(() => {
+    fetch(apiUrl("/api/execution/status"))
+      .then((res) => res.json())
+      .then((data) => setSandboxStatus(data))
+      .catch((e) => console.warn("Failed to fetch sandbox status in Lab:", e));
+  }, []);
+
+  const getEngineStatus = () => {
+    if (!sandboxStatus || !sandboxStatus.engines) {
+      return "available"; // default while loading
+    }
+    const engines = sandboxStatus.engines;
+    if (language.id === "python" && engines.python !== "available") {
+      return "missing";
+    }
+    if (language.id === "cpp" && engines.gcc !== "available" && engines.gplusplus !== "available") {
+      return "missing";
+    }
+    return "available";
+  };
   const [activeTab, setActiveTab] = useState<
     "result" | "errors" | "analysis" | "feedback" | "compare"
   >("result");
@@ -59,6 +81,19 @@ export default function SmartCorrectionLab() {
   });
 
   const handleExecute = async () => {
+    if (getEngineStatus() === "missing") {
+      setExecutionResult({
+        status: "error",
+        stdout: "",
+        stderr: `Erro: O ambiente de execução para ${language.name} não está disponível neste servidor.`,
+        time: "-",
+        memory: "-",
+        score: 0,
+      });
+      setActiveTab("errors");
+      return;
+    }
+
     setIsExecuting(true);
     setExecutionResult({
       status: "running",
@@ -169,8 +204,8 @@ export default function SmartCorrectionLab() {
 
             <button
               onClick={handleExecute}
-              disabled={isExecuting}
-              className="flex items-center space-x-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/50 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
+              disabled={isExecuting || getEngineStatus() === "missing"}
+              className="flex items-center space-x-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/30 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
             >
               {isExecuting ? (
                 <motion.div
@@ -190,6 +225,15 @@ export default function SmartCorrectionLab() {
             </button>
           </div>
         </header>
+
+        {getEngineStatus() === "missing" && (
+          <div className="bg-amber-950/60 border-b border-amber-500/20 px-4 py-3 flex items-center space-x-3 text-amber-200 text-xs shrink-0 font-sans">
+            <AlertCircle className="w-4.5 h-4.5 text-amber-400 shrink-0" />
+            <span>
+              <strong>Atenção:</strong> O ambiente de execução para <strong>{language.name}</strong> não está instalado ou disponível no servidor local do CodeCheck. O botão "Executar" foi desabilitado por segurança.
+            </span>
+          </div>
+        )}
 
         {/* 3-Panel Layout */}
         <div className="flex-1 flex overflow-hidden">

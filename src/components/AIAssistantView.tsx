@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiUrl } from "../config/api";
 import {
   Sparkles,
   FileText,
@@ -121,12 +122,20 @@ export default function AIAssistantView({ featureFlags }: any) {
     setPrompt("");
 
     try {
-      let endpoint =
-        type === "chat"
-          ? "/api/codecheck/module06/student-recommendation"
-          : `/api/codecheck/module06/${type.replace("_", "-") === "activity" ? "activity-builder" : type.replace("_", "-")}`;
+      let endpoint = "";
+      if (type === "chat") {
+        endpoint = "/api/codecheck/module06/student-recommendation";
+      } else if (type === "lesson_plan") {
+        endpoint = "/api/ai/planner";
+      } else if (type === "activity") {
+        endpoint = "/api/codecheck/module06/activity-builder";
+      } else if (type === "rubric") {
+        endpoint = "/api/codecheck/module06/rubric-builder";
+      } else {
+        endpoint = `/api/codecheck/module06/${type.replace("_", "-")}`;
+      }
 
-      const res = await fetch(endpoint, {
+      const res = await fetch(apiUrl(endpoint), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: textToUse }),

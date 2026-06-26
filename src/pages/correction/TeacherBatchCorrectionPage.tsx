@@ -49,7 +49,7 @@ export default function TeacherBatchCorrectionPage() {
   const fetchJobs = async () => {
     try {
       const baseUrl = API_BASE_URL;
-      const res = await fetch(`${baseUrl}/batch-correction/jobs`);
+      const res = await fetch(`${baseUrl}/api/batch`);
       if (res.ok) {
         const data = await res.json();
         setJobs(data);
@@ -63,7 +63,7 @@ export default function TeacherBatchCorrectionPage() {
   const fetchJobDetails = async (jobId: number) => {
     try {
       const baseUrl = API_BASE_URL;
-      const res = await fetch(`${baseUrl}/batch-correction/jobs/${jobId}`);
+      const res = await fetch(`${baseUrl}/api/batch/${jobId}`);
       if (res.ok) {
         const data = await res.json();
         setItems(data.items || []);
@@ -93,7 +93,7 @@ export default function TeacherBatchCorrectionPage() {
 
     try {
       const baseUrl = API_BASE_URL;
-      const res = await fetch(`${baseUrl}/batch-correction/upload`, {
+      const res = await fetch(`${baseUrl}/api/batch/upload`, {
         method: 'POST',
         body: formData,
       });

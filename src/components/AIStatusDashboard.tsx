@@ -94,9 +94,9 @@ export const AIStatusDashboard: React.FC = () => {
                 return [key, model];
               })
             : Object.entries(status.models || {})
-          ).map(([key, model]) => (
+          ).map(([key, model], idx) => (
             <div
-              key={key}
+              key={`${key}-${idx}`}
               className="p-4 bg-slate-950 rounded-xl border border-slate-800"
             >
               <div className="text-[10px] text-slate-500 font-mono uppercase mb-1">
