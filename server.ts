@@ -4397,11 +4397,11 @@ app.post("/api/materials/generate", async (req, res) => {
   const quantity = body.quantity || 3;
   const include_answer_key = body.include_answer_key || false;
 
-  if (!tipo || !tema || !dificuldade) {
+  if (!tema) {
     return res.status(400).json({
       success: false,
-      error: "Campos obrigatórios ausentes. Preencha tipo, tema e dificuldade.",
-      message: "Campos obrigatórios ausentes. Preencha tipo, tema e dificuldade."
+      error: "Campo tema obrigatório.",
+      message: "Informe o tema do material."
     });
   }
 
