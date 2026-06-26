@@ -1,6 +1,4 @@
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://api.teacherjuniors.com.br";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== "undefined" && (window.location.hostname.includes("run.app") || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? "" : "https://api.teacherjuniors.com.br");
 
 if (import.meta.env.DEV) {
   console.log(

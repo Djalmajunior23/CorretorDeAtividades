@@ -351,7 +351,7 @@ export default function App() {
       })
       .then(data => setSandboxStatus(data))
       .catch(e => {
-        console.warn("Sandbox connection failed, using fallback:", e);
+        console.warn("Sandbox connection failed, using fallback:", e?.message || "Unknown error");
         setSandboxStatus({
           success: false,
           available: false,
@@ -420,8 +420,8 @@ export default function App() {
           setQuestions(data);
         }
       }
-    } catch (err) {
-      console.error("Error fetching question bank", err);
+    } catch (err: any) {
+      console.error("Error fetching question bank", err?.message || "Unknown error");
     }
   };
 
@@ -474,12 +474,12 @@ export default function App() {
     fetch(apiUrl("/api/feature-flags"))
       .then(res => safeJsonResponse(res))
       .then(data => setFeatureFlags(data))
-      .catch(e => console.error("Error loading features:", e));
+      .catch(e => console.error("Error loading features:", e?.message || "Unknown error"));
 
     fetch(apiUrl("/api/settings/linting"))
       .then(res => safeJsonResponse(res))
       .then(data => setLintSettings(data))
-      .catch(e => console.error("Error loading linting settings:", e));
+      .catch(e => console.error("Error loading linting settings:", e?.message || "Unknown error"));
   }, []);
 
   useEffect(() => {
@@ -764,8 +764,8 @@ export default function App() {
           setDbConnected(false);
         }
       }
-    } catch (err) {
-      console.warn("DB offline fallback reading active", err);
+    } catch (err: any) {
+      console.warn("DB offline fallback reading active", err?.message || "Unknown error");
       setSubmissionRetryCount(prev => {
         const nextCount = prev + 1;
         if (nextCount >= 1) { // retry máximo 1

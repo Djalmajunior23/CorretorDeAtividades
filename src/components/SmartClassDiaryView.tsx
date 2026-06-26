@@ -175,8 +175,8 @@ export default function SmartClassDiaryView({
       if (resObs.ok) {
         setObservations(await resObs.json());
       }
-    } catch (err) {
-      console.error("Failed fetching diary data:", err);
+    } catch (err: any) {
+      console.error("Failed fetching diary data:", err?.message || "Unknown error");
       showToast(
         "Erro de comunicação com o servidor. Usando modo de segurança local.",
         "error",

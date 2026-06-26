@@ -46,7 +46,7 @@ dotenv.config();
 
 const { Pool } = pg;
 const app = express();
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: "20mb" }));
 app.disable("x-powered-by");
@@ -66,30 +66,34 @@ app.use(express.urlencoded({ limit: "20mb", extended: true }));
 // CORS middleware
 const allowedOrigins = [
   "https://corretor-de-atividades.vercel.app",
-];
-
-const allowedPatterns = [
-  /^https:\/\/.*\.vercel\.app$/,
-  /^https:\/\/ais-(dev|pre)-[a-z0-9-]+\.us-east1\.run\.app$/,
+  /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/,
+  /^https:\/\/ais-dev-[a-zA-Z0-9-]+\.us-east1\.run\.app$/,
+  /^https:\/\/ais-pre-[a-zA-Z0-9-]+\.us-east1\.run\.app$/,
   /^https:\/\/ais-[a-z0-9-]+-[a-z0-9-]+\.us-east1\.run\.app$/,
-  /^http:\/\/localhost:\d+$/,
-  /^http:\/\/127\.0\.0\.1:\d+$/
+  "http://localhost:5173",
+  "http://localhost:3000"
 ];
 
-function isAllowedOrigin(origin?: string) {
-  if (!origin) return true;
-  if (allowedOrigins.includes(origin)) return true;
-  return allowedPatterns.some((pattern) => pattern.test(origin));
-}
-
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-    } else {
-      console.warn("[CORS BLOCKED]", origin);
-      callback(new Error("Origin not allowed by CORS"));
+const corsOptions: cors.CorsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true);
     }
+
+    const allowed = allowedOrigins.some((allowedOrigin) => {
+      if (typeof allowedOrigin === "string") {
+        return allowedOrigin === origin;
+      }
+
+      return allowedOrigin.test(origin);
+    });
+
+    if (allowed) {
+      return callback(null, true);
+    }
+
+    console.warn("[CORS BLOCKED]", origin);
+    return callback(new Error(`CORS bloqueado para origem: ${origin}`));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -97,7 +101,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 
 // ============================================
@@ -7482,94 +7486,6 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   return res.json(inMemorySubmissions);
 });
 
-// Added during audit to support frontend calls
-let mockClasses = [
-  { id: "1", name: "Turma A", active: true },
-  { id: "2", name: "Turma B", active: true }
-];
-
-app.get("/api/classes", async (req, res) => {
-  return res.json(mockClasses);
-});
-
-app.post("/api/classes", async (req, res) => {
-  const newClass = { id: Date.now().toString(), ...req.body };
-  mockClasses.push(newClass);
-  return res.json(newClass);
-});
-
-app.put("/api/classes/:id", async (req, res) => {
-  mockClasses = mockClasses.map(c => c.id === req.params.id ? { ...c, ...req.body } : c);
-  return res.json({ success: true });
-});
-
-app.delete("/api/classes/:id", async (req, res) => {
-  mockClasses = mockClasses.filter(c => c.id !== req.params.id);
-  return res.json({ success: true });
-});
-
-let mockStudents = [
-  { id: "1", name: "João Silva", class_id: "1", email: "joao@example.com", status: "active" },
-  { id: "2", name: "Maria Oliveira", class_id: "2", email: "maria@example.com", status: "active" }
-];
-
-app.get("/api/students", async (req, res) => {
-  const classId = req.query.class_id;
-
-  if (classId && typeof classId === "string" && (classId.includes("$") || classId.includes("{") || classId.includes("}"))) {
-    return res.status(400).json({
-      success: false,
-      message: "class_id inválido. Selecione uma turma válida.",
-      students: []
-    });
-  }
-
-  let filtered = mockStudents;
-  if (classId && typeof classId === "string") {
-    filtered = filtered.filter(s => s.class_id === classId);
-  }
-  return res.json(filtered);
-});
-
-app.post("/api/students", async (req, res) => {
-  const newStudent = { id: Date.now().toString(), status: "active", ...req.body };
-  mockStudents.push(newStudent);
-  return res.json(newStudent);
-});
-
-app.put("/api/students/:id", async (req, res) => {
-  mockStudents = mockStudents.map(s => s.id === req.params.id ? { ...s, ...req.body } : s);
-  return res.json({ success: true });
-});
-
-app.delete("/api/students/:id", async (req, res) => {
-  mockStudents = mockStudents.filter(s => s.id !== req.params.id);
-  return res.json({ success: true });
-});
-
-app.post("/api/students/import-csv", async (req, res) => {
-  return res.json({ success: true, count: 0 }); // Mock import
-});
-
-app.get("/api/students/:id/profile", async (req, res) => {
-  const s = mockStudents.find(s => s.id === req.params.id) || {};
-  return res.json({ student: s, metrics: {} });
-});
-
-let mockActivities = [
-  { id: "1", title: "Atividade 1", description: "Descrição", type: "code" },
-  { id: "2", title: "Atividade 2", description: "Descrição", type: "quiz" }
-];
-
-app.get("/api/activities", async (req, res) => {
-  return res.json(mockActivities);
-});
-
-app.post("/api/activities", async (req, res) => {
-  const newActivity = { id: Date.now().toString(), ...req.body };
-  mockActivities.push(newActivity);
-  return res.json(newActivity);
-});
 
 // REST API Endpoints for CodeCheck AI Evolutionary Features
 app.get("/api/feature-flags", (req, res) => {
