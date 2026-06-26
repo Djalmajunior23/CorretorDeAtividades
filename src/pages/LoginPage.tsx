@@ -46,9 +46,6 @@ export default function LoginPage() {
 
   // If already authenticated, redirect immediately
   if (user) {
-    if (user.role === "ALUNO") {
-      return <Navigate to="/student/dashboard" replace />;
-    }
     if (user.role === "ADMIN") {
       return <Navigate to="/admin/dashboard" replace />;
     }
@@ -72,17 +69,15 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
-      console.log("LOGIN RESPONSE:", data);
+      if (import.meta.env.DEV) {
+        console.log("LOGIN RESPONSE:", data);
+      }
 
       if (response.ok) {
         data.user.role = normalizeRole(data.user.role);
         login(data.token || data.access_token, data.user);
         if (data.user.role === "ADMIN") {
           navigate("/admin/dashboard");
-        } else if (data.user.role === "PROFESSOR") {
-          navigate("/teacher/dashboard");
-        } else if (data.user.role === "ALUNO") {
-          navigate("/student/dashboard");
         } else {
           navigate("/teacher/dashboard");
         }

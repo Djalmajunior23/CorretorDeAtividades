@@ -36,7 +36,7 @@ COPY --from=builder /app/*.traineddata ./
 # (server.ts bundle excludes external packages but resolves relative imports)
 
 # Expose the port
-EXPOSE 8080
+EXPOSE 3000
 
 # Use the production start command
 CMD ["node", "dist/server.cjs"]

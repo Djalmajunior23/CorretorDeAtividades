@@ -106,6 +106,7 @@ export default function QuestionBankView() {
 
       toast.success(`${generatedQuestions.length} questões geradas com sucesso!`);
       setShowGenModal(false);
+      setQuestions(prev => [...generatedQuestions, ...prev]);
       fetchQuestions();
     } catch (e: any) {
       toast.error("Erro ao gerar questões com IA.");

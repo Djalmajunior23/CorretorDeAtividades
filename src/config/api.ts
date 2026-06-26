@@ -10,7 +10,7 @@ if (import.meta.env.DEV) {
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const finalUrl = `${API_BASE_URL}${normalizedPath}`;
-  if (path.includes("feature-flags")) {
+  if (import.meta.env.DEV && path.includes("feature-flags")) {
     console.log(
       "[REQUEST]",
       finalUrl
