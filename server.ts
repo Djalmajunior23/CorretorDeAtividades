@@ -46,9 +46,10 @@ dotenv.config();
 
 const { Pool } = pg;
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 8080);
 
 app.use(express.json({ limit: "20mb" }));
+app.disable("x-powered-by");
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err instanceof SyntaxError && "body" in err) {
     return res.status(400).json({
@@ -2201,7 +2202,7 @@ app.get("/ready", async (req, res) => {
 
 // Deep health probe (system resources, connections, latencies)
 app.get("/health", async (req, res) => {
-  return res.status(200).json({ status: "ok", service: "codecheck-backend" });
+  return res.status(200).json({ status: "ok" });
 });
 
 // O1: API System Health
@@ -9431,7 +9432,7 @@ async function main() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Express active fullstack on http://localhost:${PORT}`);
+    console.log(`CodeCheck API running on 0.0.0.0:${PORT}`);
   });
 }
 

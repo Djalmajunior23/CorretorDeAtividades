@@ -202,7 +202,19 @@ export default function App() {
   });
   const [notificationOpen, setNotificationOpen] = useState<boolean>(false);
   const [language, setLanguage] = useState<string>("python");
-  const [code, setCode] = useState<string>(CODE_TEMPLATES["python"]);
+  const [code, setCode] = useState<string>(() => {
+    const savedCode = localStorage.getItem('codecheck-code');
+    return savedCode || CODE_TEMPLATES["python"];
+  });
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      localStorage.setItem('codecheck-code', code);
+    }, 1000); // 1s debounce
+
+    return () => clearTimeout(handler);
+  }, [code]);
+
   const [testCases, setTestCases] = useState<TestCase[]>(INITIAL_TEST_CASES);
   
   // Correction responses

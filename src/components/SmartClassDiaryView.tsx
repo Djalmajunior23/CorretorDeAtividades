@@ -41,9 +41,26 @@ export default function SmartClassDiaryView({
 
   // Filter and search state
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedClass, setSelectedClass] = useState(
-    "Turma de Desenvolvimento Web 1A",
-  );
+  const [classes, setClasses] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState<string>("");
+
+  useEffect(() => {
+    fetch(apiUrl("/api/classes"))
+      .then(r => r.json())
+      .then(setClasses)
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (selectedClass) {
+      fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedClass)}`))
+        .then(r => r.json())
+        .then(setStudents)
+        .catch(console.error);
+    }
+  }, [selectedClass]);
 
   // Component states
   const [sessions, setSessions] = useState<any[]>([]);
@@ -640,6 +657,29 @@ export default function SmartClassDiaryView({
 
       {/* Main Header Row */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
+        <div className="flex gap-4">
+          <select
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="p-2 border border-gray-300 rounded-lg"
+          >
+            <option value="">Selecione uma Turma</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
+            value={selectedStudent}
+            onChange={(e) => setSelectedStudent(e.target.value)}
+            className="p-2 border border-gray-300 rounded-lg"
+            disabled={!selectedClass}
+          >
+            <option value="">Selecione um Aluno</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
         <div>
           <div className="flex items-center gap-3">
             <span className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-xs font-semibold uppercase tracking-wider">
