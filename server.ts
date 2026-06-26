@@ -1,3 +1,9 @@
+// ... helper functions
+function isValidUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 // import { registerAddonEndpoints } from './server-addon';
 import { setupTeacherAPIs } from './server-apis-addon';
 import express from "express";
@@ -7087,72 +7093,67 @@ app.post("/api/questions/generate", async (req, res) => {
     ]
   }`;
 
+  let aiAvailable = false;
+  let fallbackUsed = false;
+  let provider = "ollama";
+  let questionsData: any = null;
+
   try {
     const dataText = await AIGateway.executeTask<string>(AITask.QUESTION_GENERATION, prompt);
-    let data: any = null;
-    try {
-      data = safeParseAI(dataText);
-    } catch (parseErr) {
-      console.warn("Erro ao fazer parse do JSON retornado pela IA para questões:", parseErr);
+    const parsedData = safeParseAI(dataText);
+    
+    if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
+      questionsData = parsedData.questions;
+      aiAvailable = true;
+    } else {
+      throw new Error("Formato inválido.");
     }
-
-    if (!data || !Array.isArray(data.questions) || data.questions.length === 0) {
-      throw new Error("Formato de JSON inválido retornado pela IA.");
-    }
-
-    let inserted = [];
-    for (const q of data.questions) {
-      const id = crypto.randomUUID();
-      const mappedQ = {
-        id,
-        title: q.title || "Questão sem título",
-        description: q.statement || q.description || "Sem descrição",
-        language: q.language || language || "javascript",
-        difficulty: q.difficulty || difficulty || "easy",
-        starter_code: q.reference_solution || q.starter_code || "",
-        test_cases: q.test_cases || [],
-        rubric: q.rubric || { syntax_weight: 30, tests_weight: 50, quality_weight: 20 }
-      };
-      
-      // Save in memory cache
-      questionsMemoryDb.unshift(mappedQ);
-      
-      // Save in DB if available
-      if (pool) {
-        try {
-          await pool.query(`
-            INSERT INTO questions (id, title, description, language, difficulty, starter_code, test_cases, rubric)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          `, [id, mappedQ.title, mappedQ.description, mappedQ.language, mappedQ.difficulty, mappedQ.starter_code, JSON.stringify(mappedQ.test_cases), JSON.stringify(mappedQ.rubric)]);
-        } catch (dbErr) {
-          console.error("Erro de banco ao salvar questão gerada por IA:", dbErr);
-        }
-      }
-      inserted.push(mappedQ);
-    }
-
-    const singleQ = inserted[0] || {
+  } catch (err) {
+    console.warn("Falha ao gerar questões com IA:", err);
+    fallbackUsed = true;
+    provider = "local";
+    questionsData = [{
       title: "Soma de dois números",
-      description: "Crie um programa que leia dois números e exiba a soma.",
-      language: language || "python",
-      difficulty: difficulty || "Iniciante",
-      starter_code: "a = int(input())\nb = int(input())\nprint(a + b)",
+      statement: "Crie um programa que leia dois números e exiba a soma.",
+      language: language,
+      difficulty: difficulty,
+      reference_solution: "a = int(input())\nb = int(input())\nprint(a + b)",
       test_cases: [{ input: "2\n3", expected_output: "5" }],
-      rubric: { syntax_weight: 30, tests_weight: 50, quality_weight: 20 }
-    };
+      rubric: { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+    }];
+  }
 
-    return res.json({
-      success: true,
-      message: "Questões geradas com IA.",
-      data: { 
-        question: singleQ,
-        questions: inserted
-      },
-      questions: inserted,
-      ai_available: true,
-      fallback_used: false,
-      provider: "ollama"
-    });
+  const resultQuestions = questionsData.map((q: any) => {
+    const id = crypto.randomUUID();
+    const mappedQ = {
+      id,
+      title: q.title || "Questão sem título",
+      description: q.statement || q.description || "Sem descrição",
+      language: q.language || language,
+      difficulty: q.difficulty || difficulty,
+      starter_code: q.reference_solution || q.starter_code || "",
+      test_cases: q.test_cases || [],
+      rubric: q.rubric || { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+    };
+    
+    if (pool) {
+      pool.query(`
+        INSERT INTO questions (id, title, description, language, difficulty, starter_code, test_cases, rubric)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [id, mappedQ.title, mappedQ.description, mappedQ.language, mappedQ.difficulty, mappedQ.starter_code, JSON.stringify(mappedQ.test_cases), JSON.stringify(mappedQ.rubric)]).catch(console.error);
+    }
+    
+    return mappedQ;
+  });
+
+  return res.json({
+    success: true,
+    data: { question: resultQuestions[0] },
+    ai_available: aiAvailable,
+    fallback_used: fallbackUsed,
+    provider: provider
+  });
+});
 
   } catch (e: any) {
     console.warn("Falha ao gerar questões via Ollama, usando fallback local inteligente:", e.message);

@@ -14,6 +14,11 @@ function uuidv4() {
   return crypto.randomUUID();
 }
 
+function isValidUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   // --- DATABASE MIGRATIONS FOR THE NEW COLUMNS ---
   if (pool) {
@@ -119,11 +124,21 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   app.get("/api/students", async (req, res) => {
     try {
       if(!pool) return res.json([]);
+      const classId = req.query.class_id;
+
+      if (classId !== undefined && !isValidUuid(classId)) {
+        return res.status(400).json({
+          success: false,
+          message: "class_id inválido. Selecione uma turma válida.",
+          students: []
+        });
+      }
+
       let query = "SELECT *, (SELECT name FROM d_class_group c WHERE c.id = d_student_record.class_id) as class_name FROM d_student_record WHERE status != 'deleted'";
       const values: any[] = [];
-      if (req.query.class_id) {
+      if (classId) {
         query += " AND class_id = $1";
-        values.push(req.query.class_id);
+        values.push(classId);
       }
       query += " ORDER BY name ASC";
       
