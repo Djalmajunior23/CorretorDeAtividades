@@ -6,10 +6,14 @@ services:
     container_name: codecheck-backend
     restart: always
     ports:
-      - "8080:8080"
+      - "3000:3000"
+    expose:
+      - "3000"
+    labels:
+      - "traefik.http.services.codecheck.loadbalancer.server.port=3000"
     environment:
       - NODE_ENV=production
-      - PORT=8080
+      - PORT=3000
       - DATABASE_URL=${DATABASE_URL}
       - AI_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://host.docker.internal:11434

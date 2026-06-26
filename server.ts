@@ -46,7 +46,7 @@ dotenv.config();
 
 const { Pool } = pg;
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
@@ -2190,7 +2190,7 @@ app.get("/ready", async (req, res) => {
 
 // Deep health probe (system resources, connections, latencies)
 app.get("/health", async (req, res) => {
-  return res.status(200).json({ status: "ok" });
+  return res.status(200).json({ status: "ok", service: "codecheck-backend" });
 });
 
 // O1: API System Health
@@ -3825,7 +3825,7 @@ app.post("/api/ai/generate-questions", async (req, res) => {
 // ==========================================
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({ status: "ok", service: "codecheck-backend" });
 });
 
 app.get("/ready", async (req, res) => {
@@ -4387,9 +4387,17 @@ app.get("/api/educational-templates", async (req, res) => {
 let materialsMemoryDb: any[] = [];
 
 app.post("/api/materials/generate", async (req, res) => {
-  const { template_type, topic, difficulty, target_audience, quantity, include_answer_key } = req.body;
+  const body = req.body || {};
 
-  if (!template_type || !topic || !difficulty) {
+  const tipo = body.tipo || body.type || body.template_type || body.materialType || "material_didatico";
+  const tema = body.tema || body.topic || body.subject || body.title;
+  const dificuldade = body.dificuldade || body.difficulty || body.level || "iniciante";
+  const duracao = body.duracao || body.duration || body.estimatedDuration || "2h";
+  const target_audience = body.target_audience || "Estudantes";
+  const quantity = body.quantity || 3;
+  const include_answer_key = body.include_answer_key || false;
+
+  if (!tipo || !tema || !dificuldade) {
     return res.status(400).json({
       success: false,
       error: "Campos obrigatórios ausentes. Preencha tipo, tema e dificuldade.",
@@ -4398,10 +4406,11 @@ app.post("/api/materials/generate", async (req, res) => {
   }
 
   try {
-    const prompt = `Gere um material didático do tipo "${template_type}" sobre o tema "${topic}".
-      Dificuldade: ${difficulty}. 
-      Público-alvo: ${target_audience || 'Estudantes'}.
-      Quantidade de questões (se aplicável): ${quantity || 3}.
+    const prompt = `Gere um material didático do tipo "${tipo}" sobre o tema "${tema}".
+      Dificuldade: ${dificuldade}. 
+      Público-alvo: ${target_audience}.
+      Duração estimada: ${duracao}.
+      Quantidade de questões (se aplicável): ${quantity}.
       Incluir gabarito: ${include_answer_key ? "Sim" : "Não"}.
       
       Retorne um JSON com esta estrutura:
@@ -4443,25 +4452,25 @@ app.post("/api/materials/generate", async (req, res) => {
     if (!aiResult) {
       // Robust Local Fallback
       aiResult = {
-        title: `Guia Didático Completo: ${topic}`,
-        content: `Este material didático cobre de forma aprofundada o tema "${topic}" para estudantes no nível de complexidade "${difficulty}".`,
+        title: `Guia Didático Completo: ${tema}`,
+        content: `Este material didático cobre de forma aprofundada o tema "${tema}" para estudantes no nível de complexidade "${dificuldade}".`,
         objectives: [
-          `Dominar os fundamentos lógicos de ${topic}`,
-          `Descrever soluções para problemas usando ${topic}`,
+          `Dominar os fundamentos lógicos de ${tema}`,
+          `Descrever soluções para problemas usando ${tema}`,
           `Praticar através de desafios didáticos práticos`
         ],
         activities: [
           `Leitura acompanhada da seção teórica de introdução`,
-          `Resolução de 3 desafios práticos sobre ${topic}`,
+          `Resolução de 3 desafios práticos sobre ${tema}`,
           `Debate conceitual sobre as melhores abordagens`
         ],
         assessment: "A avaliação consistirá no desenvolvimento correto de desafios práticos aplicados.",
         sections: [
-          { heading: "Introdução", content: `O estudo de ${topic} constitui um dos pilares de desenvolvimento tecnológico no nível ${difficulty}.` },
-          { heading: "Desenvolvimento Teórico", content: `Exemplos práticos de modelagem, codificação e otimização relativos a ${topic}.` }
+          { heading: "Introdução", content: `O estudo de ${tema} constitui um dos pilares de desenvolvimento tecnológico no nível ${dificuldade}.` },
+          { heading: "Desenvolvimento Teórico", content: `Exemplos práticos de modelagem, codificação e otimização relativos a ${tema}.` }
         ],
         questions: [
-          { id: 1, text: `Qual das alternativas representa o uso ideal de ${topic}?`, options: ["Opção estrutural e otimizada", "Abordagem procedural redundante"], correct: "A" }
+          { id: 1, text: `Qual das alternativas representa o uso ideal de ${tema}?`, options: ["Opção estrutural e otimizada", "Abordagem procedural redundante"], correct: "A" }
         ],
         answer_key: ["O gabarito correto é a primeira opção, devido ao uso otimizado de recursos lógicos."],
         rubric: { criteria: ["Sintaxe correta", "Atendimento dos requisitos"], levels: ["Atende plenamente", "Não atende"] },
@@ -4470,12 +4479,12 @@ app.post("/api/materials/generate", async (req, res) => {
     }
 
     const mergedData = {
-      title: aiResult.title || `Guia Didático Completo: ${topic}`,
-      content: aiResult.content || `Este material didático cobre de forma aprofundada o tema "${topic}" para estudantes no nível de complexidade "${difficulty}".`,
-      objectives: aiResult.objectives || [`Dominar os fundamentos lógicos de ${topic}`],
-      activities: aiResult.activities || [`Resolução de desafios práticos sobre ${topic}`],
+      title: aiResult.title || `Guia Didático Completo: ${tema}`,
+      content: aiResult.content || `Este material didático cobre de forma aprofundada o tema "${tema}" para estudantes no nível de complexidade "${dificuldade}".`,
+      objectives: aiResult.objectives || [`Dominar os fundamentos lógicos de ${tema}`],
+      activities: aiResult.activities || [`Resolução de desafios práticos sobre ${tema}`],
       assessment: aiResult.assessment || "A avaliação consistirá no desenvolvimento correto de testes práticos.",
-      sections: aiResult.sections || [{ heading: "Introdução", content: `O estudo de ${topic} constitui um dos pilares.` }],
+      sections: aiResult.sections || [{ heading: "Introdução", content: `O estudo de ${tema} constitui um dos pilares.` }],
       questions: aiResult.questions || [{ id: 1, text: "Pergunta exemplo", options: ["A", "B"], correct: "A" }],
       answer_key: aiResult.answer_key || ["Gabarito do exercício"],
       rubric: aiResult.rubric || { criteria: ["Qualidade"], levels: ["Atende"] },
@@ -4488,8 +4497,8 @@ app.post("/api/materials/generate", async (req, res) => {
       id,
       teacher_id: "teacher_portal",
       title: mergedData.title,
-      type: template_type,
-      topic,
+      type: tipo,
+      topic: tema,
       content: mergedData, // Keep as object in-memory
       status: "draft",
       created_by_ai: true,
@@ -4504,7 +4513,7 @@ app.post("/api/materials/generate", async (req, res) => {
           INSERT INTO d_generated_material (
             id, teacher_id, title, type, topic, content, status, created_by_ai
           ) VALUES ($1, $2, $3, $4, $5, $6, 'draft', true)
-        `, [id, "teacher_portal", mergedData.title, template_type, topic, JSON.stringify(mergedData)]);
+        `, [id, "teacher_portal", mergedData.title, tipo, tema, JSON.stringify(mergedData)]);
       } catch (dbErr) {
         console.error("Erro de banco ao salvar material didático gerado:", dbErr);
       }
@@ -4525,10 +4534,10 @@ app.post("/api/materials/generate", async (req, res) => {
       success: true,
       id: crypto.randomUUID(),
       data: {
-        title: `Material sobre ${topic}`,
-        content: `Explicações pedagógicas completas sobre ${topic}.`,
-        objectives: [`Entender os fundamentos de ${topic}`],
-        activities: [`Exercícios de codificação para ${topic}`],
+        title: `Material sobre ${tema}`,
+        content: `Explicações pedagógicas completas sobre ${tema}.`,
+        objectives: [`Entender os fundamentos de ${tema}`],
+        activities: [`Exercícios de codificação para ${tema}`],
         assessment: "Análise de legibilidade sintática."
       },
       ai_available: false,
@@ -7072,149 +7081,91 @@ app.post("/api/questions/generate", async (req, res) => {
     });
   }
 
-  const prompt = `Gere ${quantity} questões de programação sobre o tema "${topic}" na linguagem "${language}".
-  Nível de dificuldade: ${difficulty}. Tipo de questão: ${question_type || "prática"}.
-  
-  Responda APENAS com um JSON no formato:
-  {
-    "questions": [
-      {
-        "title": "título curto",
-        "statement": "enunciado detalhado",
-        "difficulty": "${difficulty}",
-        "type": "${question_type || 'prática'}",
-        "language": "${language}",
-        "rubric": {"syntax_weight": 30, "tests_weight": 50, "quality_weight": 20},
-        "test_cases": [{"input": "...", "expected_output": "..."}],
-        "reference_solution": "código exemplo",
-        "expected_feedback": "comentários pedagógicos sugeridos",
-        "tags": ["${topic}", "${language}"]
-      }
-    ]
-  }`;
-
-  let aiAvailable = false;
-  let fallbackUsed = false;
-  let provider = "ollama";
-  let questionsData: any = null;
-
   try {
-    const dataText = await AIGateway.executeTask<string>(AITask.QUESTION_GENERATION, prompt);
-    const parsedData = safeParseAI(dataText);
+    const prompt = `Gere ${quantity} questões de programação sobre o tema "${topic}" na linguagem "${language}".
+    Nível de dificuldade: ${difficulty}. Tipo de questão: ${question_type || "prática"}.
     
-    if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
-      questionsData = parsedData.questions;
-      aiAvailable = true;
-    } else {
-      throw new Error("Formato inválido.");
-    }
-  } catch (err) {
-    console.warn("Falha ao gerar questões com IA:", err);
-    fallbackUsed = true;
-    provider = "local";
-    questionsData = [{
-      title: "Soma de dois números",
-      statement: "Crie um programa que leia dois números e exiba a soma.",
-      language: language,
-      difficulty: difficulty,
-      reference_solution: "a = int(input())\nb = int(input())\nprint(a + b)",
-      test_cases: [{ input: "2\n3", expected_output: "5" }],
-      rubric: { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
-    }];
-  }
-
-  const resultQuestions = questionsData.map((q: any) => {
-    const id = crypto.randomUUID();
-    const mappedQ = {
-      id,
-      title: q.title || "Questão sem título",
-      description: q.statement || q.description || "Sem descrição",
-      language: q.language || language,
-      difficulty: q.difficulty || difficulty,
-      starter_code: q.reference_solution || q.starter_code || "",
-      test_cases: q.test_cases || [],
-      rubric: q.rubric || { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
-    };
-    
-    if (pool) {
-      pool.query(`
-        INSERT INTO questions (id, title, description, language, difficulty, starter_code, test_cases, rubric)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [id, mappedQ.title, mappedQ.description, mappedQ.language, mappedQ.difficulty, mappedQ.starter_code, JSON.stringify(mappedQ.test_cases), JSON.stringify(mappedQ.rubric)]).catch(console.error);
-    }
-    
-    return mappedQ;
-  });
-
-  return res.json({
-    success: true,
-    data: { question: resultQuestions[0] },
-    ai_available: aiAvailable,
-    fallback_used: fallbackUsed,
-    provider: provider
-  });
-});
-
-  } catch (e: any) {
-    console.warn("Falha ao gerar questões via Ollama, usando fallback local inteligente:", e.message);
-    
-    // Fallback local robusto
-    const inserted = [];
-    for (let i = 0; i < quantity; i++) {
-      const qId = crypto.randomUUID();
-      const mappedQ = {
-        id: qId,
-        title: i === 0 ? "Soma de dois números" : `Problema Prático ${i + 1} de ${topic}`,
-        description: i === 0 
-          ? "Crie um programa que leia dois números inteiros da entrada padrão e exiba a soma deles." 
-          : `Desenvolva uma solução lógica para o problema prático abordando o tema ${topic} utilizando a linguagem ${language}.`,
-        language: language || "python",
-        difficulty: difficulty || "Iniciante",
-        starter_code: language === "python" ? "a = int(input())\nb = int(input())\nprint(a + b)" : "console.log(2 + 3);",
-        test_cases: [
-          {
-            input: "2\n3",
-            expected_output: "5"
-          }
-        ],
-        rubric: {
-          syntax_weight: 30,
-          tests_weight: 50,
-          quality_weight: 20
+    Responda APENAS com um JSON no formato:
+    {
+      "questions": [
+        {
+          "title": "título curto",
+          "statement": "enunciado detalhado",
+          "difficulty": "${difficulty}",
+          "type": "${question_type || 'prática'}",
+          "language": "${language}",
+          "rubric": {"syntax_weight": 30, "tests_weight": 50, "quality_weight": 20},
+          "test_cases": [{"input": "...", "expected_output": "..."}],
+          "reference_solution": "código exemplo",
+          "expected_feedback": "comentários pedagógicos sugeridos",
+          "tags": ["${topic}", "${language}"]
         }
-      };
+      ]
+    }`;
 
-      // Save in memory cache
-      questionsMemoryDb.unshift(mappedQ);
+    let aiAvailable = false;
+    let fallbackUsed = false;
+    let provider = "ollama";
+    let questionsData: any = null;
+
+    try {
+      const dataText = await AIGateway.executeTask<string>(AITask.QUESTION_GENERATION, prompt);
+      const parsedData = safeParseAI(dataText);
       
-      // Save in DB if available
-      if (pool) {
-        try {
-          await pool.query(`
-            INSERT INTO questions (id, title, description, language, difficulty, starter_code, test_cases, rubric)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          `, [qId, mappedQ.title, mappedQ.description, mappedQ.language, mappedQ.difficulty, mappedQ.starter_code, JSON.stringify(mappedQ.test_cases), JSON.stringify(mappedQ.rubric)]);
-        } catch (dbErr) {
-          console.error("Erro de banco ao salvar questão gerada por fallback local:", dbErr);
-        }
+      if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
+        questionsData = parsedData.questions;
+        aiAvailable = true;
+      } else {
+        throw new Error("Formato inválido.");
       }
-      inserted.push(mappedQ);
+    } catch (err) {
+      console.warn("Falha ao gerar questões com IA:", err);
+      fallbackUsed = true;
+      provider = "local";
+      questionsData = [{
+        title: "Soma de dois números",
+        statement: "Crie um programa que leia dois números e exiba a soma.",
+        language: language,
+        difficulty: difficulty,
+        reference_solution: "a = int(input())\nb = int(input())\nprint(a + b)",
+        test_cases: [{ input: "2\n3", expected_output: "5" }],
+        rubric: { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+      }];
     }
 
-    const singleQ = inserted[0];
+    const resultQuestions = questionsData.map((q: any) => {
+      const id = crypto.randomUUID();
+      const mappedQ = {
+        id,
+        title: q.title || "Questão sem título",
+        description: q.statement || q.description || "Sem descrição",
+        language: q.language || language,
+        difficulty: q.difficulty || difficulty,
+        starter_code: q.reference_solution || q.starter_code || "",
+        test_cases: q.test_cases || [],
+        rubric: q.rubric || { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+      };
+      
+      if (pool) {
+        pool.query(`
+          INSERT INTO questions (id, title, description, language, difficulty, starter_code, test_cases, rubric)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [id, mappedQ.title, mappedQ.description, mappedQ.language, mappedQ.difficulty, mappedQ.starter_code, JSON.stringify(mappedQ.test_cases), JSON.stringify(mappedQ.rubric)]).catch(console.error);
+      }
+      
+      return mappedQ;
+    });
 
     return res.json({
       success: true,
-      message: "IA indisponível. Foi usado fallback local inteligente.",
-      data: { 
-        question: singleQ,
-        questions: inserted
-      },
-      questions: inserted,
-      ai_available: false,
-      fallback_used: true,
-      provider: "local"
+      data: { question: resultQuestions[0] },
+      ai_available: aiAvailable,
+      fallback_used: fallbackUsed,
+      provider: provider
     });
+  } catch (e: any) {
+    console.warn("Erro crítico ao gerar questões:", e.message);
+    return res.status(500).json({ success: false, error: e.message });
   }
 });
 
