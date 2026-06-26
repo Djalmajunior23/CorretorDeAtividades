@@ -27,9 +27,8 @@ import { exportHtmlToPDF } from "../../utils/export";
 
 const LANGUAGES = [
   { id: "python", name: "Python", icon: "🐍" },
-  { id: "java", name: "Java", icon: "☕" },
   { id: "javascript", name: "JavaScript", icon: "💛" },
-  { id: "cpp", name: "C++", icon: "⚙️" },
+  { id: "c", name: "C/C++", icon: "⚙️" },
 ];
 
 export default function SmartCorrectionLab() {
@@ -48,6 +47,9 @@ export default function SmartCorrectionLab() {
   }, []);
 
   const getEngineStatus = () => {
+    if (language.id === "c") {
+      return "missing_c";
+    }
     if (!sandboxStatus || !sandboxStatus.engines) {
       return "available"; // default while loading
     }
@@ -55,7 +57,7 @@ export default function SmartCorrectionLab() {
     if (language.id === "python" && engines.python !== "available") {
       return "missing";
     }
-    if (language.id === "cpp" && engines.gcc !== "available" && engines.gplusplus !== "available") {
+    if (language.id === "javascript" && engines.node !== "available") {
       return "missing";
     }
     return "available";
@@ -204,7 +206,7 @@ export default function SmartCorrectionLab() {
 
             <button
               onClick={handleExecute}
-              disabled={isExecuting || getEngineStatus() === "missing"}
+              disabled={isExecuting || getEngineStatus() !== "available"}
               className="flex items-center space-x-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/30 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
             >
               {isExecuting ? (
@@ -225,6 +227,15 @@ export default function SmartCorrectionLab() {
             </button>
           </div>
         </header>
+
+        {getEngineStatus() === "missing_c" && (
+          <div className="bg-amber-950/60 border-b border-amber-500/20 px-4 py-3 flex items-center space-x-3 text-amber-200 text-xs shrink-0 font-sans">
+            <AlertCircle className="w-4.5 h-4.5 text-amber-400 shrink-0" />
+            <span>
+              <strong>Atenção:</strong> Execução de C/C++ ainda não está disponível neste servidor. Use Python ou JavaScript nesta versão inicial.
+            </span>
+          </div>
+        )}
 
         {getEngineStatus() === "missing" && (
           <div className="bg-amber-950/60 border-b border-amber-500/20 px-4 py-3 flex items-center space-x-3 text-amber-200 text-xs shrink-0 font-sans">
@@ -248,9 +259,7 @@ export default function SmartCorrectionLab() {
                     ? "py"
                     : language.id === "javascript"
                       ? "js"
-                      : language.id === "java"
-                        ? "java"
-                        : "cpp"}
+                      : "c"}
                 </span>
               </div>
             </div>

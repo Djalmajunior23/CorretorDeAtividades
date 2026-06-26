@@ -69,6 +69,7 @@ export default function MateriaisDidaticosView() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedTemplate, setSelectedTemplate] =
     useState<EducationalTemplate | null>(null);
+  const [selectedMaterial, setSelectedMaterial] = useState<GeneratedMaterial | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -134,7 +135,7 @@ export default function MateriaisDidaticosView() {
   };
 
   const exportPDF = (id: string) => {
-    window.open(`/api/materials/${id}/export/pdf`, "_blank");
+    window.open(apiUrl(`/api/materials/${id}/export/pdf`), "_blank");
   };
 
   return (
@@ -245,7 +246,10 @@ export default function MateriaisDidaticosView() {
                           {m.status}
                         </span>
                       </div>
-                      <button className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 group">
+                      <button 
+                        onClick={() => setSelectedMaterial(m)}
+                        className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 group"
+                      >
                         Ver Material{" "}
                         <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-all" />
                       </button>
@@ -432,6 +436,118 @@ export default function MateriaisDidaticosView() {
           </div>
         )}
       </div>
+
+      {selectedMaterial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-[#0f111a] border border-slate-800 rounded-2xl p-6 w-full max-w-3xl my-auto">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-white mb-2">{selectedMaterial.title}</h2>
+                <div className="flex gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded-full">
+                    {selectedMaterial.type.replace("_", " ")}
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-slate-800 text-slate-300 rounded-full">
+                    {selectedMaterial.topic}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMaterial(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <Trash2 className="w-5 h-5 hidden" /> {/* Dummy space if needed */}
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+              {selectedMaterial.content?.content && (
+                <div>
+                  <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2">Conteúdo</h3>
+                  <div className="text-slate-300 text-sm whitespace-pre-wrap">{selectedMaterial.content.content}</div>
+                </div>
+              )}
+              
+              {selectedMaterial.content?.objectives && selectedMaterial.content.objectives.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2">Objetivos</h3>
+                  <ul className="list-disc pl-5 text-slate-300 text-sm space-y-1">
+                    {selectedMaterial.content.objectives.map((obj: string, i: number) => (
+                      <li key={i}>{obj}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {selectedMaterial.content?.activities && selectedMaterial.content.activities.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2">Atividades</h3>
+                  <ul className="list-disc pl-5 text-slate-300 text-sm space-y-1">
+                    {selectedMaterial.content.activities.map((act: string, i: number) => (
+                      <li key={i}>{act}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {selectedMaterial.content?.questions && selectedMaterial.content.questions.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2">Questões</h3>
+                  <div className="space-y-4">
+                    {selectedMaterial.content.questions.map((q: any, i: number) => (
+                      <div key={i} className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
+                        <p className="text-sm font-medium text-white mb-2">{i + 1}. {q.text || q.statement}</p>
+                        {q.options && (
+                          <ul className="list-[lower-alpha] pl-5 text-slate-400 text-sm mt-2">
+                            {q.options.map((opt: string, j: number) => (
+                              <li key={j} className={opt === q.correct || String.fromCharCode(65+j) === q.correct ? "text-emerald-400 font-medium" : ""}>{opt}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedMaterial.content?.answer_key && (
+                <div>
+                  <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-2">Gabarito</h3>
+                  <div className="text-slate-300 text-sm whitespace-pre-wrap">
+                    {Array.isArray(selectedMaterial.content.answer_key) 
+                      ? selectedMaterial.content.answer_key.join('\n')
+                      : selectedMaterial.content.answer_key}
+                  </div>
+                </div>
+              )}
+
+              {selectedMaterial.content?.teacher_notes && (
+                <div>
+                  <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider mb-2">Observações para o Professor</h3>
+                  <div className="text-slate-300 text-sm whitespace-pre-wrap bg-amber-500/10 p-4 rounded-lg border border-amber-500/20">{selectedMaterial.content.teacher_notes}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <button
+                onClick={() => setSelectedMaterial(null)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 text-sm font-medium transition-all"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => exportPDF(selectedMaterial.id)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 text-sm font-medium transition-all flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Exportar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
