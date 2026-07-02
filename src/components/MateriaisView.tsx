@@ -33,7 +33,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { EducationalTemplate, GeneratedMaterial } from "../types";
-import { apiUrl, safeJsonResponse } from "../config/api";
+import { apiUrl, safeJsonResponse, apiFetch } from "../config/api";
 
 const TEMPLATE_TYPES = [
   { id: "exercise_list", label: "Lista de Exercícios" },

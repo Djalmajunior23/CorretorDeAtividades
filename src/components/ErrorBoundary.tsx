@@ -1,16 +1,17 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import { AlertCircle } from "lucide-react";
 
 interface Props {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 interface State {
   hasError: boolean;
 }
 
-class ErrorBoundary extends Component<Props, State> {
+export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
-    hasError: false,
+    hasError: false
   };
 
   public static getDerivedStateFromError(_: Error): State {
@@ -24,24 +25,20 @@ class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
-          <h1 className="text-2xl font-bold mb-4">Something went wrong.</h1>
-          <p className="mb-4">
-            Please try refreshing the page or contact support.
-          </p>
-          <button
+        <div className="flex flex-col items-center justify-center h-full w-full p-8 text-center text-slate-300">
+          <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+          <h2 className="text-lg font-bold text-white mb-2">Erro ao carregar esta tela.</h2>
+          <p className="text-sm opacity-80 mb-6">Recarregue a página ou volte ao painel principal.</p>
+          <button 
             onClick={() => window.location.reload()}
-            className="p-2 bg-blue-500 text-white rounded"
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
           >
-            Reload Page
+            Recarregar Página
           </button>
         </div>
       );
     }
 
-    // @ts-ignore
     return this.props.children;
   }
 }
-
-export default ErrorBoundary;

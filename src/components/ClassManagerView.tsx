@@ -2,11 +2,31 @@ import React, { useState, useEffect } from "react";
 import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search, Edit2, Archive, Trash, MoreVertical } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 
+const emptyClassForm = () => ({
+  name: "",
+  course: "",
+  module: "",
+  semester: "",
+  shift: "",
+  year: new Date().getFullYear(),
+  description: ""
+});
+
+const normalizeClassForm = (cls: any) => ({
+  name: cls?.name ?? "",
+  course: cls?.course ?? "",
+  module: cls?.module ?? "",
+  semester: cls?.semester ?? "",
+  shift: cls?.shift ?? "",
+  year: Number(cls?.year) || new Date().getFullYear(),
+  description: cls?.description ?? ""
+});
+
 export function ClassManagerView() {
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: "", course: "", module: "", semester: "", shift: "", year: new Date().getFullYear(), description: "" });
+  const [formData, setFormData] = useState(emptyClassForm());
   const [editId, setEditId] = useState<string | null>(null);
 
   const fetchClasses = async () => {
@@ -14,7 +34,8 @@ export function ClassManagerView() {
     try {
       const resp = await fetch(apiUrl("/api/classes"));
       const data = await resp.json();
-      setClasses(data || []);
+      const rows = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+      setClasses(rows);
     } catch (e) {
       console.error(e);
     }
@@ -43,7 +64,7 @@ export function ClassManagerView() {
       }
       setShowModal(false);
       setEditId(null);
-      setFormData({ name: "", course: "", module: "", semester: "", shift: "", year: new Date().getFullYear(), description: "" });
+      setFormData(emptyClassForm());
       fetchClasses();
     } catch (e) {
       console.error(e);
@@ -79,7 +100,7 @@ export function ClassManagerView() {
           </p>
         </div>
         <button
-          onClick={() => { setEditId(null); setShowModal(true); }}
+          onClick={() => { setEditId(null); setFormData(emptyClassForm()); setShowModal(true); }}
           className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
         >
           <Plus className="w-4 h-4" />
@@ -104,7 +125,7 @@ export function ClassManagerView() {
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       <div className="absolute right-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 py-1">
-                        <button onClick={() => { setEditId(cls.id); setFormData(cls); setShowModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <button onClick={() => { setEditId(cls.id); setFormData(normalizeClassForm(cls)); setShowModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
                           <Edit2 className="w-3 h-3" /> Editar
                         </button>
                         <button onClick={() => handleArchive(cls.id, cls)} className="w-full text-left px-3 py-1.5 text-xs text-amber-400 hover:bg-slate-700 flex items-center gap-2">
@@ -154,22 +175,22 @@ export function ClassManagerView() {
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-slate-400 font-medium">Nome da Turma</label>
-                <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" placeholder="Ex: Informática T1" />
+                <input required value={formData.name ?? ""} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" placeholder="Ex: Informática T1" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Curso</label>
-                  <input value={formData.course} onChange={e => setFormData({...formData, course: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                  <input value={formData.course ?? ""} onChange={e => setFormData({...formData, course: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Módulo</label>
-                  <input value={formData.module} onChange={e => setFormData({...formData, module: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                  <input value={formData.module ?? ""} onChange={e => setFormData({...formData, module: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Turno</label>
-                  <select value={formData.shift} onChange={e => setFormData({...formData, shift: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+                  <select value={formData.shift ?? ""} onChange={e => setFormData({...formData, shift: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
                     <option value="">Selecione</option>
                     <option value="Matutino">Matutino</option>
                     <option value="Vespertino">Vespertino</option>
@@ -179,16 +200,16 @@ export function ClassManagerView() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Ano</label>
-                  <input type="number" value={formData.year} onChange={e => setFormData({...formData, year: Number(e.target.value)})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                  <input type="number" value={formData.year ?? new Date().getFullYear()} onChange={e => setFormData({...formData, year: Number(e.target.value) || new Date().getFullYear()})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Semestre</label>
-                  <input value={formData.semester} onChange={e => setFormData({...formData, semester: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" placeholder="Ex: 1º" />
+                  <input value={formData.semester ?? ""} onChange={e => setFormData({...formData, semester: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" placeholder="Ex: 1º" />
                 </div>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-slate-400 font-medium">Descrição</label>
-                <textarea rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                <textarea rows={3} value={formData.description ?? ""} onChange={e => setFormData({...formData, description: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
               </div>
               
               <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">

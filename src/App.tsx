@@ -61,10 +61,12 @@ import {
   Eye,
   EyeOff,
   Sun,
-  Moon
+  Moon,
+  AlertCircle
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
-import { apiUrl, safeJsonResponse } from "./config/api";
+import { apiUrl, safeJsonResponse, apiFetch } from "./config/api";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -1144,6 +1146,7 @@ export default function App() {
 
         {/* View switching panel */}
         <div className="flex-1 overflow-y-auto p-8 scrollbar-thin">
+          <ErrorBoundary>
 
           {currentTab === "dashboard" && (
             <DashboardView onNavigate={(tab) => setTab(tab)} />
@@ -3998,8 +4001,8 @@ export default function App() {
             </div>
           )}
 
+        </ErrorBoundary>
         </div>
-
       </main>
     </div>
   );

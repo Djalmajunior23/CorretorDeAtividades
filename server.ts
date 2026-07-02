@@ -4642,7 +4642,7 @@ Retorne obrigatoriamente um JSON puro seguindo este esquema exato:
       },
     });
 
-    const result = JSON.parse(response.text);
+    const result = JSON.parse(response.text || "{}");
     res.json(result);
   } catch (error: any) {
     console.error("Simulation Generation Error:", error);
@@ -8351,7 +8351,8 @@ const inMemoryClassSessions = [
     notes: "Grande facilidade demonstrada por 85% de toda a classe.",
     competencies: "Lógica de Programação, Funções",
     status: "Registered",
-    created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+    created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+    periods: "1,2,3,4"
   },
   {
     id: "s2",

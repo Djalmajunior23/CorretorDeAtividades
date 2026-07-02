@@ -35,6 +35,72 @@ interface SmartClassDiaryViewProps {
   dbConnected: boolean;
 }
 
+
+function normalizeArray<T = any>(value: any): T[] {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.data?.items)) return value.data.items;
+  if (Array.isArray(value?.data?.records)) return value.data.records;
+  if (Array.isArray(value?.data?.timeSlots)) return value.data.timeSlots;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.records)) return value.records;
+  if (Array.isArray(value?.results)) return value.results;
+  if (Array.isArray(value?.timeSlots)) return value.timeSlots;
+  return [];
+}
+
+const standardUnitsByCourse: Record<string, string[]> = {
+  "TECNICO EM DESENVOLVIMENTO DE SISTEMAS": [
+    "Lógica de Programação",
+    "Banco de Dados",
+    "Desenvolvimento de Sistemas Web",
+    "Programação de Aplicativos",
+    "Modelagem de Software",
+    "Arquitetura de Software",
+    "Teste e Implantação de Sistemas",
+    "Design de Interface (UI/UX)",
+    "Segurança de Aplicações",
+    "Metodologias Ágeis"
+  ],
+  "TECNICO EM INFORMATICA": [
+    "Montagem e Manutenção de Computadores",
+    "Redes de Computadores",
+    "Sistemas Operacionais",
+    "Lógica de Programação",
+    "Banco de Dados",
+    "Desenvolvimento Web",
+    "Segurança da Informação",
+    "Suporte ao Usuário"
+  ],
+  "TECNICO EM REDES DE COMPUTADORES": [
+    "Arquitetura de Redes",
+    "Sistemas Operacionais de Rede",
+    "Cabeamento Estruturado",
+    "Serviços de Rede",
+    "Segurança de Redes",
+    "Administração de Sistemas",
+    "Roteamento e Comutação"
+  ],
+  "TECNICO EM ADMINISTRACAO": [
+    "Gestão de Pessoas",
+    "Administração Financeira",
+    "Planejamento Estratégico",
+    "Logística",
+    "Marketing e Vendas",
+    "Comportamento Organizacional",
+    "Contabilidade Geral"
+  ],
+  "TECNICO EM DESIGN": [
+    "Fundamentos do Design",
+    "Ilustração Digital",
+    "Tipografia",
+    "Criação de Identidade Visual",
+    "Design Editorial",
+    "Fotografia e Tratamento de Imagem",
+    "UX/UI Design"
+  ]
+};
+
 export default function SmartClassDiaryView({
   featureFlags,
   dbConnected,
@@ -54,22 +120,24 @@ export default function SmartClassDiaryView({
     fetch(apiUrl("/api/classes"))
       .then(r => r.json())
       .then(data => {
-        setClasses(data);
-        if (data.length > 0 && !selectedClass) {
-          setSelectedClass(data[0].id);
+        const normalized = normalizeArray(data);
+        setClasses(normalized);
+        if (normalized.length > 0 && !selectedClass) {
+          setSelectedClass(normalized[0].id);
         }
       })
       .catch(console.error);
 
     fetch(apiUrl("/api/codecheck/diary/time-slots"))
       .then(r => r.json())
-      .then(setTimeSlots)
+      .then(data => setTimeSlots(normalizeArray(data)))
       .catch(console.error);
 
     fetch(apiUrl("/api/codecheck/activities"))
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) setPedagogicalActivities(data);
+        const normalized = normalizeArray(data);
+        setPedagogicalActivities(normalized);
       })
       .catch(console.error);
   }, []);
@@ -78,7 +146,7 @@ export default function SmartClassDiaryView({
     if (selectedClass) {
       fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedClass)}`))
         .then(r => r.json())
-        .then(setStudents)
+        .then(data => setStudents(normalizeArray(data)))
         .catch(console.error);
     }
   }, [selectedClass]);
@@ -116,6 +184,7 @@ export default function SmartClassDiaryView({
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [aiSummaryResult, setAiSummaryResult] = useState<any>(null);
 
+
   // Attendance states
   const [selectedAttendanceSessionId, setSelectedAttendanceSessionId] =
     useState<string>("");
@@ -149,6 +218,41 @@ export default function SmartClassDiaryView({
   >("idle");
   const [testResultsLog, setTestResultsLog] = useState<string[]>([]);
 
+  const safeTimeSlots = normalizeArray(timeSlots);
+  const safeClasses = normalizeArray(classes);
+  const safeStudents = normalizeArray(students);
+  const safeSessions = normalizeArray(sessions);
+  const safeCompetencies = normalizeArray(competencies);
+  const safeAuditLogs = normalizeArray(auditLogs);
+  const safeObservations = normalizeArray(observations);
+  const safeAttendanceRecords = normalizeArray(attendanceRecords);
+
+  // Curricular Unit suggestions helper based on current class's course
+  const selectedClassObjForSuggestions = safeClasses.find(c => c.id === selectedClass);
+  const currentCourseSuggestions = selectedClassObjForSuggestions?.course || "";
+  const normalizedCourseKeySuggestions = currentCourseSuggestions
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const courseSpecificSuggestions = standardUnitsByCourse[normalizedCourseKeySuggestions] || [
+    "Lógica de Programação",
+    "Banco de Dados",
+    "Desenvolvimento de Sistemas Web",
+    "Programação de Aplicativos",
+    "Modelagem de Software",
+    "Arquitetura de Software",
+    "Teste e Implantação de Sistemas",
+    "Design de Interface (UI/UX)"
+  ];
+
+  const uniqueUnitsFromExistingSessions = Array.from(
+    new Set(safeSessions.map(s => s.curricular_unit).filter(Boolean))
+  );
+
+  const combinedCurricularSuggestions = Array.from(
+    new Set([...courseSpecificSuggestions, ...uniqueUnitsFromExistingSessions])
+  );
   // Show Toast helper
   const showToast = (
     msg: string,
@@ -163,7 +267,7 @@ export default function SmartClassDiaryView({
   const fetchData = async () => {
     try {
       // Find class name if selectedClass is ID
-      const classObj = classes.find(c => c.id === selectedClass);
+      const classObj = safeClasses.find(c => c.id === selectedClass);
       const classNameForQuery = classObj ? classObj.name : selectedClass;
 
       // 1. Sessions
@@ -171,7 +275,8 @@ export default function SmartClassDiaryView({
         `${API_BASE_URL}/api/codecheck/diary/sessions?class_name=${encodeURIComponent(classNameForQuery)}&search=${encodeURIComponent(searchQuery)}`,
       );
       if (resSessions.ok) {
-        const data = await resSessions.json();
+        const rawData = await resSessions.json();
+        const data = normalizeArray(rawData);
         setSessions(data);
         if (data.length > 0 && !selectedAttendanceSessionId) {
           setSelectedAttendanceSessionId(data[0].id);
@@ -181,7 +286,7 @@ export default function SmartClassDiaryView({
       // 2. Competencies
       const resComps = await fetch(apiUrl("/api/codecheck/diary/competencies"));
       if (resComps.ok) {
-        setCompetencies(await resComps.json());
+        setCompetencies(normalizeArray(await resComps.json()));
       }
 
       // 3. Dash metrics
@@ -199,13 +304,13 @@ export default function SmartClassDiaryView({
       // 5. Audit logs
       const resAud = await fetch(apiUrl("/api/audit-logs"));
       if (resAud.ok) {
-        setAuditLogs(await resAud.json());
+        setAuditLogs(normalizeArray(await resAud.json()));
       }
 
       // 6. Observations
       const resObs = await fetch(apiUrl("/api/codecheck/diary/observations"));
       if (resObs.ok) {
-        setObservations(await resObs.json());
+        setObservations(normalizeArray(await resObs.json()));
       }
     } catch (err: any) {
       console.error("Failed fetching diary data:", err?.message || "Unknown error");
@@ -229,11 +334,12 @@ export default function SmartClassDiaryView({
           if (res.ok) return res.json();
           throw new Error("Failed");
         })
-        .then((data) => {
+        .then((rawData) => {
+          const data = normalizeArray(rawData);
           // If no attendance records registered yet, pre-populate students list
           if (data.length === 0) {
             if (students && students.length > 0) {
-              const fromStudents = students.map((s) => ({
+              const fromStudents = safeStudents.map((s) => ({
                 student_name: s.name,
                 status: "P,P,P,P,P",
                 justification: "",
@@ -323,7 +429,7 @@ export default function SmartClassDiaryView({
         const sessionId = editingSessionId || sessionData.id;
 
         // Save Attendance integrated
-        if (attendanceRecords.length > 0 && sessionId) {
+        if (safeAttendanceRecords.length > 0 && sessionId) {
           await fetch(apiUrl("/api/codecheck/diary/attendance"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -355,7 +461,7 @@ export default function SmartClassDiaryView({
     setEditingSessionId(null);
     setFormDate(new Date().toISOString().split("T")[0]);
     // Find name of currently selected class if available
-    const currentClassObj = classes.find(c => c.id === selectedClass);
+    const currentClassObj = safeClasses.find(c => c.id === selectedClass);
     setFormClassName(currentClassObj ? currentClassObj.name : "Turma de Desenvolvimento Web 1A");
     setFormCurricularUnit("Lógica e Estrutura de Repetição");
     setFormDurationHours("4");
@@ -371,7 +477,7 @@ export default function SmartClassDiaryView({
 
     // Initialize attendance for new session with current class students
     if (students && students.length > 0) {
-      setAttendanceRecords(students.map(s => ({
+      setAttendanceRecords(safeStudents.map(s => ({
         student_name: s.name,
         status: "P,P,P,P,P",
         justification: ""
@@ -382,14 +488,14 @@ export default function SmartClassDiaryView({
   };
 
   const createSessionFromActivity = async (activity: any, date: string) => {
-    const classObj = classes.find(c => c.id === selectedClass);
+    const classObj = safeClasses.find(c => c.id === selectedClass);
     const className = classObj ? classObj.name : "Turma Selecionada";
 
     const payload = {
       date: date,
       class_name: className,
       curricular_unit: activity.theme || "Unidade Pedagógica",
-      duration_hours: timeSlots.length || 5,
+      duration_hours: safeTimeSlots.length || 5,
       lesson_topic: activity.title,
       content_taught: `Atividade: ${activity.title}. ${activity.theme || ""}`,
       methodology: "Aplicação de atividade prática orientada.",
@@ -397,7 +503,7 @@ export default function SmartClassDiaryView({
       notes: "Registro gerado via Calendar Drag & Drop.",
       competencies: activity.competence || "",
       status: "Draft",
-      periods: timeSlots.map(s => s.period_number).join(","),
+      periods: safeTimeSlots.map(s => s.period_number).join(","),
     };
 
     try {
@@ -461,13 +567,14 @@ export default function SmartClassDiaryView({
     // Fetch attendance for this session
     fetch(apiUrl(`/api/codecheck/diary/attendance?session_id=${sess.id}`))
       .then(r => r.json())
-      .then(data => {
+      .then(rawData => {
+        const data = normalizeArray(rawData);
         if (data.length > 0) {
           setAttendanceRecords(data);
         } else {
           // Fallback if no records, but try to use current students
           if (students && students.length > 0) {
-             setAttendanceRecords(students.map(s => ({
+             setAttendanceRecords(safeStudents.map(s => ({
               student_name: s.name,
               status: "P,P,P,P,P",
               justification: ""
@@ -576,7 +683,7 @@ export default function SmartClassDiaryView({
 
   // Mark all students present (MÓDULO 3)
   const markAllPresent = () => {
-    const updated = attendanceRecords.map((r) => ({
+    const updated = safeAttendanceRecords.map((r) => ({
       ...r,
       status: "P,P,P,P,P",
       justification: "",
@@ -701,7 +808,7 @@ export default function SmartClassDiaryView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: format,
-          details: `Relatório exportado para classe "${selectedClass}" contendo ${sessions.length} aulas registradas.`,
+          details: `Relatório exportado para classe "${selectedClass}" contendo ${safeSessions.length} aulas registradas.`,
         }),
       });
 
@@ -789,6 +896,8 @@ export default function SmartClassDiaryView({
     }
   };
 
+
+
   return (
     <div
       id="smart-diary-container"
@@ -828,7 +937,7 @@ export default function SmartClassDiaryView({
             className="p-2 border border-gray-300 rounded-lg"
           >
             <option value="">Selecione uma Turma</option>
-            {classes.map((c) => (
+            {safeClasses.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
@@ -839,7 +948,7 @@ export default function SmartClassDiaryView({
             disabled={!selectedClass}
           >
             <option value="">Selecione um Aluno</option>
-            {students.map((s) => (
+            {safeStudents.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
@@ -873,13 +982,87 @@ export default function SmartClassDiaryView({
             className="bg-transparent font-medium text-sm text-gray-800 focus:outline-none"
           >
             <option value="">Selecione uma Turma</option>
-            {classes.map((c) => (
+            {safeClasses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Seletor Visual de Turmas Cadastradas no Sistema */}
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-teal-600" />
+            <h2 className="text-base font-bold text-slate-800">
+              Turmas Cadastradas no Sistema
+            </h2>
+            <span className="bg-teal-100 text-teal-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-teal-200">
+              {safeClasses.length} {safeClasses.length === 1 ? "Turma" : "Turmas"}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-medium">
+            Selecione uma turma abaixo para visualizar e gerenciar o Diário de Classe, frequências, observações e planejamentos.
+          </p>
+        </div>
+
+        {safeClasses.length === 0 ? (
+          <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+            <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+            <p className="text-sm text-slate-500 font-medium">
+              Nenhuma turma cadastrada no sistema ou erro ao carregar as turmas.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {safeClasses.map((c) => {
+              const isSelected = selectedClass === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setSelectedClass(c.id);
+                    // Clear selected student upon changing class
+                    setSelectedStudent("");
+                  }}
+                  className={`flex flex-col text-left p-4 rounded-xl border transition-all duration-200 relative group cursor-pointer ${
+                    isSelected
+                      ? "bg-white border-teal-500 ring-2 ring-teal-500/20 shadow-md"
+                      : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/30 shadow-sm"
+                  }`}
+                >
+                  {isSelected && (
+                    <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-teal-600 text-white shadow-sm animate-fade-in">
+                      <Check className="w-3 h-3" />
+                    </span>
+                  )}
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-teal-600 mb-1">
+                    {c.shift || "Turno Regular"}
+                  </span>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-teal-700 transition-colors line-clamp-1">
+                    {c.name}
+                  </h3>
+                  <p className="text-xs text-slate-600 font-medium mt-1 line-clamp-1">
+                    {c.course || "Desenvolvimento Geral"}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-2 line-clamp-1">
+                    {c.module || "Sem Módulo Cadastrado"}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-3 pt-2 text-[10px] text-slate-500 font-semibold border-t border-slate-100">
+                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                      Semestre {c.semester || "1º"}
+                    </span>
+                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                      Ano {c.year || "2026"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Top Level Navigation Tabs */}
@@ -904,7 +1087,7 @@ export default function SmartClassDiaryView({
           }`}
         >
           <FileText className="w-4 h-4" />
-          Registro de Aulas ({sessions.length})
+          Registro de Aulas ({safeSessions.length})
         </button>
         <button
           onClick={() => setActiveSubTab("attendance")}
@@ -926,7 +1109,7 @@ export default function SmartClassDiaryView({
           }`}
         >
           <Award className="w-4 h-4" />
-          Anotações Pedagógicas ({observations.length})
+          Anotações Pedagógicas ({safeObservations.length})
         </button>
         <button
           onClick={() => setActiveSubTab("calendar")}
@@ -1023,7 +1206,7 @@ export default function SmartClassDiaryView({
               </div>
               <div className="mt-4">
                 <span className="text-3xl font-extrabold text-gray-900">
-                  {dashboardMetrics?.totalClasses || sessions.length}
+                  {dashboardMetrics?.totalClasses || safeSessions.length}
                 </span>
                 <p className="text-xs text-gray-500 mt-1">
                   Carga horária acumulada
@@ -1042,7 +1225,7 @@ export default function SmartClassDiaryView({
               </div>
               <div className="mt-4">
                 <span className="text-3xl font-extrabold text-gray-900">
-                  {sessions.filter((s) => s.status === "Draft").length}
+                  {safeSessions.filter((s) => s.status === "Draft").length}
                 </span>
                 <p className="text-xs text-amber-600 font-medium mt-1">
                   Pendências de registro
@@ -1099,7 +1282,7 @@ export default function SmartClassDiaryView({
               </div>
               <div className="mt-4">
                 <span className="text-3xl font-extrabold text-gray-900">
-                  {observations.length}
+                  {safeObservations.length}
                 </span>
                 <p className="text-xs text-gray-500 mt-1">
                   Apontamentos ativos
@@ -1429,7 +1612,7 @@ export default function SmartClassDiaryView({
                       >
                         <span className="text-[9px] opacity-60 uppercase">H{p}</span>
                         <span className="text-xs">
-                          {timeSlots.find(s => s.period_number === p)?.start_time || "--:--"}
+                          {safeTimeSlots.find(s => s.period_number === p)?.start_time || "--:--"}
                         </span>
                       </button>
                     ))}
@@ -1444,17 +1627,70 @@ export default function SmartClassDiaryView({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
-                  Unidade Curricular / Categoria
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1 flex items-center justify-between">
+                  <span>Unidade Curricular / Categoria *</span>
+                  {currentCourseSuggestions && (
+                    <span className="text-[10px] text-teal-600 font-mono font-semibold normal-case">
+                      Curso: {currentCourseSuggestions}
+                    </span>
+                  )}
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Lógica e Estrutura de Repetição, Arquitetura de Software..."
-                  value={formCurricularUnit}
-                  onChange={(e) => setFormCurricularUnit(e.target.value)}
-                  className="w-full p-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl text-gray-850"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Lógica e Estrutura de Repetição, Arquitetura de Software..."
+                    value={formCurricularUnit}
+                    onChange={(e) => setFormCurricularUnit(e.target.value)}
+                    className="w-full p-2.5 pr-10 text-sm bg-gray-50 border border-gray-200 rounded-xl text-gray-850 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all font-medium"
+                  />
+                  <div className="absolute right-3 top-3 flex items-center gap-1 text-slate-400">
+                    <Layers className="w-4 h-4 text-slate-400" />
+                  </div>
+                </div>
+
+                {/* Suggestions Section */}
+                <div className="mt-2 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-teal-600" />
+                      Unidades Sugeridas para Planejamento
+                    </span>
+                    <span className="text-[9px] text-slate-400 italic">
+                      Clique para preencher o formulário
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto pr-1 custom-scrollbar">
+                    {combinedCurricularSuggestions.length === 0 ? (
+                      <span className="text-[11px] text-slate-400 italic">Digite qualquer unidade curricular acima.</span>
+                    ) : (
+                      combinedCurricularSuggestions.map((unit) => {
+                        const isSelected = formCurricularUnit === unit;
+                        return (
+                          <button
+                            key={unit}
+                            type="button"
+                            onClick={() => setFormCurricularUnit(unit)}
+                            className={`px-2.5 py-1 text-xs rounded-lg transition-all border font-medium ${
+                              isSelected
+                                ? "bg-teal-50 border-teal-300 text-teal-700 font-bold shadow-sm"
+                                : "bg-white border-slate-200 text-slate-700 hover:border-teal-400 hover:text-teal-600"
+                            }`}
+                          >
+                            {unit}
+                          </button>
+                        );
+                      })
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setFormCurricularUnit("")}
+                      className="px-2.5 py-1 text-xs rounded-lg bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-all font-semibold"
+                    >
+                      Limpar Campo
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -1523,7 +1759,7 @@ export default function SmartClassDiaryView({
                     </p>
 
                     <div className="space-y-1.5 mt-3 max-h-40 overflow-y-auto">
-                      {competencies.map((comp) => (
+                      {safeCompetencies.map((comp) => (
                         <label
                           key={comp.id}
                           className="flex items-center gap-2 p-1.5 bg-white rounded border border-gray-150 hover:bg-teal-50 cursor-pointer text-xs"
@@ -1659,14 +1895,14 @@ export default function SmartClassDiaryView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {attendanceRecords.length === 0 ? (
+                      {safeAttendanceRecords.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="px-4 py-6 text-center text-xs text-gray-400 italic">
                             Carregando lista de alunos... certifique-se de que a turma selecionada possui alunos cadastrados.
                           </td>
                         </tr>
                       ) : (
-                        attendanceRecords.map((stud, idx) => (
+                        safeAttendanceRecords.map((stud, idx) => (
                           <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
                             <td className="px-4 py-3">
                               <span className="text-xs font-bold text-gray-800">{stud.student_name}</span>
@@ -1685,7 +1921,7 @@ export default function SmartClassDiaryView({
                                   }
                                   const statusArray = currentStatus.split(",");
                                   const pStat = statusArray[periodIdx] || "P";
-                                  const slot = timeSlots.find((s) => s.period_number === periodNum);
+                                  const slot = safeTimeSlots.find((s) => s.period_number === periodNum);
                                   const timeRange = slot ? ` (${slot.start_time} - ${slot.end_time})` : "";
 
                                   return (
@@ -1764,7 +2000,7 @@ export default function SmartClassDiaryView({
             </form>
           ) : (
             <div className="space-y-4">
-              {sessions.length === 0 ? (
+              {safeSessions.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-2xl border border-gray-200">
                   <span className="text-3xl">📭</span>
                   <h3 className="text-sm font-bold text-gray-700 mt-2">
@@ -1775,7 +2011,7 @@ export default function SmartClassDiaryView({
                   </p>
                 </div>
               ) : (
-                sessions.map((sess) => (
+                safeSessions.map((sess) => (
                   <div
                     key={sess.id}
                     className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in"
@@ -1905,7 +2141,7 @@ export default function SmartClassDiaryView({
                 onChange={(e) => setSelectedAttendanceSessionId(e.target.value)}
                 className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-medium text-gray-800"
               >
-                {sessions.map((s) => (
+                {safeSessions.map((s) => (
                   <option key={s.id} value={s.id}>
                     [{s.date}] {s.lesson_topic.slice(0, 45)}...
                   </option>
@@ -1917,7 +2153,7 @@ export default function SmartClassDiaryView({
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-fade-in">
             <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
               <span className="text-xs font-bold text-gray-500 uppercase">
-                Alunos matriculados ({attendanceRecords.length})
+                Alunos matriculados ({safeAttendanceRecords.length})
               </span>
 
               <div className="flex gap-2">
@@ -1932,12 +2168,12 @@ export default function SmartClassDiaryView({
             </div>
 
             <div className="divide-y divide-gray-150">
-              {attendanceRecords.length === 0 ? (
+              {safeAttendanceRecords.length === 0 ? (
                 <div className="p-8 text-center text-gray-500 text-xs">
                   Aguardando seleção ou populando banco local...
                 </div>
               ) : (
-                attendanceRecords.map((stud, idx) => (
+                safeAttendanceRecords.map((stud, idx) => (
                   <div
                     key={idx}
                     className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors"
@@ -2139,7 +2375,7 @@ export default function SmartClassDiaryView({
                     className="w-full p-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl"
                   >
                     <option value="">Sem vinculação específica</option>
-                    {sessions.map((s) => (
+                    {safeSessions.map((s) => (
                       <option key={s.id} value={s.id}>
                         [{s.date}] {s.lesson_topic}
                       </option>
@@ -2246,12 +2482,12 @@ export default function SmartClassDiaryView({
 
           {/* OBSERVATIONS TIMELINE STREAM */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {observations.length === 0 ? (
+            {safeObservations.length === 0 ? (
               <div className="p-8 text-center bg-white rounded-2xl border border-gray-200 md:col-span-2">
                 Sem anotações pedagógicas registradas.
               </div>
             ) : (
-              observations.map((obs) => (
+              safeObservations.map((obs) => (
                 <div
                   key={obs.id}
                   className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3 animate-fade-in"
@@ -2347,6 +2583,12 @@ export default function SmartClassDiaryView({
       {/* ============================================================== */}
       {activeSubTab === "calendar" && (
         <div id="subtab-calendar" className="space-y-6">
+          {safeTimeSlots.length === 0 && (
+            <div className="p-4 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl mb-4 text-center">
+              Nenhum horário disponível para exibição no calendário.
+            </div>
+          )}
+
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -2359,7 +2601,7 @@ export default function SmartClassDiaryView({
             </div>
             <div className="flex gap-2">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-100 px-2 py-1 rounded">
-                Turma: {classes.find(c => c.id === selectedClass)?.name || "Nenhuma"}
+                Turma: {safeClasses.find(c => c.id === selectedClass)?.name || "Nenhuma"}
               </span>
             </div>
           </div>
@@ -2444,7 +2686,7 @@ export default function SmartClassDiaryView({
                 {Array.from({ length: 30 }).map((_, idx) => {
                   const day = idx + 1;
                   const formattedDate = `2026-06-${day < 10 ? "0" + day : day}`;
-                  const matchSessions = sessions.filter(s => s.date === formattedDate);
+                  const matchSessions = safeSessions.filter(s => s.date === formattedDate);
                   
                   return (
                     <div
@@ -2659,7 +2901,7 @@ export default function SmartClassDiaryView({
             </div>
 
             <div className="divide-y divide-gray-150">
-              {auditLogs.map((log, i) => (
+              {safeAuditLogs.map((log, i) => (
                 <div
                   key={log.id || i}
                   className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -2726,7 +2968,7 @@ export default function SmartClassDiaryView({
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {[1, 2, 3, 4, 5].map((pNum) => {
-                        const slot = timeSlots.find(s => s.period_number === pNum) || {
+                        const slot = safeTimeSlots.find(s => s.period_number === pNum) || {
                           period_number: pNum,
                           start_time: "00:00",
                           end_time: "00:00"

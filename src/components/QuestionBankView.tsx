@@ -20,7 +20,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { apiUrl, safeJsonResponse } from "../config/api";
+import { apiUrl, safeJsonResponse, apiFetch } from "../config/api";
 
 export default function QuestionBankView() {
   const [questions, setQuestions] = useState<any[]>([]);
