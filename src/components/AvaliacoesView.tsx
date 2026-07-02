@@ -29,7 +29,7 @@ import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function AvaliacoesView() {
   const [subTab, setSubTab] = useState<
-    "assessments" | "generator" | "evidence" | "analytics"
+    "assessments" | "generator" | "evidence" | "analytics" | "simulations"
   >("assessments");
 
   // State for Construtor of assessments (Módulo 2)
@@ -85,6 +85,7 @@ export default function AvaliacoesView() {
   );
   const [aiComp, setAiComp] = useState("COMP-02");
   const [aiDifficulty, setAiDifficulty] = useState("Média");
+  const [aiAssessmentModel, setAiAssessmentModel] = useState("Nível Médio");
   const [aiQuestionsCount, setAiQuestionsCount] = useState(3);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiSuggestedExam, setAiSuggestedExam] = useState<any | null>(null);
@@ -132,6 +133,13 @@ export default function AvaliacoesView() {
   const [criticalCompCode, setCriticalCompCode] = useState("COMP-03");
   const [recoveryAdvisedNum, setRecoveryAdvisedNum] = useState(4);
 
+  // Simulation Generator State
+  const [weaknesses, setWeaknesses] = useState<any[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGeneratingSimulation, setIsGeneratingSimulation] = useState(false);
+  const [generatedSimulation, setGeneratedSimulation] = useState<any | null>(null);
+  const [selectedWeaknesses, setSelectedWeaknesses] = useState<string[]>([]);
+
   const handleCreateManual = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) return;
@@ -163,6 +171,7 @@ export default function AvaliacoesView() {
           theme: aiTheme,
           comp: aiComp,
           difficulty: aiDifficulty,
+          model: aiAssessmentModel,
           count: aiQuestionsCount,
         }),
       });
@@ -250,6 +259,89 @@ export default function AvaliacoesView() {
     setNewEvidenceFile("");
   };
 
+  const handleAnalyzeWeaknesses = async () => {
+    setIsAnalyzing(true);
+    try {
+      // Mocking the analytics fetch for now, but in a real scenario we'd call analyticsApi.getCommonErrors
+      setTimeout(() => {
+        setWeaknesses([
+          {
+            id: "W1",
+            topic: "Laços Aninhados",
+            error_rate: 45,
+            description: "Dificuldade em gerenciar variáveis de controle em loops duplos.",
+            comp: "COMP-02",
+          },
+          {
+            id: "W2",
+            topic: "Escopo de Variável",
+            error_rate: 38,
+            description: "Confusão entre variáveis locais e globais dentro de funções.",
+            comp: "COMP-04",
+          },
+          {
+            id: "W3",
+            topic: "Manipulação de Matrizes",
+            error_rate: 52,
+            description: "Erros de indexação 'off-by-one' em arrays multidimensionais.",
+            comp: "COMP-03",
+          },
+        ]);
+        setIsAnalyzing(false);
+      }, 1500);
+    } catch (error) {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleGenerateSimulation = async () => {
+    if (selectedWeaknesses.length === 0) return;
+    setIsGeneratingSimulation(true);
+    try {
+      // API call to generate adaptive simulation
+      const selectedData = weaknesses.filter((w) =>
+        selectedWeaknesses.includes(w.id),
+      );
+      
+      const resp = await fetch(apiUrl("/api/ai/simulations/generate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weaknesses: selectedData,
+          classId: "default_class",
+        }),
+      });
+      
+      // Fallback/Mock for preview
+      setTimeout(() => {
+        setGeneratedSimulation({
+          id: Date.now(),
+          title: `Simulado de Reforço: ${selectedData.map((w) => w.topic).join(", ")}`,
+          description: "Esta bateria foi gerada para atacar pontos de falha recorrentes detectados no seu Analytics.",
+          questions: [
+            {
+              id: 1,
+              title: "Otimização de Matriz",
+              type: "Code",
+              difficulty: "Hard",
+              statement: "Dada uma matriz 3x3, escreva um algoritmo que zere a diagonal secundária garantindo que não haja erros de índice.",
+            },
+            {
+              id: 2,
+              title: "Escopo e Funções",
+              type: "Logic",
+              difficulty: "Medium",
+              statement: "Explique a saída do código abaixo considerando o escopo léxico da variável 'contador'.",
+            }
+          ]
+        });
+        setIsGeneratingSimulation(false);
+      }, 2000);
+    } catch (error) {
+      setIsGeneratingSimulation(false);
+    }
+  };
+
   const handleExportExamPDF = (title: string, competency: string) => {
     const doc = new jsPDF();
     doc.setFontSize(16);
@@ -333,6 +425,16 @@ export default function AvaliacoesView() {
         >
           Gerador Inteligente IA
           {subTab === "generator" && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />
+          )}
+        </button>
+        
+        <button
+          onClick={() => setSubTab("simulations")}
+          className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer ${subTab === "simulations" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}
+        >
+          Simulações Adaptativas
+          {subTab === "simulations" && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />
           )}
         </button>
@@ -549,7 +651,7 @@ export default function AvaliacoesView() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-2">
                 <div className="flex flex-col gap-1.5 md:col-span-2">
                   <label className="text-xs font-mono font-bold text-slate-400 uppercase">
                     Tema/Tópico Pedagógico
@@ -560,6 +662,29 @@ export default function AvaliacoesView() {
                     onChange={(e) => setAiTheme(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-850 px-4 py-2.5 rounded-xl text-xs hover:border-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
                   />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-mono font-bold text-slate-400 uppercase">
+                    Modelo de Avaliação
+                  </label>
+                  <select
+                    value={aiAssessmentModel}
+                    onChange={(e) => {
+                      setAiAssessmentModel(e.target.value);
+                      // Auto-adjust difficulty based on model if needed
+                      if (e.target.value === "Nível Fácil") setAiDifficulty("Fácil");
+                      if (e.target.value === "Nível Médio") setAiDifficulty("Média");
+                      if (e.target.value === "Foco em Lógica") setAiDifficulty("Difícil");
+                    }}
+                    className="w-full bg-slate-900 border border-slate-850 px-4 py-2.5 rounded-xl text-xs hover:border-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer font-semibold"
+                  >
+                    <option value="Nível Fácil">Nível Fácil</option>
+                    <option value="Nível Médio">Nível Médio</option>
+                    <option value="Foco em Lógica">Foco em Lógica</option>
+                    <option value="Simulado SAEP">Simulado SAEP</option>
+                    <option value="Recuperação Paralela">Recuperação Paralela</option>
+                  </select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -894,6 +1019,193 @@ export default function AvaliacoesView() {
                   </button>
                 </form>
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* TAB 5: AI Simulation Generator (Adaptive) */}
+        {subTab === "simulations" && (
+          <motion.div
+            key="simulations"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex flex-col gap-6"
+          >
+            <div className="p-6 rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col gap-6">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">
+                    <RefreshCw className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      Gerador de Simulações Adaptativas IA
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Crie exercícios focados nas dificuldades reais da sua turma extraídas do Analytics.
+                    </p>
+                  </div>
+                </div>
+
+                {weaknesses.length === 0 && !isAnalyzing && (
+                  <button
+                    onClick={handleAnalyzeWeaknesses}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/10 cursor-pointer"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Analisar Fragilidades da Turma
+                  </button>
+                )}
+              </div>
+
+              {isAnalyzing && (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-white">Cruzando dados do Analytics...</p>
+                    <p className="text-xs text-slate-500 mt-1">Identificando padrões de erro e lacunas de competência.</p>
+                  </div>
+                </div>
+              )}
+
+              {weaknesses.length > 0 && !generatedSimulation && (
+                <div className="flex flex-col gap-6 animate-fade-in">
+                  <div className="bg-indigo-500/5 border border-indigo-500/10 p-4 rounded-xl">
+                    <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest block mb-2">
+                      Diagnóstico de Performance
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Detectamos que a turma possui 3 tópicos críticos com taxa de erro acima de 35%. 
+                      Selecione abaixo quais deseja priorizar no simulado adaptativo.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {weaknesses.map((w) => (
+                      <button
+                        key={w.id}
+                        onClick={() => {
+                          if (selectedWeaknesses.includes(w.id)) {
+                            setSelectedWeaknesses(selectedWeaknesses.filter(id => id !== w.id));
+                          } else {
+                            setSelectedWeaknesses([...selectedWeaknesses, w.id]);
+                          }
+                        }}
+                        className={`p-4 rounded-xl border text-left transition-all flex flex-col gap-2 ${
+                          selectedWeaknesses.includes(w.id)
+                            ? "bg-indigo-500/10 border-indigo-500/50"
+                            : "bg-slate-900 border-slate-800 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-white">{w.topic}</span>
+                          <span className={`text-[10px] font-mono font-bold ${w.error_rate > 50 ? 'text-rose-400' : 'text-amber-400'}`}>
+                            {w.error_rate}% erro
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 line-clamp-2">
+                          {w.description}
+                        </p>
+                        <div className="mt-auto pt-2 flex items-center justify-between">
+                          <span className="text-[9px] font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
+                            {w.comp}
+                          </span>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                            selectedWeaknesses.includes(w.id) 
+                              ? "bg-indigo-500 border-indigo-500" 
+                              : "border-slate-700"
+                          }`}>
+                            {selectedWeaknesses.includes(w.id) && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end pt-4 border-t border-slate-900">
+                    <button
+                      onClick={handleGenerateSimulation}
+                      disabled={selectedWeaknesses.length === 0 || isGeneratingSimulation}
+                      className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-600 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-indigo-500/10"
+                    >
+                      {isGeneratingSimulation ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Construindo Itens de Reforço...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Gerar Simulado de Reforço IA
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {generatedSimulation && (
+                <div className="flex flex-col gap-6 animate-scale-up">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded uppercase">
+                        Simulado Adaptativo Pronto
+                      </span>
+                      <h4 className="text-lg font-bold text-white mt-1.5">
+                        {generatedSimulation.title}
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {generatedSimulation.description}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setGeneratedSimulation(null)}
+                        className="px-3 py-2 text-slate-400 hover:text-white text-xs font-bold"
+                      >
+                        Refazer Análise
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAssessments([
+                            ...assessments,
+                            {
+                              id: Date.now(),
+                              title: generatedSimulation.title,
+                              type: "Simulado Adaptativo",
+                              uc: "Recuperação de Performance",
+                              status: "Publicado",
+                              questionsCount: generatedSimulation.questions.length,
+                              competency: "Múltiplas",
+                            },
+                          ]);
+                          setSubTab("assessments");
+                          setGeneratedSimulation(null);
+                          setWeaknesses([]);
+                          setSelectedWeaknesses([]);
+                        }}
+                        className="px-4 py-2 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20"
+                      >
+                        Publicar para Turma
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {generatedSimulation.questions.map((q: any) => (
+                      <div key={q.id} className="p-4 rounded-xl bg-slate-900/50 border border-slate-800">
+                        <div className="flex justify-between mb-2">
+                          <span className="text-[10px] font-mono text-indigo-400 font-bold">{q.type === 'Code' ? 'Desafio de Código' : 'Análise Lógica'}</span>
+                          <span className="text-[10px] font-mono text-slate-500 uppercase">{q.difficulty}</span>
+                        </div>
+                        <h5 className="text-sm font-bold text-white mb-2">{q.title}</h5>
+                        <p className="text-xs text-slate-400 leading-relaxed">{q.statement}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

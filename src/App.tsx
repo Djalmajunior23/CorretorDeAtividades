@@ -351,7 +351,9 @@ export default function App() {
       })
       .then(data => setSandboxStatus(data))
       .catch(e => {
-        console.warn("Sandbox connection failed, using fallback:", e?.message || "Unknown error");
+        if (import.meta.env.DEV) {
+          console.warn("Sandbox connection failed, using fallback:", e?.message || "Unknown error");
+        }
         setSandboxStatus({
           success: false,
           available: false,
@@ -765,12 +767,26 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      console.warn("DB offline fallback reading active", err?.message || "Unknown error");
+      const message = String(err?.message || err);
+      if (
+        message.includes("chrome-extension://") ||
+        message.includes("aistudio.google.com") ||
+        message.includes("invalid extension")
+      ) {
+        if (import.meta.env.DEV) {
+          console.warn("Erro externo ignorado:", message);
+        }
+        return; // Ignore external errors from AI Studio
+      }
+
+      if (import.meta.env.DEV) {
+        console.warn("DB offline fallback reading active", message);
+      }
       setSubmissionRetryCount(prev => {
         const nextCount = prev + 1;
         if (nextCount >= 1) { // retry máximo 1
           setSubmissionsPollActive(false); // não fazer polling infinito quando houver erro
-          setSubmissionsError("Conexão com o servidor perdida. Tentativas suspensas.");
+          setSubmissionsError("Não foi possível carregar dados do servidor. Tentando modo temporário de leitura local.");
         }
         return nextCount;
       });
@@ -1292,6 +1308,15 @@ export default function App() {
                       <option value="rust">Rust (Análise Sintática, Sandbox no Local Indisponível)</option>
                       <option value="kotlin">Kotlin (Análise Sintática, Sandbox no Local Indisponível)</option></select>
 
+                    {(language === "c" || language === "cpp") && (
+                      <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex gap-2 items-start">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-200 font-sans">
+                          Execução de C/C++ ainda não está disponível neste servidor. Use Python ou JavaScript nesta versão inicial.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="mt-4">
                       <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Turma Base</label>
                       <select value={selectedCorrectorClass} onChange={e => { setSelectedCorrectorClass(e.target.value); setShowCorrectorStudentWarning(false); }} className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer">
@@ -1706,13 +1731,18 @@ export default function App() {
                     {/* Run Trigger */}
                     <button
                       onClick={handleRunCorrection}
-                      disabled={correcting}
+                      disabled={correcting || language === "c" || language === "cpp"}
                       className="w-full mt-2 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 font-bold text-white shadow-xl shadow-emerald-500/10 flex items-center justify-center gap-2 transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                     >
                       {correcting ? (
                         <>
                           <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                           <span>PROCESSANDO CORREÇÃO AUTOMÁTICA...</span>
+                        </>
+                      ) : language === "c" || language === "cpp" ? (
+                        <>
+                          <AlertTriangle className="w-5 h-5" />
+                          <span>LINGUAGEM INDISPONÍVEL NESTA VERSÃO</span>
                         </>
                       ) : (
                         <>
@@ -1996,37 +2026,84 @@ export default function App() {
                           <div className="flex flex-col gap-4">
                             
                             {/* Stage 1: Security Audit */}
-                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
-                              <div className="mt-0.5">
+                            <motion.div 
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ 
+                                opacity: 1, 
+                                x: 0,
+                                scale: currentStage === "security" ? 1.02 : 1,
+                                borderColor: currentStage === "security" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
+                              }}
+                              className={`flex gap-4 items-start p-4 rounded-xl border transition-all duration-500 ${
+                                currentStage === "security" ? "bg-emerald-500/5 shadow-[0_0_15px_rgba(16,185,129,0.05)]" : "bg-[#030712]/30"
+                              }`}
+                            >
+                              <div className="mt-0.5 relative">
                                 {currentStage === "security" ? (
-                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                  <motion.div 
+                                    animate={{ rotate: 360 }}
+                                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                  />
                                 ) : (
-                                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                  >
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                  </motion.div>
                                 )}
                               </div>
                               <div className="flex-1">
-                                <h4 className="text-xs font-bold text-white font-mono">1. AUDITORIA PREVENTIVA DE SEGURANÇA IMEDIATA</h4>
+                                <h4 className={`text-xs font-bold font-mono transition-colors duration-300 ${currentStage === "security" ? "text-emerald-400" : "text-white"}`}>
+                                  1. AUDITORIA PREVENTIVA DE SEGURANÇA IMEDIATA
+                                </h4>
                                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                                   {currentStage === "security" 
                                     ? "Examinando script em busca de chamadas de system, hacks, loops infinitos de escape ou memory exhaustion..."
                                     : "Validação estática de ameaça concluída sob isolamento rigoroso de sandbox de container."}
                                 </p>
                               </div>
-                            </div>
+                            </motion.div>
 
                             {/* Stage 2: Unit test cases suite execution */}
-                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
-                              <div className="mt-0.5">
+                            <motion.div 
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ 
+                                opacity: 1, 
+                                x: 0,
+                                scale: currentStage === "tests" ? 1.02 : 1,
+                                borderColor: currentStage === "tests" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
+                              }}
+                              transition={{ delay: 0.1 }}
+                              className={`flex gap-4 items-start p-4 rounded-xl border transition-all duration-500 ${
+                                currentStage === "tests" ? "bg-emerald-500/5 shadow-[0_0_15px_rgba(16,185,129,0.05)]" : "bg-[#030712]/30"
+                              }`}
+                            >
+                              <div className="mt-0.5 relative">
                                 {currentStage === "security" ? (
                                   <Clock className="w-5 h-5 text-slate-600 shrink-0" />
                                 ) : currentStage === "tests" ? (
-                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                  <motion.div 
+                                    animate={{ rotate: 360 }}
+                                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                  />
                                 ) : (
-                                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                  >
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                  </motion.div>
                                 )}
                               </div>
                               <div className="flex-1">
-                                <h4 className="text-xs font-bold text-white font-mono">2. EXECUÇÃO DOS CASOS DE TESTES UNITÁRIOS ({testCases.length} INTÂNCIAST)</h4>
+                                <h4 className={`text-xs font-bold font-mono transition-colors duration-300 ${currentStage === "tests" ? "text-emerald-400" : "text-white"}`}>
+                                  2. EXECUÇÃO DOS CASOS DE TESTES UNITÁRIOS ({testCases.length} INSTÂNCIAS)
+                                </h4>
                                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                                   {currentStage === "security" 
                                     ? "No aguardo da liberação estática..." 
@@ -2038,29 +2115,59 @@ export default function App() {
                                 {currentStage === "tests" && (
                                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                                     {testCases.map((_, i) => (
-                                      <span key={i} className="px-2.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 animate-pulse flex items-center gap-1.5 shadow-[0_0_8px_rgba(16,185,129,0.05)]">
+                                      <motion.span 
+                                        key={i} 
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: i * 0.1 }}
+                                        className="px-2.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1.5 shadow-[0_0_8px_rgba(16,185,129,0.05)]"
+                                      >
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
                                         Teste #{i + 1} Rodando...
-                                      </span>
+                                      </motion.span>
                                     ))}
                                   </div>
                                 )}
                               </div>
-                            </div>
+                            </motion.div>
 
                             {/* Stage 3: Static rules analyzer */}
-                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
-                              <div className="mt-0.5">
+                            <motion.div 
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ 
+                                opacity: 1, 
+                                x: 0,
+                                scale: currentStage === "quality" ? 1.02 : 1,
+                                borderColor: currentStage === "quality" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
+                              }}
+                              transition={{ delay: 0.2 }}
+                              className={`flex gap-4 items-start p-4 rounded-xl border transition-all duration-500 ${
+                                currentStage === "quality" ? "bg-emerald-500/5 shadow-[0_0_15px_rgba(16,185,129,0.05)]" : "bg-[#030712]/30"
+                              }`}
+                            >
+                              <div className="mt-0.5 relative">
                                 {["security", "tests"].includes(currentStage) ? (
                                   <Clock className="w-5 h-5 text-slate-600 shrink-0" />
                                 ) : currentStage === "quality" ? (
-                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                  <motion.div 
+                                    animate={{ rotate: 360 }}
+                                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                  />
                                 ) : (
-                                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                  >
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                                  </motion.div>
                                 )}
                               </div>
                               <div className="flex-1">
-                                <h4 className="text-xs font-bold text-white font-mono">3. AVALIAÇÃO DE COMPONENTES DE QUALIDADE</h4>
+                                <h4 className={`text-xs font-bold font-mono transition-colors duration-300 ${currentStage === "quality" ? "text-emerald-400" : "text-white"}`}>
+                                  3. AVALIAÇÃO DE COMPONENTES DE QUALIDADE
+                                </h4>
                                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                                   {["security", "tests"].includes(currentStage)
                                     ? "Pendente da conclusão da suite dinâmica..."
@@ -2069,26 +2176,44 @@ export default function App() {
                                       : "Estudos de arquitetura e cobertura sintática finalizados."}
                                 </p>
                               </div>
-                            </div>
+                            </motion.div>
 
                             {/* Stage 4: Generative Pedagogical Feedback synthesis with Gemini AI */}
-                            <div className="flex gap-4 items-start bg-[#030712]/30 p-4 rounded-xl border border-[#1e295b]/10 transition-colors">
-                              <div className="mt-0.5">
+                            <motion.div 
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ 
+                                opacity: 1, 
+                                x: 0,
+                                scale: currentStage === "feedback" ? 1.02 : 1,
+                                borderColor: currentStage === "feedback" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
+                              }}
+                              transition={{ delay: 0.3 }}
+                              className={`flex gap-4 items-start p-4 rounded-xl border transition-all duration-500 ${
+                                currentStage === "feedback" ? "bg-emerald-500/5 shadow-[0_0_15px_rgba(16,185,129,0.05)]" : "bg-[#030712]/30"
+                              }`}
+                            >
+                              <div className="mt-0.5 relative">
                                 {["security", "tests", "quality"].includes(currentStage) ? (
                                   <Clock className="w-5 h-5 text-slate-600 shrink-0" />
                                 ) : (
-                                  <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                                  <motion.div 
+                                    animate={{ rotate: 360 }}
+                                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                  />
                                 )}
                               </div>
                               <div className="flex-1">
-                                <h4 className="text-xs font-bold text-white font-mono">4. SÍNTESE DE FEEDBACK PEDAGÓGICO DE APRENDIZAGEM</h4>
+                                <h4 className={`text-xs font-bold font-mono transition-colors duration-300 ${currentStage === "feedback" ? "text-emerald-400" : "text-white"}`}>
+                                  4. SÍNTESE DE FEEDBACK PEDAGÓGICO DE APRENDIZAGEM
+                                </h4>
                                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                                   {["security", "tests", "quality"].includes(currentStage)
                                     ? "Aguardando geração do scorecard..."
                                     : "Acionando barramento de IA Local para gerar orientações construtivas baseadas no erro do discente..."}
                                 </p>
                               </div>
-                            </div>
+                            </motion.div>
 
                           </div>
                         </div>

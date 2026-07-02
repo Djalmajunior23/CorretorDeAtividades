@@ -88,14 +88,14 @@ export default function MateriaisDidaticosView() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [tRes, mRes] = await Promise.all([
-        fetch(apiUrl("/api/educational-templates")),
-        fetch(apiUrl("/api/materials")),
+      const [tData, mData] = await Promise.all([
+        apiFetch("/api/educational-templates"),
+        apiFetch("/api/materials"),
       ]);
-      setTemplates(await tRes.json());
-      setMaterials(await mRes.json());
-    } catch (e) {
-      toast.error("Erro ao carregar dados.");
+      setTemplates(tData);
+      setMaterials(mData);
+    } catch (e: any) {
+      toast.error("Não foi possível carregar os materiais do servidor.");
     } finally {
       setLoading(false);
     }
@@ -104,21 +104,20 @@ export default function MateriaisDidaticosView() {
   const generateMaterial = async () => {
     setIsGenerating(true);
     try {
-      const res = await fetch(apiUrl("/api/materials/generate"), {
+      const data = await apiFetch("/api/materials/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-      const data = await res.json();
-      if (data.success) {
+      if (data.success || data.id) {
         toast.success("Material gerado com sucesso!");
         setActiveTab("materials");
         fetchData();
       } else {
-        throw new Error(data.error);
+        throw new Error(data.error || "Erro desconhecido");
       }
     } catch (e) {
-      toast.error("Erro ao gerar material.");
+      toast.error("Não foi possível gerar o material agora. Tente novamente em instantes.");
     } finally {
       setIsGenerating(false);
     }
@@ -126,7 +125,7 @@ export default function MateriaisDidaticosView() {
 
   const approveMaterial = async (id: string) => {
     try {
-      await fetch(apiUrl(`/api/materials/${id}/approve`), { method: "POST" });
+      await apiFetch(`/api/materials/${id}/approve`, { method: "POST" });
       toast.success("Material aprovado.");
       fetchData();
     } catch (e) {

@@ -22,6 +22,17 @@ import {
   Bookmark
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell
+} from "recharts";
 
 interface DashboardViewProps {
   onNavigate: (tab: string) => void;
@@ -38,6 +49,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
     recent_corrections: [],
     needy_students: [],
     recent_reports: [],
+    weekly_distribution: [],
     status_ia: "Offline",
     status_ocr: "Operacional",
     status_sandbox: "Operacional"
@@ -227,6 +239,89 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
             Ver Área de Correção
             <ChevronRight className="w-4 h-4" />
           </div>
+        </div>
+      </div>
+
+      {/* Weekly Activity Chart */}
+      <div className="p-6 rounded-2xl bg-[#0f172a] border border-slate-800 shadow-2xl">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-lg font-bold text-white font-mono uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" />
+              Distribuição Semanal de Atividades
+            </h3>
+            <p className="text-xs text-slate-400">
+              Resumo comparativo entre correções concluídas e pendências nos últimos 7 dias.
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-[10px] font-mono font-bold uppercase tracking-tight">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-emerald-500"></div>
+              <span className="text-emerald-400">Concluídas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-slate-700"></div>
+              <span className="text-slate-500">Pendentes</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data.weekly_distribution && data.weekly_distribution.length > 0 ? data.weekly_distribution : [
+                { day: "Seg", completed: 0, pending: 0 },
+                { day: "Ter", completed: 0, pending: 0 },
+                { day: "Qua", completed: 0, pending: 0 },
+                { day: "Qui", completed: 0, pending: 0 },
+                { day: "Sex", completed: 0, pending: 0 },
+                { day: "Sáb", completed: 0, pending: 0 },
+                { day: "Dom", completed: 0, pending: 0 },
+              ]}
+              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              barGap={8}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis 
+                dataKey="day" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                dy={10}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+              />
+              <Tooltip 
+                cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                contentStyle={{ 
+                  backgroundColor: '#0f172a', 
+                  border: '1px solid #1e293b', 
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  fontFamily: 'monospace'
+                }}
+                itemStyle={{ color: '#fff' }}
+              />
+              <Bar 
+                dataKey="completed" 
+                name="Concluídas" 
+                fill="#10b981" 
+                radius={[4, 4, 0, 0]} 
+                barSize={32}
+              />
+              <Bar 
+                dataKey="pending" 
+                name="Pendentes" 
+                fill="#334155" 
+                radius={[4, 4, 0, 0]} 
+                barSize={32}
+              />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   BarChart3,
   TrendingUp,
@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import {
   LineChart,
@@ -30,11 +32,13 @@ import {
 } from "recharts";
 
 export default function EducationalAnalyticsView() {
+  const reportRef = useRef<HTMLDivElement>(null);
   const [overview, setOverview] = useState<any>(null);
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -73,6 +77,55 @@ export default function EducationalAnalyticsView() {
     }
   };
 
+  const handleExportPDF = async () => {
+    if (!reportRef.current) return;
+    setExporting(true);
+    const toastId = toast.loading("Gerando PDF formatado...");
+
+    try {
+      // Temporarily add some padding and fix width for better capture if needed
+      // But for now let's try direct capture
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#020617",
+        logging: false,
+        onclone: (clonedDoc) => {
+          // You can modify the cloned document before capture here if needed
+          const el = clonedDoc.getElementById("report-content");
+          if (el) el.style.padding = "40px";
+          
+          // Hide elements that shouldn't be in the PDF
+          const noPrintElements = clonedDoc.querySelectorAll(".no-print");
+          noPrintElements.forEach(el => {
+            (el as HTMLElement).style.display = "none";
+          });
+        },
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Relatorio_Analytics_${new Date().toISOString().split("T")[0]}.pdf`);
+
+      toast.success("Relatório exportado com sucesso!", { id: toastId });
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao exportar PDF.", { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs animate-pulse">
@@ -82,7 +135,11 @@ export default function EducationalAnalyticsView() {
   }
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in duration-700">
+    <div
+      ref={reportRef}
+      id="report-content"
+      className="flex flex-col gap-8 animate-in fade-in duration-700 p-1"
+    >
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold text-white tracking-tight font-display">
@@ -92,7 +149,7 @@ export default function EducationalAnalyticsView() {
             Transformando correções em indicadores estratégicos de aprendizagem.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 no-print">
           <button
             onClick={recalculate}
             disabled={recalculating}
@@ -103,8 +160,15 @@ export default function EducationalAnalyticsView() {
             />
             {recalculating ? "Processando..." : "Atualizar Analytics"}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-all">
-            <Download className="w-4 h-4" /> Exportar Relatório
+          <button
+            onClick={handleExportPDF}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-all disabled:opacity-50"
+          >
+            <Download
+              className={`w-4 h-4 ${exporting ? "animate-bounce" : ""}`}
+            />
+            {exporting ? "Exportando..." : "Exportar Relatório"}
           </button>
         </div>
       </div>

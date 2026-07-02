@@ -40,9 +40,19 @@ import multer from "multer";
 import AdmZip from "adm-zip";
 import * as xlsx from "xlsx";
 import PDFDocument from "pdfkit";
+import { GoogleGenAI, Type } from "@google/genai";
 
 dns.setDefaultResultOrder("ipv4first");
 dotenv.config();
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      "User-Agent": "aistudio-build",
+    },
+  },
+});
 
 const { Pool } = pg;
 const app = express();
@@ -1541,6 +1551,7 @@ async function initDatabase() {
         notes TEXT,
         competencies TEXT,
         status VARCHAR(50) DEFAULT 'Draft',
+        periods TEXT DEFAULT '1,2,3,4,5',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -1599,6 +1610,29 @@ async function initDatabase() {
         user_id VARCHAR(100)
       );
 
+      CREATE TABLE IF NOT EXISTS class_time_slots (
+        id SERIAL PRIMARY KEY,
+        period_number INTEGER UNIQUE NOT NULL,
+        start_time VARCHAR(10) NOT NULL,
+        end_time VARCHAR(10) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Seed default time slots if table is empty
+    const slotsCheck = await pool.query("SELECT COUNT(*) FROM class_time_slots");
+    if (parseInt(slotsCheck.rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO class_time_slots (period_number, start_time, end_time) VALUES
+        (1, '08:00', '08:50'),
+        (2, '08:50', '09:40'),
+        (3, '10:00', '10:50'),
+        (4, '10:50', '11:40'),
+        (5, '11:40', '12:30')
+      `);
+    }
+
+    await pool.query(`
       -- ============================================
       -- Módulo 12: Gestor de Competências (Fase 11)
       -- ============================================
@@ -4559,6 +4593,63 @@ app.post("/api/materials/generate", async (req, res) => {
       ai_available: false,
       fallback_used: true,
       provider: "local"
+    });
+  }
+});
+
+app.post("/api/ai/simulations/generate", async (req, res) => {
+  const { weaknesses, classId } = req.body || {};
+
+  if (!weaknesses || !Array.isArray(weaknesses) || weaknesses.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: "Fragilidades não fornecidas.",
+    });
+  }
+
+  try {
+    const weaknessesStr = weaknesses.map(w => `- Tópico: ${w.topic}. Descrição: ${w.description}. Taxa de Erro: ${w.error_rate}%. Competência: ${w.comp}`).join("\n");
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: `Você é um especialista em pedagogia técnica de alto nível. Com base nas seguintes fragilidades detectadas em uma turma de desenvolvimento de sistemas, gere um simulado adaptativo de reforço focado em superar esses obstáculos.
+
+Fragilidades Detectadas:
+${weaknessesStr}
+
+Instruções:
+1. O simulado deve conter de 3 a 5 questões desafiadoras.
+2. Cada questão deve atacar diretamente uma ou mais fragilidades listadas.
+3. Use uma linguagem técnica precisa, mas didática.
+4. Inclua desafios de código (type: "Code") e questões de lógica/arquitetura (type: "Logic").
+
+Retorne obrigatoriamente um JSON puro seguindo este esquema exato:
+{
+  "title": "Título do Simulado",
+  "description": "Descrição explicando por que este simulado foi gerado com base nos dados analisados",
+  "questions": [
+    { 
+      "id": number, 
+      "title": "Título da Questão", 
+      "type": "Code" | "Logic", 
+      "difficulty": "Easy" | "Medium" | "Hard", 
+      "statement": "Enunciado completo da questão" 
+    }
+  ]
+}`,
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    const result = JSON.parse(response.text);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Simulation Generation Error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Falha ao gerar simulado adaptativo.",
+      details: error.message,
     });
   }
 });
@@ -8353,7 +8444,7 @@ app.get("/api/codecheck/diary/sessions", async (req, res) => {
 
 app.post("/api/codecheck/diary/sessions", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_SMART_CLASS_DIARY) return res.status(403).json({ error: "Desativado" });
-  const { date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status } = req.body;
+  const { date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, periods } = req.body;
   const id = crypto.randomUUID();
 
   const newSession = {
@@ -8369,15 +8460,16 @@ app.post("/api/codecheck/diary/sessions", async (req, res) => {
     notes,
     competencies: competencies || "",
     status: status || "Draft",
+    periods: periods || "1,2,3,4,5",
     created_at: new Date().toISOString()
   };
 
   if (pool) {
     try {
       await pool.query(
-        `INSERT INTO class_sessions (id, date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [id, newSession.date, newSession.class_name, newSession.curricular_unit, newSession.duration_hours, newSession.lesson_topic, newSession.content_taught, newSession.methodology, newSession.resources_used, newSession.notes, newSession.competencies, newSession.status]
+        `INSERT INTO class_sessions (id, date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, periods) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [id, newSession.date, newSession.class_name, newSession.curricular_unit, newSession.duration_hours, newSession.lesson_topic, newSession.content_taught, newSession.methodology, newSession.resources_used, newSession.notes, newSession.competencies, newSession.status, newSession.periods]
       );
       logAudit(req.query.userId?.toString() || "teacher", "CREATE_CLASS_SESSION", `Assigned "${lesson_topic}" to class "${class_name}"`);
       return res.json(newSession);
@@ -8395,15 +8487,15 @@ app.post("/api/codecheck/diary/sessions", async (req, res) => {
 app.put("/api/codecheck/diary/sessions/:id", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_SMART_CLASS_DIARY) return res.status(403).json({ error: "Desativado" });
   const { id } = req.params;
-  const { date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status } = req.body;
+  const { date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, periods } = req.body;
 
   if (pool) {
     try {
       await pool.query(
         `UPDATE class_sessions 
-         SET date=$1, class_name=$2, curricular_unit=$3, duration_hours=$4, lesson_topic=$5, content_taught=$6, methodology=$7, resources_used=$8, notes=$9, competencies=$10, status=$11
-         WHERE id=$12`,
-        [date, class_name, curricular_unit, parseInt(duration_hours), lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, id]
+         SET date=$1, class_name=$2, curricular_unit=$3, duration_hours=$4, lesson_topic=$5, content_taught=$6, methodology=$7, resources_used=$8, notes=$9, competencies=$10, status=$11, periods=$12
+         WHERE id=$13`,
+        [date, class_name, curricular_unit, parseInt(duration_hours), lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, periods, id]
       );
       logAudit(req.query.userId?.toString() || "teacher", "UPDATE_CLASS_SESSION", `Modified class session ID: ${id}`);
       return res.json({ success: true, id });
@@ -8427,7 +8519,8 @@ app.put("/api/codecheck/diary/sessions/:id", async (req, res) => {
       resources_used,
       notes,
       competencies,
-      status
+      status,
+      periods
     };
     logAudit(req.query.userId?.toString() || "teacher", "UPDATE_CLASS_SESSION", `Modified class session ID: ${id} (InMemory Mode)`);
     return res.json(inMemoryClassSessions[idx]);
@@ -8824,6 +8917,50 @@ app.get("/api/codecheck/diary/integrations", async (req, res) => {
     intervention_plans: plans,
     learning_paths: paths
   });
+});
+
+app.get("/api/codecheck/diary/time-slots", async (req, res) => {
+  if (!FEATURE_FLAGS.ENABLE_SMART_CLASS_DIARY) return res.status(403).json({ error: "Desativado" });
+  if (pool) {
+    try {
+      const result = await pool.query("SELECT * FROM class_time_slots ORDER BY period_number ASC");
+      return res.json(result.rows);
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erro ao buscar horários" });
+    }
+  }
+  // InMemory fallback
+  return res.json([
+    { period_number: 1, start_time: "08:00", end_time: "08:50" },
+    { period_number: 2, start_time: "08:50", end_time: "09:40" },
+    { period_number: 3, start_time: "10:00", end_time: "10:50" },
+    { period_number: 4, start_time: "10:50", end_time: "11:40" },
+    { period_number: 5, start_time: "11:40", end_time: "12:30" },
+  ]);
+});
+
+app.post("/api/codecheck/diary/time-slots", async (req, res) => {
+  if (!FEATURE_FLAGS.ENABLE_SMART_CLASS_DIARY) return res.status(403).json({ error: "Desativado" });
+  const { slots } = req.body; 
+  if (pool) {
+    try {
+      for (const slot of slots) {
+        await pool.query(
+          `INSERT INTO class_time_slots (period_number, start_time, end_time) 
+           VALUES ($1, $2, $3) 
+           ON CONFLICT (period_number) 
+           DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
+          [slot.period_number, slot.start_time, slot.end_time]
+        );
+      }
+      return res.json({ success: true });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erro ao salvar horários" });
+    }
+  }
+  return res.json({ success: true });
 });
 
 // ============================================

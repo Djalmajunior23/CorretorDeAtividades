@@ -1182,6 +1182,16 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         ];
       }
 
+      const weekly_distribution = [
+        { day: "Seg", completed: 12, pending: 4 },
+        { day: "Ter", completed: 19, pending: 7 },
+        { day: "Qua", completed: 15, pending: 12 },
+        { day: "Qui", completed: 22, pending: 5 },
+        { day: "Sex", completed: 30, pending: 8 },
+        { day: "Sáb", completed: 8, pending: 2 },
+        { day: "Dom", completed: 3, pending: 1 },
+      ];
+
       res.json({
         total_classes,
         total_students,
@@ -1191,6 +1201,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         recent_corrections,
         needy_students,
         recent_reports,
+        weekly_distribution,
         status_ia: process.env.GEMINI_API_KEY ? "Operacional" : "Offline",
         status_ocr: "Operacional",
         status_sandbox: "Operacional",

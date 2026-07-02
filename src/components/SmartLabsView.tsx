@@ -70,9 +70,45 @@ export default function SmartLabsView() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [currentClass, setCurrentClass] = useState("Turma A - Engenharia");
 
+  const [newLabData, setNewLabData] = useState({
+    title: "",
+    description: "",
+    topic: "Lógica de Programação",
+    language: "python",
+    difficulty: "medium",
+    statement: "",
+  });
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleCreateManual = async () => {
+    if (!newLabData.title || !newLabData.statement) {
+      toast.error("Título e Enunciado são obrigatórios.");
+      return;
+    }
+    try {
+      const res = await fetch(apiUrl("/api/smart-labs"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newLabData,
+          class_name: currentClass,
+          rubric: { sintaxe: 30, logica: 40, performance: 30 },
+          test_cases: [],
+          learning_objectives: [],
+        }),
+      });
+      if (res.ok) {
+        toast.success("Laboratório criado com sucesso!");
+        setShowCreateModal(false);
+        fetchData();
+      }
+    } catch (e) {
+      toast.error("Erro ao criar laboratório.");
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -296,6 +332,112 @@ export default function SmartLabsView() {
             className={currentClass}
             onClose={() => setShowSettingsModal(false)}
           />
+        )}
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#030712]/90 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-slate-900 border border-slate-800 rounded-[40px] w-full max-w-2xl p-10 overflow-hidden shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar"
+            >
+              <div className="mb-8">
+                <h3 className="text-2xl font-bold text-white tracking-tight">
+                  Novo Laboratório
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">Configure um novo ambiente de desafio para sua turma.</p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase">Título</label>
+                    <input 
+                      type="text" 
+                      value={newLabData.title}
+                      onChange={e => setNewLabData({...newLabData, title: e.target.value})}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all"
+                      placeholder="Ex: Algoritmos de Ordenação"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase">Linguagem</label>
+                    <select 
+                      value={newLabData.language}
+                      onChange={e => setNewLabData({...newLabData, language: e.target.value})}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all appearance-none"
+                    >
+                      <option value="python">Python</option>
+                      <option value="javascript">JavaScript</option>
+                      <option value="c">C/C++</option>
+                      <option value="java">Java</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase">Tópico</label>
+                    <input 
+                      type="text" 
+                      value={newLabData.topic}
+                      onChange={e => setNewLabData({...newLabData, topic: e.target.value})}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all"
+                      placeholder="Ex: Estruturas de Dados"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase">Dificuldade</label>
+                    <select 
+                      value={newLabData.difficulty}
+                      onChange={e => setNewLabData({...newLabData, difficulty: e.target.value})}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all appearance-none"
+                    >
+                      <option value="easy">Fácil</option>
+                      <option value="medium">Médio</option>
+                      <option value="hard">Difícil</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase">Descrição Curta</label>
+                  <input 
+                    type="text" 
+                    value={newLabData.description}
+                    onChange={e => setNewLabData({...newLabData, description: e.target.value})}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all"
+                    placeholder="Breve descrição do laboratório"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase">Enunciado / Instruções (Markdown)</label>
+                  <textarea 
+                    rows={5}
+                    value={newLabData.statement}
+                    onChange={e => setNewLabData({...newLabData, statement: e.target.value})}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all resize-none"
+                    placeholder="Descreva o que o aluno deve implementar..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-10 flex gap-4">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateManual}
+                  className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20"
+                >
+                  Criar Laboratório
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

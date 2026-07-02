@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Zap,
   Download,
+  Sparkles,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { cn } from "../../utils/cn";
@@ -65,6 +66,9 @@ export default function SmartCorrectionLab() {
   const [activeTab, setActiveTab] = useState<
     "result" | "errors" | "analysis" | "feedback" | "compare"
   >("result");
+  const [showAiSuggestion, setShowAiSuggestion] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+
   const [executionResult, setExecutionResult] = useState<{
     status: "idle" | "running" | "success" | "error";
     stdout: string;
@@ -137,6 +141,18 @@ export default function SmartCorrectionLab() {
           analysis: data.analysis,
         });
         setActiveTab("errors");
+
+        // Trigger AI suggestions on error
+        if (data.analysis?.quality_issues || data.analysis?.logic_issues) {
+          const suggestions = [
+            ...(data.analysis.quality_issues || []),
+            ...(data.analysis.logic_issues || []),
+          ];
+          if (suggestions.length > 0) {
+            setAiSuggestions(suggestions);
+            setShowAiSuggestion(true);
+          }
+        }
       } else {
         setExecutionResult({
           status: "success",
@@ -280,6 +296,48 @@ export default function SmartCorrectionLab() {
                   cursorBlinking: "smooth",
                 }}
               />
+
+              <AnimatePresence>
+                {showAiSuggestion && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="absolute bottom-6 left-6 right-6 z-20 bg-[#1e293b]/95 backdrop-blur-md border border-indigo-500/30 rounded-2xl p-4 shadow-2xl shadow-indigo-500/20"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-indigo-500/20 rounded-lg">
+                          <Sparkles className="w-4 h-4 text-indigo-400" />
+                        </div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Sugestões de Melhoria</h4>
+                      </div>
+                      <button 
+                        onClick={() => setShowAiSuggestion(false)}
+                        className="text-slate-500 hover:text-white transition-colors"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                      {aiSuggestions.map((s, i) => (
+                        <div key={i} className="flex items-start gap-2 text-[11px] text-slate-300 bg-slate-800/40 p-2 rounded-lg border border-slate-700/30">
+                          <Zap className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+                          <span>{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <button 
+                        onClick={() => setShowAiSuggestion(false)}
+                        className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        Entendido, vou ajustar
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 

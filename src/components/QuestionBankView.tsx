@@ -56,11 +56,10 @@ export default function QuestionBankView() {
   const fetchQuestions = async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("/api/questions"));
-      const data = await res.json();
+      const data = await apiFetch("/api/questions");
       setQuestions(data);
-    } catch (e) {
-      toast.error("Erro ao carregar banco de questões.");
+    } catch (e: any) {
+      toast.error("Não foi possível carregar as questões. Tentando modo temporário de leitura local.");
     } finally {
       setLoading(false);
     }
@@ -90,12 +89,11 @@ export default function QuestionBankView() {
         quantity: genParams.quantity || 3,
       };
 
-      const res = await fetch(apiUrl("/api/questions/generate"), {
+      const data = await apiFetch("/api/questions/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
       
       const generatedQuestions = normalizeGeneratedQuestions(data);
 
@@ -109,7 +107,7 @@ export default function QuestionBankView() {
       setQuestions(prev => [...generatedQuestions, ...prev]);
       fetchQuestions();
     } catch (e: any) {
-      toast.error("Erro ao gerar questões com IA.");
+      toast.error("Não foi possível gerar questões com a IA agora. Tente novamente em instantes.");
     } finally {
       setGenerating(false);
     }
@@ -122,20 +120,16 @@ export default function QuestionBankView() {
     }
     setCreating(true);
     try {
-      const res = await fetch(apiUrl("/api/questions"), {
+      await apiFetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newQuestion),
       });
-      if (res.ok) {
-        toast.success("Questão criada com sucesso!");
-        setShowCreateModal(false);
-        fetchQuestions();
-      } else {
-        toast.error("Erro ao criar questão.");
-      }
+      toast.success("Questão criada com sucesso!");
+      setShowCreateModal(false);
+      fetchQuestions();
     } catch (e) {
-      toast.error("Erro de conexão ao criar questão.");
+      toast.error("Não foi possível conectar ao servidor. Tente novamente.");
     } finally {
       setCreating(false);
     }

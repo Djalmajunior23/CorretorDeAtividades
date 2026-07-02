@@ -11,6 +11,7 @@ import {
   Plus,
   Trash2,
   Clock,
+  Settings,
   Sparkles,
   AlertTriangle,
   CheckCircle2,
@@ -24,6 +25,9 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { apiUrl, safeJsonResponse, API_BASE_URL } from "../config/api";
+
+
+import { AttendanceDashboard } from "./dashboard/AttendanceDashboard";
 
 
 interface SmartClassDiaryViewProps {
@@ -49,7 +53,24 @@ export default function SmartClassDiaryView({
   useEffect(() => {
     fetch(apiUrl("/api/classes"))
       .then(r => r.json())
-      .then(setClasses)
+      .then(data => {
+        setClasses(data);
+        if (data.length > 0 && !selectedClass) {
+          setSelectedClass(data[0].id);
+        }
+      })
+      .catch(console.error);
+
+    fetch(apiUrl("/api/codecheck/diary/time-slots"))
+      .then(r => r.json())
+      .then(setTimeSlots)
+      .catch(console.error);
+
+    fetch(apiUrl("/api/codecheck/activities"))
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setPedagogicalActivities(data);
+      })
       .catch(console.error);
   }, []);
 
@@ -68,6 +89,7 @@ export default function SmartClassDiaryView({
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(null);
   const [integrations, setIntegrations] = useState<any>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [pedagogicalActivities, setPedagogicalActivities] = useState<any[]>([]);
 
   // Active Form state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -87,6 +109,8 @@ export default function SmartClassDiaryView({
   const [formNotes, setFormNotes] = useState("");
   const [selectedComps, setSelectedComps] = useState<string[]>([]);
   const [formStatus, setFormStatus] = useState("Draft");
+  const [formPeriods, setFormPeriods] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [timeSlots, setTimeSlots] = useState<any[]>([]);
 
   // AI Summary states
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
@@ -108,6 +132,10 @@ export default function SmartClassDiaryView({
   const [obsDifficulties, setObsDifficulties] = useState("");
   const [obsProgress, setObsProgress] = useState("Evoluindo");
   const [obsComments, setObsComments] = useState("");
+
+  useEffect(() => {
+    setFormDurationHours(formPeriods.length.toString());
+  }, [formPeriods]);
 
   // Toast notifications
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -134,9 +162,13 @@ export default function SmartClassDiaryView({
   // Fetch all initial data
   const fetchData = async () => {
     try {
+      // Find class name if selectedClass is ID
+      const classObj = classes.find(c => c.id === selectedClass);
+      const classNameForQuery = classObj ? classObj.name : selectedClass;
+
       // 1. Sessions
       const resSessions = await fetch(
-        `${API_BASE_URL}/api/codecheck/diary/sessions?class_name=${encodeURIComponent(selectedClass)}&search=${encodeURIComponent(searchQuery)}`,
+        `${API_BASE_URL}/api/codecheck/diary/sessions?class_name=${encodeURIComponent(classNameForQuery)}&search=${encodeURIComponent(searchQuery)}`,
       );
       if (resSessions.ok) {
         const data = await resSessions.json();
@@ -186,7 +218,7 @@ export default function SmartClassDiaryView({
 
   useEffect(() => {
     fetchData();
-  }, [selectedClass, searchQuery]);
+  }, [selectedClass, searchQuery, classes]);
 
   // Fetch Attendance records when selected session ID changes
   useEffect(() => {
@@ -200,34 +232,43 @@ export default function SmartClassDiaryView({
         .then((data) => {
           // If no attendance records registered yet, pre-populate students list
           if (data.length === 0) {
-            const prePopulate = [
-              {
-                student_name: "Ana Silva",
-                status: "presente",
+            if (students && students.length > 0) {
+              const fromStudents = students.map((s) => ({
+                student_name: s.name,
+                status: "P,P,P,P,P",
                 justification: "",
-              },
-              {
-                student_name: "Bruno Souza",
-                status: "presente",
-                justification: "",
-              },
-              {
-                student_name: "Carlos Eduardo",
-                status: "presente",
-                justification: "",
-              },
-              {
-                student_name: "Douglas Lima",
-                status: "presente",
-                justification: "",
-              },
-              {
-                student_name: "Elena G",
-                status: "presente",
-                justification: "",
-              },
-            ];
-            setAttendanceRecords(prePopulate);
+              }));
+              setAttendanceRecords(fromStudents);
+            } else {
+              const prePopulate = [
+                {
+                  student_name: "Ana Silva",
+                  status: "P,P,P,P,P",
+                  justification: "",
+                },
+                {
+                  student_name: "Bruno Souza",
+                  status: "P,P,P,P,P",
+                  justification: "",
+                },
+                {
+                  student_name: "Carlos Eduardo",
+                  status: "P,P,P,P,P",
+                  justification: "",
+                },
+                {
+                  student_name: "Douglas Lima",
+                  status: "P,P,P,P,P",
+                  justification: "",
+                },
+                {
+                  student_name: "Elena G",
+                  status: "P,P,P,P,P",
+                  justification: "",
+                },
+              ];
+              setAttendanceRecords(prePopulate);
+            }
           } else {
             setAttendanceRecords(data);
           }
@@ -236,7 +277,7 @@ export default function SmartClassDiaryView({
           console.warn("Attendance fetch fallback triggered:", err);
         });
     }
-  }, [selectedAttendanceSessionId]);
+  }, [selectedAttendanceSessionId, students]);
 
   // Handle Session Form Submit (Create or Update)
   const handleSessionSubmit = async (e: React.FormEvent) => {
@@ -258,6 +299,7 @@ export default function SmartClassDiaryView({
       notes: formNotes,
       competencies: selectedComps.join(", "),
       status: formStatus,
+      periods: formPeriods.join(","),
     };
 
     try {
@@ -277,6 +319,21 @@ export default function SmartClassDiaryView({
       }
 
       if (res.ok) {
+        const sessionData = await res.json();
+        const sessionId = editingSessionId || sessionData.id;
+
+        // Save Attendance integrated
+        if (attendanceRecords.length > 0 && sessionId) {
+          await fetch(apiUrl("/api/codecheck/diary/attendance"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              records: attendanceRecords
+            }),
+          }).catch(err => console.error("Error saving attendance from session form:", err));
+        }
+
         showToast(
           editingSessionId
             ? "Aula modificada com sucesso!"
@@ -297,7 +354,9 @@ export default function SmartClassDiaryView({
   const resetForm = () => {
     setEditingSessionId(null);
     setFormDate(new Date().toISOString().split("T")[0]);
-    setFormClassName("Turma de Desenvolvimento Web 1A");
+    // Find name of currently selected class if available
+    const currentClassObj = classes.find(c => c.id === selectedClass);
+    setFormClassName(currentClassObj ? currentClassObj.name : "Turma de Desenvolvimento Web 1A");
     setFormCurricularUnit("Lógica e Estrutura de Repetição");
     setFormDurationHours("4");
     setFormLessonTopic("");
@@ -307,7 +366,74 @@ export default function SmartClassDiaryView({
     setFormNotes("");
     setSelectedComps([]);
     setFormStatus("Draft");
+    setFormPeriods([1, 2, 3, 4, 5]);
     setAiSummaryResult(null);
+
+    // Initialize attendance for new session with current class students
+    if (students && students.length > 0) {
+      setAttendanceRecords(students.map(s => ({
+        student_name: s.name,
+        status: "P,P,P,P,P",
+        justification: ""
+      })));
+    } else {
+      setAttendanceRecords([]);
+    }
+  };
+
+  const createSessionFromActivity = async (activity: any, date: string) => {
+    const classObj = classes.find(c => c.id === selectedClass);
+    const className = classObj ? classObj.name : "Turma Selecionada";
+
+    const payload = {
+      date: date,
+      class_name: className,
+      curricular_unit: activity.theme || "Unidade Pedagógica",
+      duration_hours: timeSlots.length || 5,
+      lesson_topic: activity.title,
+      content_taught: `Atividade: ${activity.title}. ${activity.theme || ""}`,
+      methodology: "Aplicação de atividade prática orientada.",
+      resources_used: "Laboratório, CodeCheck AI, " + (activity.language || ""),
+      notes: "Registro gerado via Calendar Drag & Drop.",
+      competencies: activity.competence || "",
+      status: "Draft",
+      periods: timeSlots.map(s => s.period_number).join(","),
+    };
+
+    try {
+      const res = await fetch(apiUrl("/api/codecheck/diary/sessions"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        showToast(`Registro gerado para ${activity.title}!`, "success");
+        fetchData();
+      } else {
+        showToast("Erro ao gerar registro automático.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Erro na conexão.", "error");
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, activity: any) => {
+    e.dataTransfer.setData("activity", JSON.stringify(activity));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, date: string) => {
+    e.preventDefault();
+    const activityData = e.dataTransfer.getData("activity");
+    if (activityData) {
+      const activity = JSON.parse(activityData);
+      createSessionFromActivity(activity, date);
+    }
   };
 
   // Open Form for Editing
@@ -328,7 +454,28 @@ export default function SmartClassDiaryView({
         : [],
     );
     setFormStatus(sess.status);
+    setFormPeriods(sess.periods ? sess.periods.split(",").map(Number) : [1, 2, 3, 4, 5]);
+    setAiSummaryResult(null);
     setIsFormOpen(true);
+
+    // Fetch attendance for this session
+    fetch(apiUrl(`/api/codecheck/diary/attendance?session_id=${sess.id}`))
+      .then(r => r.json())
+      .then(data => {
+        if (data.length > 0) {
+          setAttendanceRecords(data);
+        } else {
+          // Fallback if no records, but try to use current students
+          if (students && students.length > 0) {
+             setAttendanceRecords(students.map(s => ({
+              student_name: s.name,
+              status: "P,P,P,P,P",
+              justification: ""
+            })));
+          }
+        }
+      })
+      .catch(e => console.error("Error fetching attendance for session edit:", e));
   };
 
   // Open Form for Copying/Scheduling Next
@@ -431,24 +578,41 @@ export default function SmartClassDiaryView({
   const markAllPresent = () => {
     const updated = attendanceRecords.map((r) => ({
       ...r,
-      status: "presente",
+      status: "P,P,P,P,P",
       justification: "",
     }));
     setAttendanceRecords(updated);
     showToast(
-      "Todos os alunos marcados como Presentes temporariamente.",
+      "Todos os alunos marcados como Presentes em todos os horários.",
       "info",
     );
   };
 
-  // Update single student attendance state
+  // Update single student attendance state for a specific period
   const handleAttendanceChange = (
-    index: number,
-    status: "presente" | "falta" | "atraso",
+    studentIndex: number,
+    periodIndex: number,
+    newStatus: "P" | "F" | "A",
     justification: string = "",
   ) => {
     const updated = [...attendanceRecords];
-    updated[index] = { ...updated[index], status, justification };
+    let currentStatus = updated[studentIndex].status || "P,P,P,P,P";
+    
+    // Compatibility with legacy single-word statuses
+    if (!currentStatus.includes(",")) {
+      if (currentStatus === "presente") currentStatus = "P,P,P,P,P";
+      else if (currentStatus === "falta") currentStatus = "F,F,F,F,F";
+      else if (currentStatus === "atraso") currentStatus = "A,A,A,A,A";
+      else currentStatus = "P,P,P,P,P";
+    }
+
+    const statusArray = currentStatus.split(",");
+    statusArray[periodIndex] = newStatus;
+    updated[studentIndex] = { 
+      ...updated[studentIndex], 
+      status: statusArray.join(","), 
+      justification: justification || updated[studentIndex].justification 
+    };
     setAttendanceRecords(updated);
   };
 
@@ -708,12 +872,12 @@ export default function SmartClassDiaryView({
             onChange={(e) => setSelectedClass(e.target.value)}
             className="bg-transparent font-medium text-sm text-gray-800 focus:outline-none"
           >
-            <option value="Turma de Desenvolvimento Web 1A">
-              Turma de Desenvolvimento Web 1A
-            </option>
-            <option value="Turma de Engenharia de Dados 2C">
-              Turma de Engenharia de Dados 2C
-            </option>
+            <option value="">Selecione uma Turma</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -797,6 +961,17 @@ export default function SmartClassDiaryView({
           <Shield className="w-4 h-4" />
           Log de Auditoria
         </button>
+        <button
+          onClick={() => setActiveSubTab("schedule")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-all ${
+            activeSubTab === "schedule"
+              ? "border-teal-600 text-teal-600"
+              : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+          Configurações
+        </button>
       </div>
 
       {/* SEARCH BAR (Visible in list mode tabs) */}
@@ -828,6 +1003,13 @@ export default function SmartClassDiaryView({
       {/* ============================================================== */}
       {activeSubTab === "dashboard" && (
         <div id="subtab-dashboard" className="space-y-6">
+          {/* Attendance Dashboard Component */}
+          <AttendanceDashboard 
+            totalWorkload={160} 
+            actualPresence={sessions.reduce((acc, s) => acc + (s.duration_hours || 0), 0)}
+            className="animate-fade-in"
+          />
+
           {/* Top Level Key-Metrics Block */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-between">
@@ -1181,18 +1363,11 @@ export default function SmartClassDiaryView({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
-                    Duração (Horas Aula)
+                    Duração (Calculada)
                   </label>
-                  <select
-                    value={formDurationHours}
-                    onChange={(e) => setFormDurationHours(e.target.value)}
-                    className="w-full p-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl"
-                  >
-                    <option value="1">1 hora</option>
-                    <option value="2">2 horas (Padrão)</option>
-                    <option value="4">4 horas (Integral)</option>
-                    <option value="6">6 horas</option>
-                  </select>
+                  <div className="w-full p-2.5 text-sm bg-gray-100 border border-gray-200 rounded-xl font-bold text-teal-800">
+                    {formDurationHours} {parseInt(formDurationHours) === 1 ? "Hora Aula" : "Horas Aula"}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
@@ -1225,6 +1400,46 @@ export default function SmartClassDiaryView({
                       Registered (Assinado Oficial)
                     </option>
                   </select>
+                </div>
+              </div>
+
+              {/* PERÍODOS / HORÁRIOS SELECTOR (01 a 05) */}
+              <div className="p-4 bg-teal-50/50 border border-teal-100 rounded-2xl flex flex-col sm:flex-row items-center gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-teal-800 uppercase mb-2">
+                    Horários Vinculados (01 a 05 - 50 min cada)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          if (formPeriods.includes(p)) {
+                            setFormPeriods(formPeriods.filter((item) => item !== p));
+                          } else {
+                            setFormPeriods([...formPeriods, p].sort());
+                          }
+                        }}
+                        className={`min-w-[70px] h-12 rounded-xl font-bold text-sm transition-all flex flex-col items-center justify-center border ${
+                          formPeriods.includes(p)
+                            ? "bg-teal-700 text-white border-teal-800 shadow-md scale-105"
+                            : "bg-white text-gray-400 border-gray-200 hover:border-teal-300"
+                        }`}
+                      >
+                        <span className="text-[9px] opacity-60 uppercase">H{p}</span>
+                        <span className="text-xs">
+                          {timeSlots.find(s => s.period_number === p)?.start_time || "--:--"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[11px] text-teal-700 leading-relaxed italic">
+                    Ao selecionar os horários (01 a 05), você vincula este registro de aula aos tempos específicos de 50 minutos. 
+                    A duração total será calculada baseada nos horários selecionados.
+                  </p>
                 </div>
               </div>
 
@@ -1410,6 +1625,114 @@ export default function SmartClassDiaryView({
                 )}
               </div>
 
+              {/* MÓDULO 3: Frequência Integrada no Registro de Aula */}
+              <div className="p-5 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-gray-600" />
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-800 uppercase tracking-tight">
+                        Frequência dos Alunos (5 Horários)
+                      </h4>
+                      <p className="text-[10px] text-gray-500">
+                        Marque a presença de cada aluno para os 5 horários desta sessão.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={markAllPresent}
+                    className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-teal-700 rounded-xl text-[10px] font-bold transition-all shadow-sm flex items-center gap-1 uppercase"
+                  >
+                    <CheckCircle2 className="w-3 h-3" />
+                    Todos Presentes
+                  </button>
+                </div>
+
+                <div className="overflow-hidden border border-gray-200 rounded-xl bg-white">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3 border-b border-gray-200">Aluno</th>
+                        <th className="px-4 py-3 border-b border-gray-200 text-center">Horários (1-5)</th>
+                        <th className="px-4 py-3 border-b border-gray-200">Justificativa</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {attendanceRecords.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-6 text-center text-xs text-gray-400 italic">
+                            Carregando lista de alunos... certifique-se de que a turma selecionada possui alunos cadastrados.
+                          </td>
+                        </tr>
+                      ) : (
+                        attendanceRecords.map((stud, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-4 py-3">
+                              <span className="text-xs font-bold text-gray-800">{stud.student_name}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {[0, 1, 2, 3, 4].map((periodIdx) => {
+                                  const periodNum = periodIdx + 1;
+                                  const isSelected = formPeriods.includes(periodNum);
+                                  let currentStatus = stud.status || "P,P,P,P,P";
+                                  if (!currentStatus.includes(",")) {
+                                    if (currentStatus === "presente") currentStatus = "P,P,P,P,P";
+                                    else if (currentStatus === "falta") currentStatus = "F,F,F,F,F";
+                                    else if (currentStatus === "atraso") currentStatus = "A,A,A,A,A";
+                                    else currentStatus = "P,P,P,P,P";
+                                  }
+                                  const statusArray = currentStatus.split(",");
+                                  const pStat = statusArray[periodIdx] || "P";
+                                  const slot = timeSlots.find((s) => s.period_number === periodNum);
+                                  const timeRange = slot ? ` (${slot.start_time} - ${slot.end_time})` : "";
+
+                                  return (
+                                    <button
+                                      key={periodIdx}
+                                      type="button"
+                                      disabled={!isSelected}
+                                      onClick={() => {
+                                        const nextStat = pStat === "P" ? "F" : pStat === "F" ? "A" : "P";
+                                        handleAttendanceChange(idx, periodIdx, nextStat as any);
+                                      }}
+                                      className={`w-6 h-6 rounded flex items-center justify-center text-[9px] font-black transition-all ${
+                                        !isSelected ? "opacity-20 grayscale cursor-not-allowed scale-75" : ""
+                                      } ${
+                                        pStat === "P" ? "bg-emerald-100 text-emerald-700" :
+                                        pStat === "F" ? "bg-rose-100 text-rose-700" :
+                                        "bg-amber-100 text-amber-700"
+                                      }`}
+                                      title={isSelected ? `${periodNum}º Horário${timeRange}: ${pStat === "P" ? "Presente" : pStat === "F" ? "Falta" : "Atraso"}` : `Horário ${periodNum} não selecionado para esta aula`}
+                                    >
+                                      {pStat}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="text"
+                                placeholder="Nota..."
+                                value={stud.justification || ""}
+                                onChange={(e) => {
+                                  const updated = [...attendanceRecords];
+                                  updated[idx] = { ...updated[idx], justification: e.target.value };
+                                  setAttendanceRecords(updated);
+                                }}
+                                className="w-full bg-gray-50 border border-gray-150 rounded-lg px-2 py-1 text-[10px] focus:outline-none focus:border-teal-500"
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
                   Notas Pedagógicas Gerais e Observações da Sessão
@@ -1481,6 +1804,18 @@ export default function SmartClassDiaryView({
                           <Clock className="w-3.5 h-3.5 text-teal-600" />
                           {sess.duration_hours}h
                         </span>
+                        {sess.periods && (
+                          <div className="flex items-center gap-1">
+                            {sess.periods.split(",").map((p: string) => (
+                              <span
+                                key={p}
+                                className="text-[10px] font-black px-1.5 py-0.5 bg-teal-100 text-teal-800 rounded-md border border-teal-200"
+                              >
+                                H{p}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <h3 className="text-lg font-bold text-gray-950 hover:text-teal-600 transition-colors">
@@ -1617,58 +1952,81 @@ export default function SmartClassDiaryView({
                     </div>
 
                     <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
-                      {/* Attendance picker triggers */}
-                      <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl border border-gray-200">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleAttendanceChange(idx, "presente")
+                      {/* 5-Period Attendance Picker */}
+                      <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                        {[0, 1, 2, 3, 4].map((periodIdx) => {
+                          let currentStatus = stud.status || "P,P,P,P,P";
+                          
+                          // Compatibility check
+                          if (!currentStatus.includes(",")) {
+                            if (currentStatus === "presente") currentStatus = "P,P,P,P,P";
+                            else if (currentStatus === "falta") currentStatus = "F,F,F,F,F";
+                            else if (currentStatus === "atraso") currentStatus = "A,A,A,A,A";
+                            else currentStatus = "P,P,P,P,P";
                           }
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                            stud.status === "presente"
-                              ? "bg-emerald-600 text-white shadow-sm"
-                              : "text-gray-500 hover:bg-gray-200"
-                          }`}
-                        >
-                          P
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleAttendanceChange(idx, "falta")}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                            stud.status === "falta"
-                              ? "bg-rose-600 text-white shadow-sm"
-                              : "text-gray-500 hover:bg-gray-200"
-                          }`}
-                        >
-                          F
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleAttendanceChange(idx, "atraso")}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                            stud.status === "atraso"
-                              ? "bg-amber-600 text-white shadow-sm"
-                              : "text-gray-500 hover:bg-gray-200"
-                          }`}
-                        >
-                          A
-                        </button>
+
+                          const statusArray = currentStatus.split(",");
+                          const pStat = statusArray[periodIdx] || "P";
+
+                          return (
+                            <div key={periodIdx} className="flex flex-col items-center gap-1 shrink-0">
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+                                H{periodIdx + 1}
+                              </span>
+                              <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAttendanceChange(idx, periodIdx, "P")}
+                                  className={`w-6 h-6 rounded-md text-[9px] font-black transition-all flex items-center justify-center ${
+                                    pStat === "P"
+                                      ? "bg-emerald-600 text-white shadow-sm"
+                                      : "text-gray-400 hover:bg-gray-200"
+                                  }`}
+                                  title="Presente"
+                                >
+                                  P
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAttendanceChange(idx, periodIdx, "F")}
+                                  className={`w-6 h-6 rounded-md text-[9px] font-black transition-all flex items-center justify-center ${
+                                    pStat === "F"
+                                      ? "bg-rose-600 text-white shadow-sm"
+                                      : "text-gray-400 hover:bg-gray-200"
+                                  }`}
+                                  title="Falta"
+                                >
+                                  F
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAttendanceChange(idx, periodIdx, "A")}
+                                  className={`w-6 h-6 rounded-md text-[9px] font-black transition-all flex items-center justify-center ${
+                                    pStat === "A"
+                                      ? "bg-amber-600 text-white shadow-sm"
+                                      : "text-gray-400 hover:bg-gray-200"
+                                  }`}
+                                  title="Atraso"
+                                >
+                                  A
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
 
-                      {/* Display warning or option to insert justification on delay/fail */}
-                      {stud.status !== "presente" && (
+                      {/* Display justification option if any period has Falta or Atraso */}
+                      {(stud.status && (stud.status.includes("F") || stud.status.includes("A") || stud.status === "falta" || stud.status === "atraso")) && (
                         <input
                           type="text"
                           placeholder="Justificativa pedagógica..."
                           value={stud.justification || ""}
-                          onChange={(e) =>
-                            handleAttendanceChange(
-                              idx,
-                              stud.status,
-                              e.target.value,
-                            )
-                          }
+                          onChange={(e) => {
+                            const updated = [...attendanceRecords];
+                            updated[idx] = { ...updated[idx], justification: e.target.value };
+                            setAttendanceRecords(updated);
+                          }}
                           className="p-1 px-3.5 bg-gray-50 hover:bg-gray-100 focus:bg-white text-xs text-gray-800 border border-gray-200 rounded-xl w-40 sm:w-56 focus:outline-none"
                         />
                       )}
@@ -1989,93 +2347,144 @@ export default function SmartClassDiaryView({
       {/* ============================================================== */}
       {activeSubTab === "calendar" && (
         <div id="subtab-calendar" className="space-y-6">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-teal-600" />
-              Diário Curricular Visual (Módulo 7)
-            </h2>
-            <p className="text-xs text-gray-500 mt-1">
-              Visualização de cronograma de aulas e lições aplicadas ao longo de
-              Junho de 2026.
-            </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-teal-600" />
+                Planejamento Semanal Visual
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Arraste atividades pedagógicas para os dias da semana para gerar registros automáticos.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-100 px-2 py-1 rounded">
+                Turma: {classes.find(c => c.id === selectedClass)?.name || "Nenhuma"}
+              </span>
+            </div>
           </div>
 
-          <div className="bg-white text-gray-800 border border-gray-200 rounded-2xl shadow-sm p-6 overflow-hidden animate-fade-in">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
-              <span className="text-lg font-bold text-teal-950 flex items-center gap-1">
-                📅 Junho 2026
-              </span>
-              <span className="text-xs font-semibold px-2 py-1 bg-gray-100 text-gray-500 rounded-lg">
-                Filtro: {selectedClass}
-              </span>
-            </div>
-
-            {/* Grid representativa de calendario */}
-            <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-gray-500 border-b border-gray-100 pb-2 mb-2">
-              <div>DOM</div>
-              <div>SEG</div>
-              <div>TER</div>
-              <div>QUA</div>
-              <div>QUI</div>
-              <div>SEX</div>
-              <div>SÁB</div>
-            </div>
-
-            <div className="grid grid-cols-7 gap-2 h-96">
-              {/* Offset representativo para Junho começar em segunda-feira em 2026 */}
-              <div className="p-1 border border-gray-100 rounded-lg bg-gray-50/50 text-[10px] text-gray-400">
-                31 mai
+          <div className="flex gap-6 h-[600px]">
+            {/* Sidebar de Atividades */}
+            <div className="w-64 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-2xl p-4 overflow-y-auto shadow-inner">
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className="w-4 h-4 text-teal-600" />
+                <h3 className="text-xs font-bold text-gray-700 uppercase">Banco de Atividades</h3>
+              </div>
+              
+              <div className="space-y-2">
+                {pedagogicalActivities.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <BookOpen className="w-8 h-8 text-gray-200 mb-2" />
+                    <p className="text-[10px] text-gray-400 italic">
+                      Nenhuma atividade encontrada no banco.
+                    </p>
+                  </div>
+                ) : (
+                  pedagogicalActivities.map((act) => (
+                    <div
+                      key={act.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, act)}
+                      className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm cursor-grab active:cursor-grabbing hover:border-teal-400 transition-all group"
+                    >
+                      <h4 className="text-[11px] font-bold text-gray-800 line-clamp-1 mb-1 group-hover:text-teal-700">
+                        {act.title}
+                      </h4>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-bold uppercase">
+                          {act.difficulty}
+                        </span>
+                        <span className="text-[9px] text-gray-400 font-mono">
+                          {act.language}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
-              {/* Dias de junho 1 a 14 */}
-              {Array.from({ length: 14 }).map((_, idx) => {
-                const day = idx + 1;
-                const formattedDate = `2026-06-${day < 10 ? "0" + day : day}`;
-                const matchSessions = sessions.filter(
-                  (s) => s.date === formattedDate,
-                );
+              <div className="mt-auto p-3 bg-teal-50 border border-teal-100 rounded-xl">
+                <p className="text-[10px] text-teal-800 font-medium leading-tight">
+                  <Sparkles className="w-3 h-3 inline mb-0.5 mr-1" />
+                  Dica: Arraste os cards para o calendário para preencher o diário.
+                </p>
+              </div>
+            </div>
 
-                return (
-                  <div
-                    key={day}
-                    className="p-1.5 border border-gray-150 rounded-xl bg-white hover:bg-teal-50/30 transition-all flex flex-col justify-between overflow-y-auto"
-                  >
-                    <span className="font-bold text-xs text-gray-400 block text-left">
-                      {day}
-                    </span>
-                    <div className="space-y-1">
-                      {matchSessions.map((ms) => (
-                        <div
-                          key={ms.id}
-                          onClick={() => {
-                            openEditForm(ms);
-                            setActiveSubTab("lessons");
-                          }}
-                          className="p-1 bg-teal-100 border border-teal-200 text-teal-900 rounded text-[9px] font-semibold text-left truncate cursor-pointer"
-                          title={ms.lesson_topic}
-                        >
-                          {ms.lesson_topic}
-                        </div>
-                      ))}
+            {/* Calendário Principal */}
+            <div className="flex-1 bg-white border border-gray-200 rounded-2xl shadow-sm p-6 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+                <span className="text-lg font-bold text-teal-950 flex items-center gap-2">
+                  📅 Junho 2026
+                </span>
+                <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                      <div className="w-2 h-2 rounded-full bg-teal-500"></div> Aula Registrada
+                   </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-tighter border-b border-gray-100 pb-2 mb-2">
+                <div>Dom</div>
+                <div>Seg</div>
+                <div>Ter</div>
+                <div>Qua</div>
+                <div>Qui</div>
+                <div>Sex</div>
+                <div>Sáb</div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                {/* Offset */}
+                <div className="p-2 border border-gray-50 rounded-xl bg-gray-50/20 text-[10px] text-gray-300">
+                  31 mai
+                </div>
+
+                {Array.from({ length: 30 }).map((_, idx) => {
+                  const day = idx + 1;
+                  const formattedDate = `2026-06-${day < 10 ? "0" + day : day}`;
+                  const matchSessions = sessions.filter(s => s.date === formattedDate);
+                  
+                  return (
+                    <div
+                      key={day}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, formattedDate)}
+                      className={`p-2 border rounded-2xl transition-all flex flex-col gap-2 min-h-[100px] ${
+                        matchSessions.length > 0 
+                          ? "bg-teal-50/30 border-teal-100" 
+                          : "bg-white border-gray-100 hover:border-teal-200 hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[11px] font-bold ${matchSessions.length > 0 ? "text-teal-700" : "text-gray-400"}`}>
+                          {day}
+                        </span>
+                        {matchSessions.length > 0 && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-col gap-1.5">
+                        {matchSessions.map((ms) => (
+                          <div
+                            key={ms.id}
+                            onClick={() => {
+                              openEditForm(ms);
+                              setActiveSubTab("lessons");
+                            }}
+                            className="p-1.5 bg-white border border-teal-100 text-teal-900 rounded-lg text-[9px] font-bold leading-tight shadow-sm hover:shadow-md transition-all cursor-pointer truncate"
+                            title={ms.lesson_topic}
+                          >
+                            {ms.lesson_topic}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-
-              {/* Mock dias vagos */}
-              {Array.from({ length: 16 }).map((_, idx) => {
-                const day = idx + 15;
-                return (
-                  <div
-                    key={day}
-                    className="p-1.5 border border-gray-100 rounded-xl bg-gray-50/50 text-left"
-                  >
-                    <span className="font-bold text-xs text-gray-300">
-                      {day}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -2279,6 +2688,158 @@ export default function SmartClassDiaryView({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* TAB 8: SCHEDULE CONFIGURATION (MÓDULO 11/14) */}
+      {/* ============================================================== */}
+      {activeSubTab === "schedule" && (
+        <div id="subtab-schedule" className="space-y-6 animate-fade-in">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-teal-600" />
+              Configuração de Horários (Módulo 11 & 14)
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Gerencie os horários diários de 50 minutos. Estas definições serão aplicadas globalmente aos registros de presença e diário de classe.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-gray-50 border-b border-gray-200">
+                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-tight">Grade de Períodos Diários</h3>
+                </div>
+                <div className="p-0">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50/50 text-[10px] font-bold text-gray-500 uppercase">
+                      <tr>
+                        <th className="px-6 py-3 border-b border-gray-200">Período</th>
+                        <th className="px-6 py-3 border-b border-gray-200">Início (HH:mm)</th>
+                        <th className="px-6 py-3 border-b border-gray-200">Término (HH:mm)</th>
+                        <th className="px-6 py-3 border-b border-gray-200">Duração</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {[1, 2, 3, 4, 5].map((pNum) => {
+                        const slot = timeSlots.find(s => s.period_number === pNum) || {
+                          period_number: pNum,
+                          start_time: "00:00",
+                          end_time: "00:00"
+                        };
+                        return (
+                          <tr key={pNum} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs">
+                                  H{pNum}
+                                </span>
+                                <span className="text-sm font-bold text-gray-800">{pNum}º Horário</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <input
+                                type="time"
+                                value={slot.start_time}
+                                onChange={(e) => {
+                                  const newSlots = [...timeSlots];
+                                  const idx = newSlots.findIndex(s => s.period_number === pNum);
+                                  if (idx >= 0) {
+                                    newSlots[idx] = { ...newSlots[idx], start_time: e.target.value };
+                                  } else {
+                                    newSlots.push({ period_number: pNum, start_time: e.target.value, end_time: "00:00" });
+                                  }
+                                  setTimeSlots(newSlots);
+                                }}
+                                className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <input
+                                type="time"
+                                value={slot.end_time}
+                                onChange={(e) => {
+                                  const newSlots = [...timeSlots];
+                                  const idx = newSlots.findIndex(s => s.period_number === pNum);
+                                  if (idx >= 0) {
+                                    newSlots[idx] = { ...newSlots[idx], end_time: e.target.value };
+                                  } else {
+                                    newSlots.push({ period_number: pNum, start_time: "00:00", end_time: e.target.value });
+                                  }
+                                  setTimeSlots(newSlots);
+                                }}
+                                className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-xs text-gray-500 font-mono">50 min</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(apiUrl("/api/codecheck/diary/time-slots"), {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ slots: timeSlots }),
+                        });
+                        if (res.ok) {
+                          showToast("Horários salvos com sucesso!", "success");
+                        }
+                      } catch (e) {
+                        showToast("Erro ao salvar horários", "error");
+                      }
+                    }}
+                    className="px-6 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold shadow-sm transition-all flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Salvar Configurações
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  <h4 className="font-bold text-amber-900 text-sm">Atenção ao Configurar</h4>
+                </div>
+                <ul className="text-xs text-amber-800 space-y-2 list-disc pl-4">
+                  <li>Os horários devem ser definidos em formato 24h.</li>
+                  <li>Evite sobreposição de horários entre períodos.</li>
+                  <li>A alteração destes horários afeta a exibição no registro de aula, mas não altera retroativamente a duração já gravada em aulas passadas.</li>
+                  <li>O padrão institucional do SENAI é de 50 minutos por hora-aula.</li>
+                </ul>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+                <h4 className="font-bold text-gray-800 text-sm mb-3">Resumo da Carga Horária</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-xs text-gray-500">Total Diário</span>
+                    <span className="text-sm font-bold text-teal-700">250 min (4.1h)</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-xs text-gray-500">Períodos Ativos</span>
+                    <span className="text-sm font-bold text-teal-700">05</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-xs text-gray-500">Intervalos Definidos</span>
+                    <span className="text-sm font-bold text-teal-700">01 (20 min)</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
