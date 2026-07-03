@@ -10,6 +10,8 @@ import {
   Download,
   Plus,
   Trash2,
+  Edit,
+  Loader2,
   Clock,
   Settings,
   Sparkles,
@@ -42,10 +44,12 @@ function normalizeArray<T = any>(value: any): T[] {
   if (Array.isArray(value?.data?.items)) return value.data.items;
   if (Array.isArray(value?.data?.records)) return value.data.records;
   if (Array.isArray(value?.data?.timeSlots)) return value.data.timeSlots;
+  if (Array.isArray(value?.data?.students)) return value.data.students;
   if (Array.isArray(value?.items)) return value.items;
   if (Array.isArray(value?.records)) return value.records;
   if (Array.isArray(value?.results)) return value.results;
   if (Array.isArray(value?.timeSlots)) return value.timeSlots;
+  if (Array.isArray(value?.students)) return value.students;
   return [];
 }
 
@@ -113,8 +117,20 @@ export default function SmartClassDiaryView({
   const [searchQuery, setSearchQuery] = useState("");
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
-  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedClass, setSelectedClass] = useState(() => {
+    return localStorage.getItem("selectedClass") || "";
+  });
   const [selectedStudent, setSelectedStudent] = useState<string>("");
+
+  const changeSelectedClass = (classId: string) => {
+    setSelectedClass(classId);
+    if (classId) {
+      localStorage.setItem("selectedClass", classId);
+    } else {
+      localStorage.removeItem("selectedClass");
+    }
+    setSelectedStudent("");
+  };
 
   useEffect(() => {
     fetch(apiUrl("/api/classes"))
@@ -122,8 +138,12 @@ export default function SmartClassDiaryView({
       .then(data => {
         const normalized = normalizeArray(data);
         setClasses(normalized);
-        if (normalized.length > 0 && !selectedClass) {
+        const saved = localStorage.getItem("selectedClass");
+        if (saved && normalized.some((c: any) => c.id === saved)) {
+          setSelectedClass(saved);
+        } else if (normalized.length > 0) {
           setSelectedClass(normalized[0].id);
+          localStorage.setItem("selectedClass", normalized[0].id);
         }
       })
       .catch(console.error);
@@ -144,10 +164,24 @@ export default function SmartClassDiaryView({
 
   useEffect(() => {
     if (selectedClass) {
+      console.log("[DEV-DIAGNOSTIC] Fetching students for class_id:", selectedClass);
       fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedClass)}`))
-        .then(r => r.json())
-        .then(data => setStudents(normalizeArray(data)))
-        .catch(console.error);
+        .then(r => {
+          console.log("[DEV-DIAGNOSTIC] Response status for students:", r.status);
+          return r.json();
+        })
+        .then(data => {
+          console.log("[DEV-DIAGNOSTIC] Loaded students raw data:", data);
+          const normalized = normalizeArray(data);
+          console.log("[DEV-DIAGNOSTIC] Normalized students list:", normalized);
+          setStudents(normalized);
+        })
+        .catch(err => {
+          console.error("[DEV-DIAGNOSTIC] Error fetching students from API:", err);
+        });
+    } else {
+      console.log("[DEV-DIAGNOSTIC] No class selected, clearing students list");
+      setStudents([]);
     }
   }, [selectedClass]);
 
@@ -218,6 +252,38 @@ export default function SmartClassDiaryView({
   >("idle");
   const [testResultsLog, setTestResultsLog] = useState<string[]>([]);
 
+  // Lesson Planner states
+  const [lessonPlans, setLessonPlans] = useState<any[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+  const [isPlanFormOpen, setIsPlanFormOpen] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+  // Lesson Plan fields
+  const [planClassId, setPlanClassId] = useState("");
+  const [planCurricularUnit, setPlanCurricularUnit] = useState("");
+  const [planTopic, setPlanTopic] = useState("");
+  const [planDate, setPlanDate] = useState("");
+  const [planDuration, setPlanDuration] = useState("2");
+  const [planObjectives, setPlanObjectives] = useState<string[]>([]);
+  const [planCompetencies, setPlanCompetencies] = useState<string[]>([]);
+  const [planScript, setPlanScript] = useState("");
+  const [planMethodology, setPlanMethodology] = useState("Sala de Aula Invertida");
+  const [planPracticalActivity, setPlanPracticalActivity] = useState("");
+  const [planEvaluation, setPlanEvaluation] = useState("");
+  const [planResources, setPlanResources] = useState<string[]>([]);
+  const [planCriteria, setPlanCriteria] = useState<string[]>([]);
+  const [planRecovery, setPlanRecovery] = useState("");
+  const [planHomework, setPlanHomework] = useState("");
+
+  // Temp item inputs for lists
+  const [tempObjective, setTempObjective] = useState("");
+  const [tempCompetency, setTempCompetency] = useState("");
+  const [tempResource, setTempResource] = useState("");
+  const [tempCriterion, setTempCriterion] = useState("");
+
+  // AI Planner generation state
+  const [isGeneratingPlanAI, setIsGeneratingPlanAI] = useState(false);
+
   const safeTimeSlots = normalizeArray(timeSlots);
   const safeClasses = normalizeArray(classes);
   const safeStudents = normalizeArray(students);
@@ -278,8 +344,13 @@ export default function SmartClassDiaryView({
         const rawData = await resSessions.json();
         const data = normalizeArray(rawData);
         setSessions(data);
-        if (data.length > 0 && !selectedAttendanceSessionId) {
-          setSelectedAttendanceSessionId(data[0].id);
+        if (data.length > 0) {
+          const exists = data.some((s: any) => s.id === selectedAttendanceSessionId);
+          if (!exists) {
+            setSelectedAttendanceSessionId(data[0].id);
+          }
+        } else {
+          setSelectedAttendanceSessionId("");
         }
       }
 
@@ -311,6 +382,12 @@ export default function SmartClassDiaryView({
       const resObs = await fetch(apiUrl("/api/codecheck/diary/observations"));
       if (resObs.ok) {
         setObservations(normalizeArray(await resObs.json()));
+      }
+
+      // 7. Lesson Plans
+      const resPlans = await fetch(apiUrl("/api/diary/plan"));
+      if (resPlans.ok) {
+        setLessonPlans(normalizeArray(await resPlans.json()));
       }
     } catch (err: any) {
       console.error("Failed fetching diary data:", err?.message || "Unknown error");
@@ -799,6 +876,193 @@ export default function SmartClassDiaryView({
     }
   };
 
+  // ==========================================
+  // Lesson Planner Handlers (Módulo 6)
+  // ==========================================
+  const handleOpenNewPlan = () => {
+    setEditingPlanId(null);
+    setPlanClassId(selectedClass || "");
+    setPlanCurricularUnit("");
+    setPlanTopic("");
+    setPlanDate(new Date().toISOString().split("T")[0]);
+    setPlanDuration("2");
+    setPlanObjectives([]);
+    setPlanCompetencies([]);
+    setPlanScript("");
+    setPlanMethodology("Sala de Aula Invertida");
+    setPlanPracticalActivity("");
+    setPlanEvaluation("");
+    setPlanResources([]);
+    setPlanCriteria([]);
+    setPlanRecovery("");
+    setPlanHomework("");
+    setIsPlanFormOpen(true);
+  };
+
+  const handleOpenEditPlan = (plan: any) => {
+    setEditingPlanId(plan.id);
+    setPlanClassId(plan.class_id || "");
+    setPlanCurricularUnit(plan.curricular_unit || "");
+    setPlanTopic(plan.topic || "");
+    setPlanDate(plan.date || "");
+    setPlanDuration(plan.duration?.toString() || "2");
+    setPlanObjectives(Array.isArray(plan.objectives) ? plan.objectives : []);
+    setPlanCompetencies(Array.isArray(plan.competencies) ? plan.competencies : []);
+    setPlanScript(plan.script || "");
+    setPlanMethodology(plan.methodology || "Sala de Aula Invertida");
+    setPlanPracticalActivity(plan.practical_activity || "");
+    setPlanEvaluation(plan.evaluation || "");
+    setPlanResources(Array.isArray(plan.resources) ? plan.resources : []);
+    setPlanCriteria(Array.isArray(plan.criteria) ? plan.criteria : []);
+    setPlanRecovery(plan.recovery || "");
+    setPlanHomework(plan.homework || "");
+    setIsPlanFormOpen(true);
+  };
+
+  const handleSavePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!planTopic.trim()) {
+      showToast("Por favor, preencha o tema/tópico da aula.", "error");
+      return;
+    }
+
+    const payload = {
+      id: editingPlanId,
+      topic: planTopic,
+      class_id: planClassId,
+      curricular_unit: planCurricularUnit,
+      date: planDate,
+      duration: Number(planDuration) || 2,
+      objectives: planObjectives,
+      competencies: planCompetencies,
+      script: planScript,
+      methodology: planMethodology,
+      practical_activity: planPracticalActivity,
+      evaluation: planEvaluation,
+      resources: planResources,
+      criteria: planCriteria,
+      recovery: planRecovery,
+      homework: planHomework
+    };
+
+    try {
+      const res = await fetch(apiUrl("/api/diary/plan"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        showToast(editingPlanId ? "Plano de aula atualizado!" : "Plano de aula criado com sucesso!");
+        setIsPlanFormOpen(false);
+        fetchData(); // Syncs list
+      } else {
+        showToast("Erro ao salvar o plano de aula.", "error");
+      }
+    } catch (err) {
+      showToast("Erro na comunicação com o servidor.", "error");
+    }
+  };
+
+  const handleDeletePlan = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este plano de aula?")) return;
+    try {
+      const res = await fetch(apiUrl(`/api/diary/plan/${id}`), {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        showToast("Plano de aula excluído com sucesso!");
+        fetchData();
+      } else {
+        showToast("Erro ao excluir o plano de aula.", "error");
+      }
+    } catch (err) {
+      showToast("Erro de rede ao excluir.", "error");
+    }
+  };
+
+  const handleGeneratePlanWithAI = async () => {
+    if (!planTopic.trim()) {
+      showToast("Defina o tema/tópico antes de acionar a inteligência artificial.", "info");
+      return;
+    }
+
+    setIsGeneratingPlanAI(true);
+    showToast("Inteligência artificial analisando contexto e gerando plano de aula...", "info");
+
+    const targetClassObj = safeClasses.find(c => c.id === planClassId);
+    const payload = {
+      className: targetClassObj ? targetClassObj.name : "Geral",
+      courseName: targetClassObj ? targetClassObj.course : "Curso Técnico",
+      curricularUnit: planCurricularUnit,
+      topic: planTopic,
+      duration: Number(planDuration) || 2
+    };
+
+    try {
+      const res = await fetch(apiUrl("/api/codecheck/lesson-plans/ai-generate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.data) {
+          const aiData = result.data;
+          setPlanTopic(aiData.topic || planTopic);
+          setPlanObjectives(Array.isArray(aiData.objectives) ? aiData.objectives : []);
+          setPlanCompetencies(Array.isArray(aiData.competencies) ? aiData.competencies : []);
+          setPlanScript(aiData.script || "");
+          setPlanMethodology(aiData.methodology || planMethodology);
+          setPlanPracticalActivity(aiData.practical_activity || "");
+          setPlanEvaluation(aiData.evaluation || "");
+          setPlanResources(Array.isArray(aiData.resources) ? aiData.resources : []);
+          setPlanCriteria(Array.isArray(aiData.criteria) ? aiData.criteria : []);
+          setPlanRecovery(aiData.recovery || "");
+          setPlanHomework(aiData.homework || "");
+          showToast("Plano de aula gerado com inteligência artificial com sucesso!", "success");
+        } else {
+          showToast("Resposta inválida do gerador de IA.", "error");
+        }
+      } else {
+        showToast("Falha na geração de conteúdo da IA.", "error");
+      }
+    } catch (error) {
+      showToast("Erro na geração com IA.", "error");
+    } finally {
+      setIsGeneratingPlanAI(false);
+    }
+  };
+
+  const handleAddObjective = () => {
+    if (tempObjective.trim()) {
+      setPlanObjectives([...planObjectives, tempObjective.trim()]);
+      setTempObjective("");
+    }
+  };
+
+  const handleAddCompetency = () => {
+    if (tempCompetency.trim()) {
+      setPlanCompetencies([...planCompetencies, tempCompetency.trim()]);
+      setTempCompetency("");
+    }
+  };
+
+  const handleAddResource = () => {
+    if (tempResource.trim()) {
+      setPlanResources([...planResources, tempResource.trim()]);
+      setTempResource("");
+    }
+  };
+
+  const handleAddCriterion = () => {
+    if (tempCriterion.trim()) {
+      setPlanCriteria([...planCriteria, tempCriterion.trim()]);
+      setTempCriterion("");
+    }
+  };
+
   // Run Export simulation (MÓDULO 9 & 13)
   const triggerExport = async (format: "PDF" | "Excel" | "CSV") => {
     showToast(`Preparando compilação do relatório em ${format}...`, "info");
@@ -933,7 +1197,7 @@ export default function SmartClassDiaryView({
         <div className="flex gap-4">
           <select
             value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
+            onChange={(e) => changeSelectedClass(e.target.value)}
             className="p-2 border border-gray-300 rounded-lg"
           >
             <option value="">Selecione uma Turma</option>
@@ -978,7 +1242,7 @@ export default function SmartClassDiaryView({
           <BookOpen className="w-4 h-4 text-teal-600" />
           <select
             value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
+            onChange={(e) => changeSelectedClass(e.target.value)}
             className="bg-transparent font-medium text-sm text-gray-800 focus:outline-none"
           >
             <option value="">Selecione uma Turma</option>
@@ -1023,9 +1287,7 @@ export default function SmartClassDiaryView({
                 <button
                   key={c.id}
                   onClick={() => {
-                    setSelectedClass(c.id);
-                    // Clear selected student upon changing class
-                    setSelectedStudent("");
+                    changeSelectedClass(c.id);
                   }}
                   className={`flex flex-col text-left p-4 rounded-xl border transition-all duration-200 relative group cursor-pointer ${
                     isSelected
@@ -1121,6 +1383,17 @@ export default function SmartClassDiaryView({
         >
           <Calendar className="w-4 h-4" />
           Calendário Visual
+        </button>
+        <button
+          onClick={() => setActiveSubTab("lesson-planner")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-all ${
+            activeSubTab === "lesson-planner"
+              ? "border-teal-600 text-teal-600"
+              : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          Planos de Aula ({lessonPlans.length})
         </button>
         <button
           onClick={() => setActiveSubTab("integrations")}
@@ -2169,8 +2442,27 @@ export default function SmartClassDiaryView({
 
             <div className="divide-y divide-gray-150">
               {safeAttendanceRecords.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 text-xs">
-                  Aguardando seleção ou populando banco local...
+                <div className="p-12 text-center text-gray-500 text-xs flex flex-col items-center justify-center gap-4">
+                  <div className="p-3 bg-teal-50 rounded-full text-teal-600">
+                    <Users className="w-8 h-8" />
+                  </div>
+                  <div className="max-w-md">
+                    <p className="font-bold text-gray-700 text-sm mb-1">Nenhuma Aula ou Aluno Selecionado</p>
+                    <p className="text-gray-400">
+                      Para lançar frequência, certifique-se de que a turma possui alunos cadastrados e de que há pelo menos uma aula registrada na aba <strong>Aulas</strong>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetForm();
+                      setIsFormOpen(true);
+                      setActiveSubTab("lessons");
+                    }}
+                    className="px-4 py-2 bg-teal-800 hover:bg-teal-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> Registrar Primeira Aula
+                  </button>
                 </div>
               ) : (
                 safeAttendanceRecords.map((stud, idx) => (
@@ -2931,6 +3223,569 @@ export default function SmartClassDiaryView({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* TAB: LESSON PLANNER (MÓDULO 6) */}
+      {/* ============================================================== */}
+      {activeSubTab === "lesson-planner" && (
+        <div id="subtab-lesson-planner" className="space-y-6 animate-fade-in pb-12">
+          
+          {/* Header Area */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-teal-600" />
+                Planejamento de Aulas Inteligente
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Elabore planos de aula estruturados por competência técnica com o apoio de Inteligência Artificial do SENAI.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenNewPlan}
+              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Plano de Aula
+            </button>
+          </div>
+
+          {/* Form Modal / Accordion */}
+          {isPlanFormOpen && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 space-y-6 animate-fade-in relative">
+              <button
+                type="button"
+                onClick={() => setIsPlanFormOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xs font-bold p-1 bg-gray-50 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                ✕ Fechar
+              </button>
+
+              <div className="border-b border-gray-150 pb-4">
+                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-tight flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-teal-600" />
+                  {editingPlanId ? "Editar Plano de Aula" : "Novo Plano de Aula Co-Pilotado por IA"}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Preencha os campos abaixo ou insira o Tema/Tópico e clique em "Gerar com IA" para automatizar a criação.
+                </p>
+              </div>
+
+              <form onSubmit={handleSavePlan} className="space-y-6">
+                {/* AI Helper Card */}
+                <div className="p-4 bg-teal-50/50 border border-teal-100 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-teal-900 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                      Geração de Plano Completo com Inteligência Artificial
+                    </h4>
+                    <p className="text-[11px] text-teal-700">
+                      O assistente irá planejar objetivos de aprendizagem, competências, roteiro de tempo, atividade prática e avaliações baseando-se no tema e turma selecionada.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isGeneratingPlanAI}
+                    onClick={handleGeneratePlanWithAI}
+                    className="self-start md:self-center px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                  >
+                    {isGeneratingPlanAI ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Planejando aula...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Co-criar com IA
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Grid Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Turma Vinculada *
+                    </label>
+                    <select
+                      required
+                      value={planClassId}
+                      onChange={(e) => setPlanClassId(e.target.value)}
+                      className="w-full p-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl text-gray-800"
+                    >
+                      <option value="">Selecione uma turma...</option>
+                      {safeClasses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.course})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Unidade Curricular
+                    </label>
+                    <select
+                      value={planCurricularUnit}
+                      onChange={(e) => setPlanCurricularUnit(e.target.value)}
+                      className="w-full p-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl text-gray-800"
+                    >
+                      <option value="">Selecione ou digite...</option>
+                      {combinedCurricularSuggestions.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                        Data Prevista
+                      </label>
+                      <input
+                        type="date"
+                        value={planDate}
+                        onChange={(e) => setPlanDate(e.target.value)}
+                        className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                        Duração (Horas)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={planDuration}
+                        onChange={(e) => setPlanDuration(e.target.value)}
+                        className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                    Tema ou Tópico Principal da Aula *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Introdução a Bancos de Dados Relacionais, Criação de tabelas e Constraints..."
+                    value={planTopic}
+                    onChange={(e) => setPlanTopic(e.target.value)}
+                    className="w-full p-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl text-gray-800"
+                  />
+                </div>
+
+                {/* Sub Lists & Arrays */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Objectives list */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-600 uppercase">
+                      Objetivos de Aprendizado (Taxonomia SENAI)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Ex: Identificar tabelas e chaves primárias"
+                        value={tempObjective}
+                        onChange={(e) => setTempObjective(e.target.value)}
+                        className="flex-1 p-2 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-850"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddObjective}
+                        className="px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="space-y-1 max-h-[120px] overflow-y-auto pr-1">
+                      {planObjectives.length === 0 ? (
+                        <p className="text-[11px] text-gray-400 italic">Nenhum objetivo adicionado.</p>
+                      ) : (
+                        planObjectives.map((obj, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-gray-50 p-1.5 rounded-lg border border-gray-150">
+                            <span className="text-[11px] text-gray-700 font-medium">{obj}</span>
+                            <button
+                              type="button"
+                              onClick={() => setPlanObjectives(planObjectives.filter((_, i) => i !== idx))}
+                              className="text-red-500 hover:text-red-700 text-xs px-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Competencies list */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-600 uppercase">
+                      Competências & Habilidades técnicas vinculadas
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Ex: Modelagem de Dados, Normalização"
+                        value={tempCompetency}
+                        onChange={(e) => setTempCompetency(e.target.value)}
+                        className="flex-1 p-2 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-850"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCompetency}
+                        className="px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="space-y-1 max-h-[120px] overflow-y-auto pr-1">
+                      {planCompetencies.length === 0 ? (
+                        <p className="text-[11px] text-gray-400 italic">Nenhuma competência adicionada.</p>
+                      ) : (
+                        planCompetencies.map((comp, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-gray-50 p-1.5 rounded-lg border border-gray-150">
+                            <span className="text-[11px] text-gray-700 font-medium">{comp}</span>
+                            <button
+                              type="button"
+                              onClick={() => setPlanCompetencies(planCompetencies.filter((_, i) => i !== idx))}
+                              className="text-red-500 hover:text-red-700 text-xs px-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Details Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Roteiro Cronológico de Aula
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Ex: 08:00 - Introdução ao modelo de dados (20m)&#10;08:20 - Criação prática do script SQL (40m)..."
+                      value={planScript}
+                      onChange={(e) => setPlanScript(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-850 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Metodologia de Ensino Sugerida
+                    </label>
+                    <select
+                      value={planMethodology}
+                      onChange={(e) => setPlanMethodology(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-800"
+                    >
+                      <option value="Sala de Aula Invertida">Sala de Aula Invertida</option>
+                      <option value="Aprendizagem Baseada em Projetos (PBL)">Aprendizagem Baseada em Projetos (PBL)</option>
+                      <option value="Instrução Direta Orientada">Instrução Direta Orientada</option>
+                      <option value="Ensino Híbrido">Ensino Híbrido</option>
+                      <option value="Metodologia Pair Programming">Metodologia Pair Programming</option>
+                      <option value="Gamificação Pedagógica">Gamificação Pedagógica</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Atividade Prática Planejada
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Instruções claras para a dinâmica ou laboratório computacional..."
+                      value={planPracticalActivity}
+                      onChange={(e) => setPlanPracticalActivity(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-850"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Avaliação e Evidência de Entrega
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Como os alunos irão provar que atingiram o objetivo técnico..."
+                      value={planEvaluation}
+                      onChange={(e) => setPlanEvaluation(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-850"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Resources list */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-600 uppercase">
+                      Recursos Didáticos / Infraestrutura
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Ex: Projetor, Ambiente CodeCheck, VS Code"
+                        value={tempResource}
+                        onChange={(e) => setTempResource(e.target.value)}
+                        className="flex-1 p-2 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-850"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddResource}
+                        className="px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {planResources.length === 0 ? (
+                        <p className="text-[10px] text-gray-400 italic">Nenhum recurso listado.</p>
+                      ) : (
+                        planResources.map((res, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1 text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                            {res}
+                            <button
+                              type="button"
+                              onClick={() => setPlanResources(planResources.filter((_, i) => i !== idx))}
+                              className="text-red-500 font-bold hover:text-red-700"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Criteria list */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-600 uppercase">
+                      Critérios de Sucesso Pedagógicos
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Ex: Chave primária definida corretamente"
+                        value={tempCriterion}
+                        onChange={(e) => setTempCriterion(e.target.value)}
+                        className="flex-1 p-2 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-850"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCriterion}
+                        className="px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="space-y-1 max-h-[100px] overflow-y-auto">
+                      {planCriteria.length === 0 ? (
+                        <p className="text-[10px] text-gray-400 italic">Nenhum critério listado.</p>
+                      ) : (
+                        planCriteria.map((crit, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded border border-gray-150">
+                            <span className="text-[10px] text-gray-700">{crit}</span>
+                            <button
+                              type="button"
+                              onClick={() => setPlanCriteria(planCriteria.filter((_, i) => i !== idx))}
+                              className="text-red-500 hover:text-red-700 text-xs px-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 pt-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Planejamento de Recuperação Contínua
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Atividades alternativas imediatas para quem demonstrar dificuldade lógica..."
+                      value={planRecovery}
+                      onChange={(e) => setPlanRecovery(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-850"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Dever de Casa / Desafio Complementar
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Exercício extraclasse de reforço prático sugerido para fixação..."
+                      value={planHomework}
+                      onChange={(e) => setPlanHomework(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-850"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPlanFormOpen(false)}
+                    className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                  >
+                    {editingPlanId ? "Salvar Alterações" : "Salvar Plano de Aula"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Search/Filter List Bar */}
+          <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
+            <span className="text-xs font-bold text-gray-600 uppercase tracking-tight flex items-center gap-1">
+              <Layers className="w-4 h-4 text-teal-600" />
+              Filtrar Planos Existentes
+            </span>
+            <div className="flex flex-wrap gap-2 w-full md:w-auto">
+              <span className="text-[11px] font-bold text-gray-400 bg-gray-100 px-3 py-1.5 rounded-lg flex items-center">
+                Turma Filtro: {safeClasses.find(c => c.id === selectedClass)?.name || "Nenhuma"}
+              </span>
+              <span className="text-[11px] font-bold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg flex items-center border border-teal-150">
+                Total Localizado: {lessonPlans.filter(p => p.class_id === selectedClass).length} Planos
+              </span>
+            </div>
+          </div>
+
+          {/* Plans Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {lessonPlans.filter(p => p.class_id === selectedClass).length === 0 ? (
+              <div className="md:col-span-2 p-12 bg-white rounded-2xl border border-gray-200 text-center space-y-4">
+                <BookOpen className="w-12 h-12 text-gray-300 mx-auto" />
+                <div className="max-w-md mx-auto">
+                  <h3 className="text-sm font-bold text-gray-800">Nenhum plano de aula para esta turma</h3>
+                  <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                    Você ainda não planejou nenhuma sessão para esta turma. Clique em "Novo Plano de Aula" acima para criar um roteiro técnico co-pilotado por inteligência artificial.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              lessonPlans
+                .filter(p => p.class_id === selectedClass)
+                .map((plan) => (
+                  <div key={plan.id} className="bg-white rounded-2xl border border-gray-200 hover:border-teal-300 hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4 relative group">
+                    
+                    {/* Badge header */}
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] px-2 py-0.5 bg-teal-50 text-teal-700 font-bold uppercase rounded border border-teal-150">
+                          {plan.curricular_unit || "Unidade Curricular"}
+                        </span>
+                        <h3 className="text-sm font-bold text-gray-800 group-hover:text-teal-700 transition-all mt-1.5">
+                          {plan.topic}
+                        </h3>
+                      </div>
+                      <div className="flex gap-1.5 opacity-80 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={() => handleOpenEditPlan(plan)}
+                          className="p-1.5 bg-gray-50 hover:bg-teal-50 text-gray-500 hover:text-teal-600 rounded-lg border border-gray-100 hover:border-teal-200 transition-all"
+                          title="Editar Plano"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlan(plan.id)}
+                          className="p-1.5 bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-lg border border-gray-100 hover:border-red-200 transition-all"
+                          title="Excluir Plano"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Meta information */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-500 border-t border-b border-gray-50 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Planejado para: <strong>{plan.date}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Duração: <strong>{plan.duration || 2}h</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Plan content snippet */}
+                    <div className="space-y-3 flex-1">
+                      {/* Objectives */}
+                      {plan.objectives && plan.objectives.length > 0 && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Objetivos de Aprendizagem</span>
+                          <ul className="list-disc pl-4 text-xs text-gray-600 space-y-0.5">
+                            {plan.objectives.slice(0, 3).map((obj: string, i: number) => (
+                              <li key={i} className="line-clamp-1">{obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Methodology */}
+                      {plan.methodology && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Metodologia</span>
+                          <p className="text-xs text-gray-600 italic bg-gray-50 p-2 rounded-lg border border-gray-150">
+                            {plan.methodology}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Script */}
+                      {plan.script && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Roteiro da Sessão</span>
+                          <p className="text-xs text-gray-600 line-clamp-2 whitespace-pre-line font-mono text-[10px] bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            {plan.script}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Practical Activity Section */}
+                    {plan.practical_activity && (
+                      <div className="p-3 bg-emerald-50/40 border border-emerald-100/50 rounded-xl space-y-1">
+                        <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Atividade Prática Planejada</span>
+                        <p className="text-xs text-gray-700 line-clamp-2 leading-relaxed">
+                          {plan.practical_activity}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))
+            )}
           </div>
         </div>
       )}

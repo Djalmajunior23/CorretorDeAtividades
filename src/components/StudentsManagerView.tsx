@@ -15,6 +15,8 @@ export function StudentsManagerView() {
   const [importText, setImportText] = useState("");
   const [importClass, setImportClass] = useState("");
   const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState<string>("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -72,8 +74,18 @@ export function StudentsManagerView() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Confirmar exclusão deste aluno?")) return;
-    try { await fetch(apiUrl(`/api/students/${id}`), { method: "DELETE" }); fetchData(); } catch (e) {}
+    try {
+      const res = await fetch(apiUrl(`/api/students/${id}`), { method: "DELETE" });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Erro ao excluir aluno: ${errorData.error || "Erro desconhecido"}`);
+      }
+      setDeleteConfirmId(null);
+      setDeleteConfirmName("");
+      fetchData();
+    } catch (e: any) {
+      alert(`Erro de conexão ao excluir aluno: ${e.message}`);
+    }
   };
 
   const handleArchive = async (id: string, currentData: any) => {
@@ -157,7 +169,11 @@ export function StudentsManagerView() {
                       <button onClick={() => handleArchive(s.id, s)} className="text-amber-400/70 hover:text-amber-400 p-1 mr-1">
                         <Archive className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(s.id)} className="text-rose-400/70 hover:text-rose-400 p-1">
+                      <button 
+                        onClick={() => { setDeleteConfirmId(s.id); setDeleteConfirmName(s.name); }} 
+                        className="text-rose-400/70 hover:text-rose-400 p-1"
+                        title="Excluir Aluno"
+                      >
                         <Trash className="w-4 h-4" />
                       </button>
                     </td>
@@ -251,6 +267,38 @@ export function StudentsManagerView() {
           isOpen={!!profileStudentId} 
           onClose={() => setProfileStudentId(null)} 
         />
+      )}
+
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 bg-[#030712]/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] rounded-2xl w-full max-w-md border border-slate-800 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="p-3 bg-rose-500/10 text-rose-400 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2 border border-rose-500/20">
+              <Trash className="w-6 h-6" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-bold text-white mb-2">Excluir Aluno?</h3>
+              <p className="text-sm text-slate-400">
+                Tem certeza que deseja excluir o aluno <strong className="text-white">{deleteConfirmName}</strong>? Esta ação removerá o aluno da listagem ativa.
+              </p>
+            </div>
+            <div className="flex justify-center gap-3 mt-4 pt-4 border-t border-slate-800">
+              <button 
+                type="button"
+                onClick={() => { setDeleteConfirmId(null); setDeleteConfirmName(""); }} 
+                className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer font-medium"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                onClick={() => handleDelete(deleteConfirmId)} 
+                className="px-5 py-2 text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer shadow-lg shadow-rose-500/20"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

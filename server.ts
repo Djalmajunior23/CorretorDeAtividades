@@ -5075,6 +5075,295 @@ app.get("/api/audit-logs", async (req, res) => {
   }
 });
 
+let inMemoryLessonPlans: any[] = [];
+
+// GET: Buscar Planos de Aula (Módulo 6)
+app.get("/api/codecheck/lesson-plans", async (req, res) => {
+  if (pool) {
+    try {
+      const q = await pool.query("SELECT * FROM ai_generated_lesson_plans ORDER BY created_at DESC");
+      const plans = q.rows.map(row => {
+        let parsedContent = {};
+        if (typeof row.content === 'string') {
+          try { parsedContent = JSON.parse(row.content); } catch(e) {}
+        } else if (row.content && typeof row.content === 'object') {
+          parsedContent = row.content;
+        }
+        return {
+          id: row.id,
+          teacher_id: row.teacher_id,
+          topic: row.topic,
+          created_at: row.created_at,
+          ...parsedContent
+        };
+      });
+      return res.json(plans);
+    } catch (e: any) {
+      console.error("[LessonPlans] DB fetch error:", e.message);
+    }
+  }
+  return res.json(inMemoryLessonPlans);
+});
+
+// POST: Criar ou Editar Plano de Aula (Módulo 6)
+app.post("/api/codecheck/lesson-plans", async (req, res) => {
+  const { id, teacher_id, topic, class_id, curricular_unit, date, duration, objectives, competencies, script, methodology, practical_activity, evaluation, resources, criteria, recovery, homework } = req.body;
+  
+  const targetId = id || crypto.randomUUID();
+  const planData = {
+    id: targetId,
+    teacher_id: teacher_id || "teacher",
+    topic: topic || "Sem Título",
+    class_id: class_id || "",
+    curricular_unit: curricular_unit || "",
+    date: date || new Date().toISOString().split('T')[0],
+    duration: Number(duration) || 2,
+    objectives: Array.isArray(objectives) ? objectives : [],
+    competencies: Array.isArray(competencies) ? competencies : [],
+    script: script || "",
+    methodology: methodology || "",
+    practical_activity: practical_activity || "",
+    evaluation: evaluation || "",
+    resources: Array.isArray(resources) ? resources : [],
+    criteria: Array.isArray(criteria) ? criteria : [],
+    recovery: recovery || "",
+    homework: homework || "",
+    created_at: new Date().toISOString()
+  };
+
+  if (pool) {
+    try {
+      const checkQ = await pool.query("SELECT id FROM ai_generated_lesson_plans WHERE id = $1", [targetId]);
+      if (checkQ.rows.length > 0) {
+        await pool.query(
+          "UPDATE ai_generated_lesson_plans SET topic = $1, content = $2 WHERE id = $3",
+          [planData.topic, JSON.stringify(planData), targetId]
+        );
+        logAudit(teacher_id || "teacher", "UPDATE_LESSON_PLAN", `Updated lesson plan for topic "${planData.topic}"`);
+      } else {
+        await pool.query(
+          "INSERT INTO ai_generated_lesson_plans (id, teacher_id, topic, content) VALUES ($1, $2, $3, $4)",
+          [targetId, planData.teacher_id, planData.topic, JSON.stringify(planData)]
+        );
+        logAudit(teacher_id || "teacher", "CREATE_LESSON_PLAN", `Created lesson plan for topic "${planData.topic}"`);
+      }
+      return res.json(planData);
+    } catch (e: any) {
+      console.error("[LessonPlans] DB save error:", e.message);
+    }
+  }
+
+  const existingIdx = inMemoryLessonPlans.findIndex(p => p.id === targetId);
+  if (existingIdx !== -1) {
+    inMemoryLessonPlans[existingIdx] = planData;
+    logAudit(teacher_id || "teacher", "UPDATE_LESSON_PLAN", `Updated lesson plan for topic "${planData.topic}" (InMemory Mode)`);
+  } else {
+    inMemoryLessonPlans.unshift(planData);
+    logAudit(teacher_id || "teacher", "CREATE_LESSON_PLAN", `Created lesson plan for topic "${planData.topic}" (InMemory Mode)`);
+  }
+  return res.json(planData);
+});
+
+// DELETE: Excluir Plano de Aula (Módulo 6)
+app.delete("/api/codecheck/lesson-plans/:id", async (req, res) => {
+  const { id } = req.params;
+  if (pool) {
+    try {
+      await pool.query("DELETE FROM ai_generated_lesson_plans WHERE id = $1", [id]);
+      logAudit("teacher", "DELETE_LESSON_PLAN", `Deleted lesson plan ID ${id}`);
+      return res.json({ success: true });
+    } catch (e: any) {
+      console.error("[LessonPlans] DB delete error:", e.message);
+    }
+  }
+
+  const idx = inMemoryLessonPlans.findIndex(p => p.id === id);
+  if (idx !== -1) {
+    inMemoryLessonPlans.splice(idx, 1);
+    logAudit("teacher", "DELETE_LESSON_PLAN", `Deleted lesson plan ID ${id} (InMemory Mode)`);
+    return res.json({ success: true });
+  }
+  return res.status(404).json({ error: "Plano de aula não encontrado." });
+});
+
+// GET: /api/diary/plan (Alias)
+app.get("/api/diary/plan", async (req, res) => {
+  if (pool) {
+    try {
+      const q = await pool.query("SELECT * FROM ai_generated_lesson_plans ORDER BY created_at DESC");
+      const plans = q.rows.map(row => {
+        let parsedContent = {};
+        if (typeof row.content === 'string') {
+          try { parsedContent = JSON.parse(row.content); } catch(e) {}
+        } else if (row.content && typeof row.content === 'object') {
+          parsedContent = row.content;
+        }
+        return {
+          id: row.id,
+          teacher_id: row.teacher_id,
+          topic: row.topic,
+          created_at: row.created_at,
+          ...parsedContent
+        };
+      });
+      return res.json(plans);
+    } catch (e: any) {
+      console.error("[DiaryPlan] DB fetch error:", e.message);
+    }
+  }
+  return res.json(inMemoryLessonPlans);
+});
+
+// POST: /api/diary/plan (Alias)
+app.post("/api/diary/plan", async (req, res) => {
+  const { id, teacher_id, topic, class_id, curricular_unit, date, duration, objectives, competencies, script, methodology, practical_activity, evaluation, resources, criteria, recovery, homework } = req.body;
+  
+  const targetId = id || crypto.randomUUID();
+  const planData = {
+    id: targetId,
+    teacher_id: teacher_id || "teacher",
+    topic: topic || "Sem Título",
+    class_id: class_id || "",
+    curricular_unit: curricular_unit || "",
+    date: date || new Date().toISOString().split('T')[0],
+    duration: Number(duration) || 2,
+    objectives: Array.isArray(objectives) ? objectives : [],
+    competencies: Array.isArray(competencies) ? competencies : [],
+    script: script || "",
+    methodology: methodology || "",
+    practical_activity: practical_activity || "",
+    evaluation: evaluation || "",
+    resources: Array.isArray(resources) ? resources : [],
+    criteria: Array.isArray(criteria) ? criteria : [],
+    recovery: recovery || "",
+    homework: homework || "",
+    created_at: new Date().toISOString()
+  };
+
+  if (pool) {
+    try {
+      const checkQ = await pool.query("SELECT id FROM ai_generated_lesson_plans WHERE id = $1", [targetId]);
+      if (checkQ.rows.length > 0) {
+        await pool.query(
+          "UPDATE ai_generated_lesson_plans SET topic = $1, content = $2 WHERE id = $3",
+          [planData.topic, JSON.stringify(planData), targetId]
+        );
+        logAudit(teacher_id || "teacher", "UPDATE_LESSON_PLAN", `Updated lesson plan for topic "${planData.topic}"`);
+      } else {
+        await pool.query(
+          "INSERT INTO ai_generated_lesson_plans (id, teacher_id, topic, content) VALUES ($1, $2, $3, $4)",
+          [targetId, planData.teacher_id, planData.topic, JSON.stringify(planData)]
+        );
+        logAudit(teacher_id || "teacher", "CREATE_LESSON_PLAN", `Created lesson plan for topic "${planData.topic}"`);
+      }
+      return res.json(planData);
+    } catch (e: any) {
+      console.error("[DiaryPlan] DB save error:", e.message);
+    }
+  }
+
+  const existingIdx = inMemoryLessonPlans.findIndex(p => p.id === targetId);
+  if (existingIdx !== -1) {
+    inMemoryLessonPlans[existingIdx] = planData;
+    logAudit(teacher_id || "teacher", "UPDATE_LESSON_PLAN", `Updated lesson plan for topic "${planData.topic}" (InMemory Mode)`);
+  } else {
+    inMemoryLessonPlans.unshift(planData);
+    logAudit(teacher_id || "teacher", "CREATE_LESSON_PLAN", `Created lesson plan for topic "${planData.topic}" (InMemory Mode)`);
+  }
+  return res.json(planData);
+});
+
+// DELETE: /api/diary/plan/:id (Alias)
+app.delete("/api/diary/plan/:id", async (req, res) => {
+  const { id } = req.params;
+  if (pool) {
+    try {
+      await pool.query("DELETE FROM ai_generated_lesson_plans WHERE id = $1", [id]);
+      logAudit("teacher", "DELETE_LESSON_PLAN", `Deleted lesson plan ID ${id}`);
+      return res.json({ success: true });
+    } catch (e: any) {
+      console.error("[DiaryPlan] DB delete error:", e.message);
+    }
+  }
+
+  const idx = inMemoryLessonPlans.findIndex(p => p.id === id);
+  if (idx !== -1) {
+    inMemoryLessonPlans.splice(idx, 1);
+    logAudit("teacher", "DELETE_LESSON_PLAN", `Deleted lesson plan ID ${id} (InMemory Mode)`);
+    return res.json({ success: true });
+  }
+  return res.status(404).json({ error: "Plano de aula não encontrado." });
+});
+
+// POST: Geração Inteligente de Plano de Aula via Gemini (Módulo 6)
+app.post("/api/codecheck/lesson-plans/ai-generate", async (req, res) => {
+  const { className, courseName, curricularUnit, topic, duration } = req.body;
+
+  const prompt = `Você é um coordenador e assistente pedagógico sênior do SENAI.
+Sua tarefa é gerar um Plano de Aula (Lesson Plan) pedagógico completo e profissional em português para:
+- Curso: ${courseName || "Técnico"}
+- Turma: ${className || "Geral"}
+- Unidade Curricular: ${curricularUnit || "Geral"}
+- Tema/Tópico da Aula: ${topic || "Lógica de Programação"}
+- Duração da Aula: ${duration || 2} horas
+
+A resposta DEVE ser estritamente um objeto JSON válido, sem tags de markdown (como \`\`\`json) ou textos explicativos ao redor.
+Esquema do JSON esperado:
+{
+  "topic": "Título do plano (ex: ${topic || 'Lógica de Programação'})",
+  "objectives": ["Objetivo de aprendizagem 1", "Objetivo de aprendizagem 2", "Objetivo de aprendizagem 3"],
+  "competencies": ["Competência técnica 1", "Competência técnica 2"],
+  "script": "Roteiro detalhado da aula passo a passo com marcações de tempo (ex: 1. Introdução (15m)...)",
+  "methodology": "Abordagem ou metodologia ativa sugerida (ex: Aprendizagem Baseada em Projetos, Aula Invertida...)",
+  "practical_activity": "Instruções claras para uma atividade prática que consolide o aprendizado",
+  "evaluation": "Como o aprendizado será avaliado ao final da aula (critérios ou entregas)",
+  "resources": ["Recurso didático necessário 1", "Recurso didático necessário 2"],
+  "criteria": ["Critério de avaliação 1", "Critério de avaliação 2"],
+  "recovery": "Plano de recuperação contínua sugerido para alunos com dificuldade",
+  "homework": "Tarefa extraclasse de fixação recomendada"
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    let cleanJson = response.text || "";
+    cleanJson = cleanJson.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleanJson);
+    return res.json({ success: true, data: parsed });
+  } catch (error: any) {
+    console.error("[LessonPlans] Gemini generation error:", error.message);
+    // Return a beautifully generated default based on input values as fallback
+    const fallbackData = {
+      topic: topic || "Lógica de Programação Básica",
+      objectives: [
+        `Compreender os conceitos fundamentais de ${topic || 'Programação'}`,
+        `Aplicar técnicas e boas práticas associadas à Unidade Curricular ${curricularUnit || 'Geral'}`,
+        `Desenvolver habilidades de resolução de problemas computacionais no contexto da turma ${className || 'Geral'}`
+      ],
+      competencies: [
+        "Raciocínio lógico e analítico",
+        "Configuração de ambientes e codificação",
+        `Competências técnicas em ${curricularUnit || 'Tecnologia'}`
+      ],
+      script: `1. Introdução Teórica (20m): Explicação do conceito básico de ${topic || 'Programação'}.\n2. Prática Guiada (40m): Resolução conjunta de exercícios-exemplo.\n3. Atividade Solo (45m): Desenvolvimento individual supervisionado.\n4. Revisão e Encerramento (15m): Feedback e discussões.`,
+      methodology: "Instrução Direta Alternada com Aprendizagem Mão na Massa (Hands-on)",
+      practical_activity: `Desenvolver um script em par para simular o comportamento de ${topic || 'Programação'} em cenários reais do SENAI.`,
+      evaluation: "Avaliação do nível de completude e qualidade do código desenvolvido durante a atividade solo.",
+      resources: ["Notebook/Computador", "IDE de Programação (VS Code)", "Ambiente CodeCheck"],
+      criteria: ["Lógica aplicada corretamente", "Boas práticas de nomenclatura", "Execução livre de erros graves"],
+      recovery: "Exercícios adicionais de reforço com mentoria individual guiada na próxima sessão.",
+      homework: `Escrever um artigo curto ou código de 20 linhas que use os conceitos de ${topic || 'Programação'} aplicados ao cotidiano.`
+    };
+    return res.json({ success: true, data: fallbackData, is_fallback: true });
+  }
+});
+
 app.post("/api/codecheck/module06/lesson-planner", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_AI_LESSON_PLANNER) return res.status(403).json({ error: "Desativado" });
   const result = await AIProvider.generate(JSON.stringify(req.body), "lesson_plan");
@@ -8563,6 +8852,9 @@ app.get("/api/codecheck/diary/attendance", async (req, res) => {
       let query = "SELECT * FROM attendance_records";
       const params: any[] = [];
       if (session_id) {
+        if (typeof session_id !== "string" || !isValidUuid(session_id)) {
+          return res.json([]);
+        }
         params.push(session_id);
         query += " WHERE session_id = $1";
       }
@@ -8571,6 +8863,7 @@ app.get("/api/codecheck/diary/attendance", async (req, res) => {
       return res.json(result.rows);
     } catch (e: any) {
       console.error("[Attendance] DB error:", e.message);
+      return res.status(500).json({ error: e.message });
     }
   }
 
@@ -8590,6 +8883,10 @@ app.post("/api/codecheck/diary/attendance", async (req, res) => {
     return res.status(400).json({ error: "Parâmetros inválidos." });
   }
 
+  if (typeof session_id !== "string" || !isValidUuid(session_id)) {
+    return res.status(400).json({ error: "session_id inválido. Precisa ser um UUID válido." });
+  }
+
   if (pool) {
     try {
       // Begin basic transaction-like sweep to support simple replaces
@@ -8606,6 +8903,7 @@ app.post("/api/codecheck/diary/attendance", async (req, res) => {
       return res.json({ success: true, count: records.length });
     } catch (e: any) {
       console.error("[Attendance] DB save error:", e.message);
+      return res.status(500).json({ error: e.message });
     }
   }
 
