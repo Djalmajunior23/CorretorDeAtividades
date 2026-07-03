@@ -67,6 +67,7 @@ import {
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
 import { apiUrl, safeJsonResponse, apiFetch } from "./config/api";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -810,9 +811,23 @@ export default function App() {
       fetch(apiUrl("/api/classes"))
         .then(res => safeJsonResponse(res))
         .then(data => {
-          if (Array.isArray(data)) {
-            setCorrectorClasses(data);
+          let classList: any[] = [];
+          if (data) {
+            if (Array.isArray(data)) {
+              classList = data;
+            } else if (Array.isArray(data.classes)) {
+              classList = data.classes;
+            } else if (Array.isArray(data.data)) {
+              classList = data.data;
+            } else if (Array.isArray(data.data?.classes)) {
+              classList = data.data.classes;
+            } else if (Array.isArray(data.items)) {
+              classList = data.items;
+            } else if (Array.isArray(data.data?.items)) {
+              classList = data.data.items;
+            }
           }
+          setCorrectorClasses(classList);
         })
         .catch(err => console.error("Error loading corrector classes:", err));
     }
@@ -828,13 +843,33 @@ export default function App() {
     };
 
     if (selectedCorrectorClass && !isInvalidClassId(selectedCorrectorClass)) {
+      console.log("[DEV-DIAGNOSTIC] App.tsx fetching corrector students for class_id:", selectedCorrectorClass);
       // 1. Fetch Students of this class
       fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedCorrectorClass)}`))
-        .then(res => safeJsonResponse(res))
+        .then(res => {
+          console.log("[DEV-DIAGNOSTIC] App.tsx response status for corrector students:", res.status);
+          return safeJsonResponse(res);
+        })
         .then(data => {
-          if (Array.isArray(data)) {
-            setCorrectorStudents(data);
+          console.log("[DEV-DIAGNOSTIC] App.tsx loaded corrector students raw data:", data);
+          let studentList: any[] = [];
+          if (data) {
+            if (Array.isArray(data)) {
+              studentList = data;
+            } else if (Array.isArray(data.students)) {
+              studentList = data.students;
+            } else if (Array.isArray(data.data)) {
+              studentList = data.data;
+            } else if (Array.isArray(data.data?.students)) {
+              studentList = data.data.students;
+            } else if (Array.isArray(data.items)) {
+              studentList = data.items;
+            } else if (Array.isArray(data.data?.items)) {
+              studentList = data.data.items;
+            }
           }
+          console.log("[DEV-DIAGNOSTIC] App.tsx corrector students list normalized:", studentList);
+          setCorrectorStudents(studentList);
         })
         .catch(err => console.error("Error loading corrector students:", err));
 
@@ -1147,8 +1182,9 @@ export default function App() {
         {/* View switching panel */}
         <div className="flex-1 overflow-y-auto p-8 scrollbar-thin">
           <ErrorBoundary>
+            <AppErrorBoundary>
 
-          {currentTab === "dashboard" && (
+            {currentTab === "dashboard" && (
             <DashboardView onNavigate={(tab) => setTab(tab)} />
           )}
 
@@ -4001,7 +4037,8 @@ export default function App() {
             </div>
           )}
 
-        </ErrorBoundary>
+            </AppErrorBoundary>
+          </ErrorBoundary>
         </div>
       </main>
     </div>

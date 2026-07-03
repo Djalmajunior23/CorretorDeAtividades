@@ -3,6 +3,23 @@ import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, 
 import { StudentProfileModal } from "./StudentProfileModal";
 import { apiUrl, safeJsonResponse } from "../config/api";
 
+function normalizeArray<T = any>(value: any): T[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.data?.items)) return value.data.items;
+  if (Array.isArray(value?.data?.records)) return value.data.records;
+  if (Array.isArray(value?.data?.timeSlots)) return value.data.timeSlots;
+  if (Array.isArray(value?.data?.students)) return value.data.students;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.records)) return value.records;
+  if (Array.isArray(value?.results)) return value.results;
+  if (Array.isArray(value?.students)) return value.students;
+  if (Array.isArray(value?.classes)) return value.classes;
+  if (Array.isArray(value?.data?.classes)) return value.data.classes;
+  return [];
+}
+
 export function StudentsManagerView() {
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
@@ -22,7 +39,8 @@ export function StudentsManagerView() {
     setLoading(true);
     try {
       const clsResp = await fetch(apiUrl("/api/classes"));
-      setClasses(await clsResp.json() || []);
+      const clsData = await clsResp.json().catch(() => null);
+      setClasses(normalizeArray(clsData));
 
       const isInvalidClassId = (cid: string | undefined) => {
         if (!cid) return true;
@@ -33,7 +51,8 @@ export function StudentsManagerView() {
 
       if (!isInvalidClassId(selectedClass)) {
         const stdResp = await fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedClass)}`));
-        setStudents(await stdResp.json() || []);
+        const stdData = await stdResp.json().catch(() => null);
+        setStudents(normalizeArray(stdData));
       } else {
         setStudents([]);
       }

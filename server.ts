@@ -79,7 +79,7 @@ const allowedOrigins = [
   /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/,
   /^https:\/\/ais-dev-[a-zA-Z0-9-]+\.us-east1\.run\.app$/,
   /^https:\/\/ais-pre-[a-zA-Z0-9-]+\.us-east1\.run\.app$/,
-  /^https:\/\/ais-[a-z0-9-]+-[a-z0-9-]+\.us-east1\.run\.app$/,
+  /^https:\/\/[a-zA-Z0-9-]+\.us-east1\.run\.app$/,
   "http://localhost:5173",
   "http://localhost:3000"
 ];

@@ -57,7 +57,7 @@ export default function QuestionBankView() {
     setLoading(true);
     try {
       const data = await apiFetch("/api/questions");
-      setQuestions(data);
+      setQuestions(normalizeQuestions(data));
     } catch (e: any) {
       toast.error("Não foi possível carregar as questões. Tentando modo temporário de leitura local.");
     } finally {
@@ -65,8 +65,10 @@ export default function QuestionBankView() {
     }
   };
 
-  const normalizeGeneratedQuestions = (response: any) => {
+  const normalizeQuestions = (response: any) => {
+    if (Array.isArray(response)) return response;
     if (Array.isArray(response?.questions)) return response.questions;
+    if (Array.isArray(response?.data)) return response.data;
     if (Array.isArray(response?.data?.questions)) return response.data.questions;
     if (response?.data?.question) return [response.data.question];
     if (response?.question) return [response.question];
@@ -95,7 +97,7 @@ export default function QuestionBankView() {
         body: JSON.stringify(payload),
       });
       
-      const generatedQuestions = normalizeGeneratedQuestions(data);
+      const generatedQuestions = normalizeQuestions(data);
 
       if (generatedQuestions.length === 0) {
         toast.error("Nenhuma questão foi gerada. Tente novamente ou altere os parâmetros.");

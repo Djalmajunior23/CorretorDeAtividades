@@ -1462,7 +1462,7 @@ export default function SmartClassDiaryView({
           {/* Attendance Dashboard Component */}
           <AttendanceDashboard 
             totalWorkload={160} 
-            actualPresence={sessions.reduce((acc, s) => acc + (s.duration_hours || 0), 0)}
+            actualPresence={safeSessions.reduce((acc, s) => acc + (s.duration_hours || 0), 0)}
             className="animate-fade-in"
           />
 
