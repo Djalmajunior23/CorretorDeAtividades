@@ -929,7 +929,28 @@ export default function App() {
 
   // Dispatch run code
   const handleRunCorrection = async () => {
+    console.log("[Diagnostic] handleRunCorrection initiated at start of execution", {
+      selectedCorrectorClass,
+      selectedCorrectorStudent,
+      studentName,
+      availableStudentsCount: correctorStudents.length
+    });
+
+    if (!selectedCorrectorClass) {
+      toast.error("Selecione uma turma antes de salvar a correção.");
+      return;
+    }
+    
+    if (!selectedCorrectorStudent) {
+      toast.error("Selecione um aluno antes de salvar a correção.");
+      return;
+    }
+
     if (!selectedCorrectorClass || !selectedCorrectorStudent) {
+      console.warn("[Diagnostic] Aborting handleRunCorrection: missing selected class or student", {
+        selectedCorrectorClass,
+        selectedCorrectorStudent
+      });
       setShowCorrectorStudentWarning(true);
       return;
     }
@@ -949,22 +970,27 @@ export default function App() {
     }, 600);
 
     try {
+      const currentStudent = correctorStudents.find(s => s.id === selectedCorrectorStudent);
+      const resolvedStudentName = studentName || currentStudent?.name || null;
+
+      const payload = {
+        language,
+        code,
+        test_cases: testCases,
+        rubric: rubricWeights,
+        studentName: resolvedStudentName,
+        className: correctorClasses.find(c => c.id === selectedCorrectorClass)?.name || null,
+        activity_id: selectedCorrectorActivity || null,
+        class_id: selectedCorrectorClass || null,
+        student_id: selectedCorrectorStudent || null
+      };
+
       const response = await fetch(apiUrl("/api/corrections/run"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          language,
-          code,
-          test_cases: testCases,
-          rubric: rubricWeights,
-          studentName: studentName,
-          className: correctorClasses.find(c => c.id === selectedCorrectorClass)?.name || null,
-          activity_id: selectedCorrectorActivity || null,
-          class_id: selectedCorrectorClass || null,
-          student_id: selectedCorrectorStudent || null
-        })
+        body: JSON.stringify(payload)
       });
 
       clearInterval(progressInterval);
@@ -972,10 +998,120 @@ export default function App() {
       if (response.ok) {
         setCurrentStage("completed");
         const evalResult = await response.json();
-        setResult(evalResult);
+        
+        // Save the result to the profile
+        const resolvedStudentKey = currentStudent ? (
+          currentStudent.id ??
+          currentStudent.student_id ??
+          currentStudent.studentId ??
+          currentStudent.matricula ??
+          currentStudent.registration ??
+          selectedCorrectorStudent
+        ) : selectedCorrectorStudent;
+
+        if (!resolvedStudentKey) {
+          throw new Error("Selecione um aluno antes de corrigir e salvar o resultado.");
+        }
+
+        if (!code?.trim()) {
+          throw new Error("Informe o código antes de corrigir.");
+        }
+
+        const scoreVal = evalResult.final_score ?? evalResult.score ?? evalResult.grade ?? evalResult.nota ?? evalResult.result?.score ?? 0;
+        const feedbackVal = evalResult.feedback ?? evalResult.ai_feedback ?? evalResult.message ?? evalResult.result?.feedback ?? "";
+
+        const savePayload = {
+          student_key: resolvedStudentKey,
+          student_id: currentStudent?.id ?? currentStudent?.student_id ?? selectedCorrectorStudent ?? null,
+          student_registration:
+            currentStudent?.matricula ??
+            currentStudent?.registration ??
+            null,
+          student_name:
+            resolvedStudentName ??
+            currentStudent?.student_name ??
+            null,
+
+          class_id: selectedCorrectorClass ?? null,
+          class_name:
+            correctorClasses.find(c => c.id === selectedCorrectorClass)?.name ??
+            null,
+
+          question_id: selectedCorrectorActivity ?? null,
+          question_title:
+            correctorActivities.find(a => a.id === selectedCorrectorActivity)?.title ??
+            "Correção manual",
+
+          language,
+          submitted_code: code,
+          code,
+
+          score: scoreVal,
+          max_score: 100,
+
+          feedback: feedbackVal,
+          ai_feedback: evalResult.ai_feedback ?? null,
+
+          execution_output:
+            evalResult.stdout ??
+            evalResult.execution_output ??
+            evalResult.output ??
+            evalResult.result?.output ??
+            "",
+
+          execution_error:
+            evalResult.stderr ??
+            evalResult.execution_error ??
+            evalResult.error ??
+            evalResult.result?.error ??
+            null,
+
+          test_results:
+            evalResult.test_results ??
+            evalResult.testResults ??
+            evalResult.result?.test_results ??
+            [],
+
+          rubric_result:
+            evalResult.rubric_result ??
+            evalResult.rubric ??
+            evalResult.result?.rubric_result ??
+            {},
+
+          metadata: {
+            source: "handleRunCorrection",
+            saved_from_frontend: true
+          }
+        };
+
+        if (import.meta.env.DEV) {
+          console.log("[Correction] selectedStudent", currentStudent);
+          console.log("[Correction] resolvedStudentKey", resolvedStudentKey);
+          console.log("[Correction] savePayload", savePayload);
+        }
+
+        const saveResponse = await fetch(apiUrl("/api/student-correction-results"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(savePayload)
+        });
+
+        const savedResult = await saveResponse.json();
+
+        if (import.meta.env.DEV) {
+          console.log("[Correction] savedResult", savedResult);
+        }
+
+        if (!saveResponse.ok) {
+          throw new Error(savedResult.message || "Erro ao salvar a correção no banco de dados.");
+        }
+
+        setResult(evalResult.data ? evalResult.data : evalResult);
+        toast.success("Correção salva no perfil do aluno.");
         fetchSubmissions(); // reload logs list
       } else {
         const errText = await response.text();
+        console.error("[Diagnostic] Server returned error for correction run:", errText);
         alert(`Erro ao executar endpoint: ${errText}`);
       }
     } catch (err: any) {
@@ -1991,27 +2127,29 @@ export default function App() {
                           )}
 
                           {/* PRIORITY 4: Constructive AI Feedback Section */}
-                          {featureFlags.ENABLE_AI_FEEDBACK && result.ai_pedagogical_feedback && (
+                          {featureFlags.ENABLE_AI_FEEDBACK && (result.feedbackStructured || result.ai_pedagogical_feedback) && (() => {
+                            const aiFb = result.feedbackStructured || result.ai_pedagogical_feedback;
+                            return (
                             <div className="p-5 rounded-xl bg-[#0f172a] border border-cyan-500/20 flex flex-col gap-4">
                               <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-3 mb-1">
                                 <Sparkles className="w-4 h-4 text-cyan-400" />
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 font-mono">Orientação e Feedback de Inteligência Artificial</h4>
                               </div>
                               <p className="text-xs leading-relaxed text-slate-300">
-                                {result.ai_pedagogical_feedback.resumo_desempenho}
+                                {aiFb.summary || aiFb.resumo_desempenho}
                               </p>
                               
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
                                   <span className="text-[10px] uppercase font-mono font-bold text-emerald-400 block mb-1">Pontos Fortes</span>
                                   <ul className="list-disc pl-4 text-[10px] text-slate-300 flex flex-col gap-1">
-                                    {(result.ai_pedagogical_feedback.pontos_fortes || []).map((pf: string, idx: number) => <li key={idx}>{pf}</li>)}
+                                    {(aiFb.strengths || aiFb.pontos_fortes || []).map((pf: string, idx: number) => <li key={idx}>{pf}</li>)}
                                   </ul>
                                 </div>
                                 <div className="p-3 rounded-lg bg-rose-500/5 border border-rose-500/15">
                                   <span className="text-[10px] uppercase font-mono font-bold text-rose-400 block mb-1">Erros e Fragilidades</span>
                                   <ul className="list-disc pl-4 text-[10px] text-slate-300 flex flex-col gap-1">
-                                    {(result.ai_pedagogical_feedback.erros_encontrados || []).map((err: string, idx: number) => <li key={idx}>{err}</li>)}
+                                    {(aiFb.errors || aiFb.erros_encontrados || []).map((err: string, idx: number) => <li key={idx}>{err}</li>)}
                                   </ul>
                                 </div>
                               </div>
@@ -2022,25 +2160,26 @@ export default function App() {
                                   <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800">
                                     <span className="text-[9px] font-bold text-slate-400 block mb-1 uppercase font-mono">Orientações de Melhorias</span>
                                     <ul className="list-disc pl-3 text-[9px] text-slate-400 flex flex-col gap-0.5">
-                                      {(result.ai_pedagogical_feedback.orientacao_melhoria || []).map((om: string, idx: number) => <li key={idx}>{om}</li>)}
+                                      {(aiFb.improvements || aiFb.orientacao_melhoria || []).map((om: string, idx: number) => <li key={idx}>{om}</li>)}
                                     </ul>
                                   </div>
                                   <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800">
                                     <span className="text-[9px] font-bold text-slate-400 block mb-1 uppercase font-mono">Sugestão de Estudos</span>
                                     <ul className="list-disc pl-3 text-[9px] text-slate-400 flex flex-col gap-0.5">
-                                      {(result.ai_pedagogical_feedback.sugestao_estudo || []).map((se: string, idx: number) => <li key={idx}>{se}</li>)}
+                                      {(aiFb.concepts_to_review || aiFb.sugestao_estudo || []).map((se: string, idx: number) => <li key={idx}>{se}</li>)}
                                     </ul>
                                   </div>
                                   <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800">
                                     <span className="text-[9px] font-bold text-slate-400 block mb-1 uppercase font-mono">Próxima Etapa Técnica</span>
                                     <ul className="list-disc pl-3 text-[9px] text-slate-400 flex flex-col gap-0.5">
-                                      {(result.ai_pedagogical_feedback.proxima_etapa || []).map((pe: string, idx: number) => <li key={idx}>{pe}</li>)}
+                                      {(aiFb.next_steps || aiFb.proxima_etapa || []).map((pe: string, idx: number) => <li key={idx}>{pe}</li>)}
                                     </ul>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          )}
+                            );
+                          })()}
 
                         </div>
                       ) : correcting ? (
@@ -2316,6 +2455,11 @@ export default function App() {
                               <span className="text-[9px] font-mono font-bold bg-[#1e293b] text-slate-300 px-2 py-0.5 rounded border border-slate-700">
                                 {val.submission.id.substring(0, 8)}
                               </span>
+                              {val.submission.student_name && (
+                                <span className="text-xs text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                  Estudante: {val.submission.student_name}
+                                </span>
+                              )}
                             </div>
                             
                             {/* Short preview of code */}

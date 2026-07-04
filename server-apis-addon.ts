@@ -27,6 +27,7 @@ function isValidUuid(value: unknown): value is string {
 }
 
 export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
+  console.log("[DEBUG] setupTeacherAPIs called");
   // --- DATABASE MIGRATIONS FOR THE NEW COLUMNS ---
   if (pool) {
     // 1. Migrate activities
@@ -42,27 +43,113 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         console.error("Error migrating d_activities columns:", err),
       );
 
-    // 2. Create d_corrections table
+    // 2. Create correction_results table
     pool
       .query(
         `
-      CREATE TABLE IF NOT EXISTS d_corrections (
-        id UUID PRIMARY KEY,
-        teacher_id VARCHAR(100) NOT NULL,
-        class_id UUID REFERENCES d_class_group(id),
-        student_id UUID REFERENCES d_student_record(id),
-        activity_id UUID REFERENCES d_activities(id),
-        code_content TEXT NOT NULL,
-        language VARCHAR(50) NOT NULL,
-        score NUMERIC NOT NULL,
-        feedback TEXT,
-        correction_type VARCHAR(50) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      CREATE TABLE IF NOT EXISTS correction_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        student_id TEXT NOT NULL,
+        class_id TEXT NULL,
+        question_id TEXT NULL,
+        activity_id TEXT NULL,
+        student_name TEXT NULL,
+        class_name TEXT NULL,
+        question_title TEXT NULL,
+        language TEXT NOT NULL,
+        submitted_code TEXT NOT NULL,
+        score NUMERIC(5,2) DEFAULT 0,
+        max_score NUMERIC(5,2) DEFAULT 100,
+        status TEXT DEFAULT 'corrected',
+        feedback TEXT NULL,
+        ai_feedback TEXT NULL,
+        teacher_feedback TEXT NULL,
+        execution_output TEXT NULL,
+        execution_error TEXT NULL,
+        test_results JSONB DEFAULT '[]'::jsonb,
+        rubric_result JSONB DEFAULT '{}'::jsonb,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        corrected_by TEXT NULL,
+        corrected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
+      CREATE INDEX IF NOT EXISTS idx_correction_results_student_id ON correction_results(student_id);
+      
+      CREATE TABLE IF NOT EXISTS submissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        student_id TEXT NOT NULL,
+        class_id TEXT NULL,
+        question_id TEXT NULL,
+        activity_id TEXT NULL,
+        student_name TEXT NULL,
+        class_name TEXT NULL,
+        question_title TEXT NULL,
+        language TEXT NOT NULL,
+        submitted_code TEXT NOT NULL,
+        score NUMERIC(5,2) DEFAULT 0,
+        max_score NUMERIC(5,2) DEFAULT 100,
+        status TEXT DEFAULT 'corrected',
+        feedback TEXT NULL,
+        ai_feedback TEXT NULL,
+        teacher_feedback TEXT NULL,
+        execution_output TEXT NULL,
+        execution_error TEXT NULL,
+        test_results JSONB DEFAULT '[]'::jsonb,
+        rubric_result JSONB DEFAULT '{}'::jsonb,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        corrected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_submissions_student_id ON submissions(student_id);
+      CREATE INDEX IF NOT EXISTS idx_submissions_class_id ON submissions(class_id);
+      CREATE INDEX IF NOT EXISTS idx_submissions_created_at ON submissions(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS student_correction_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        student_key TEXT NOT NULL,
+        student_id TEXT NULL,
+        student_registration TEXT NULL,
+        student_name TEXT NULL,
+        class_id TEXT NULL,
+        class_name TEXT NULL,
+        question_id TEXT NULL,
+        question_title TEXT NULL,
+        activity_id TEXT NULL,
+        activity_title TEXT NULL,
+        language TEXT NOT NULL,
+        submitted_code TEXT NOT NULL,
+        score NUMERIC(5,2) DEFAULT 0,
+        max_score NUMERIC(5,2) DEFAULT 100,
+        percentage NUMERIC(5,2) DEFAULT 0,
+        status TEXT DEFAULT 'corrected',
+        feedback TEXT NULL,
+        ai_feedback TEXT NULL,
+        teacher_feedback TEXT NULL,
+        execution_output TEXT NULL,
+        execution_error TEXT NULL,
+        test_results JSONB DEFAULT '[]'::jsonb,
+        rubric_result JSONB DEFAULT '{}'::jsonb,
+        strengths JSONB DEFAULT '[]'::jsonb,
+        improvements JSONB DEFAULT '[]'::jsonb,
+        evidence JSONB DEFAULT '{}'::jsonb,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        source TEXT DEFAULT 'code_correction',
+        corrected_by TEXT NULL,
+        corrected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_student_correction_results_student_key ON student_correction_results(student_key);
+      CREATE INDEX IF NOT EXISTS idx_student_correction_results_student_id ON student_correction_results(student_id);
+      CREATE INDEX IF NOT EXISTS idx_student_correction_results_student_registration ON student_correction_results(student_registration);
+      CREATE INDEX IF NOT EXISTS idx_student_correction_results_class_id ON student_correction_results(class_id);
+      CREATE INDEX IF NOT EXISTS idx_student_correction_results_created_at ON student_correction_results(created_at DESC);
     `,
       )
       .catch((err) =>
-        console.error("Error creating d_corrections table:", err),
+        console.error("Error creating tables:", err),
       );
 
     // 3. Migrate d_pedagogical_evidence
@@ -112,6 +199,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   app.get("/api/classes", async (req, res) => {
     try {
       if (!pool) return res.json([]);
+      if (!pool) return res.json({ success: true, data: [] });
       const result = await pool.query(
         "SELECT * FROM d_class_group WHERE status != 'deleted' ORDER BY created_at DESC",
       );
@@ -264,20 +352,6 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         [req.params.id],
       );
       res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/students/:id/profile", async (req, res) => {
-    try {
-      if (!pool) return res.json({ student: {}, metrics: {} });
-      const q = await pool.query(
-        "SELECT * FROM d_student_record WHERE id = $1",
-        [req.params.id],
-      );
-      const student = q.rows[0] || {};
-      res.json({ student, metrics: {} });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -731,116 +805,394 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   });
 
   // --- PRIORITY 4 & 5 BACKEND API ENDPOINTS ---
-  app.post("/api/corrections", async (req, res) => {
+  
+  function resolveStudentKey(body: any): string | null {
+    return (
+      body.student_key ??
+      body.student_id ??
+      body.studentId ??
+      body.aluno_id ??
+      body.alunoId ??
+      body.student?.id ??
+      body.student?.student_id ??
+      body.student?.studentId ??
+      body.student?.matricula ??
+      body.student?.registration ??
+      body.student_registration ??
+      null
+    );
+  }
+
+  async function handleCorrectionSave(req: express.Request, res: express.Response) {
     try {
       if (!pool)
-        return res.status(400).json({ error: "PostgreSQL indisponível." });
+        return res.status(400).json({ success: false, message: "PostgreSQL indisponível." });
 
-      const {
-        class_id,
-        student_id,
-        activity_id,
-        code_content,
-        language,
-        score,
-        feedback,
-        correction_type,
-      } = req.body;
+      const body = req.body ?? {};
+      const studentKey = resolveStudentKey(body);
 
-      if (!student_id || !class_id || !correction_type) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Campos obrigatórios ausentes (student_id, class_id, correction_type).",
-          });
+      const studentId =
+        body.student_id ??
+        body.studentId ??
+        body.student?.id ??
+        null;
+
+      const studentRegistration =
+        body.student_registration ??
+        body.registration ??
+        body.matricula ??
+        body.student?.registration ??
+        body.student?.matricula ??
+        null;
+
+      const studentName =
+        body.student_name ??
+        body.studentName ??
+        body.aluno_nome ??
+        body.alunoNome ??
+        body.student?.name ??
+        body.student?.nome ??
+        null;
+
+      const classId =
+        body.class_id ??
+        body.classId ??
+        body.turma_id ??
+        body.turmaId ??
+        body.class?.id ??
+        null;
+
+      const className =
+        body.class_name ??
+        body.className ??
+        body.turma_nome ??
+        body.turmaNome ??
+        body.class?.name ??
+        body.class?.nome ??
+        null;
+
+      const submittedCode =
+        body.submitted_code ??
+        body.code ??
+        body.sourceCode ??
+        body.codigo ??
+        body.answer ??
+        body.content ??
+        "";
+
+      const language =
+        body.language ??
+        body.linguagem ??
+        body.lang ??
+        "python";
+
+      const score = Number(
+        body.score ??
+        body.grade ??
+        body.nota ??
+        body.result?.score ??
+        0
+      );
+
+      const maxScore = Number(
+        body.max_score ??
+        body.maxScore ??
+        100
+      );
+
+      const percentage =
+        maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(2)) : 0;
+
+      const feedback =
+        body.feedback ??
+        body.ai_feedback ??
+        body.message ??
+        body.result?.feedback ??
+        "";
+
+      const aiFeedback =
+        body.ai_feedback ??
+        body.aiFeedback ??
+        null;
+
+      const teacherFeedback =
+        body.teacher_feedback ??
+        body.teacherFeedback ??
+        null;
+
+      const executionOutput =
+        body.execution_output ??
+        body.output ??
+        body.result?.output ??
+        "";
+
+      const executionError =
+        body.execution_error ??
+        body.error ??
+        body.result?.error ??
+        null;
+
+      const testResults =
+        body.test_results ??
+        body.testResults ??
+        body.result?.test_results ??
+        body.result?.testResults ??
+        [];
+
+      const rubricResult =
+        body.rubric_result ??
+        body.rubric ??
+        body.result?.rubric ??
+        {};
+
+      const strengths =
+        body.strengths ??
+        body.result?.strengths ??
+        [];
+
+      const improvements =
+        body.improvements ??
+        body.result?.improvements ??
+        [];
+
+      const evidence =
+        body.evidence ??
+        body.result?.evidence ??
+        {};
+
+      const metadata =
+        body.metadata ??
+        body.result?.metadata ??
+        {};
+
+      const source =
+        body.source ??
+        "code_correction";
+
+      const correctedBy =
+        body.corrected_by ??
+        body.correctedBy ??
+        "teacher_1";
+
+      if (!studentKey) {
+        return res.status(400).json({
+          success: false,
+          message: "student_key é obrigatório. Selecione um aluno antes de salvar a correção.",
+          received_keys: Object.keys(body)
+        });
       }
 
-      const id = uuidv4();
-      const teacher_id = "teacher_1";
+      if (!submittedCode || !String(submittedCode).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Código enviado é obrigatório para salvar a correção.",
+          received_keys: Object.keys(body)
+        });
+      }
 
-      // 1. Insert into corrections table
-      await pool.query(
-        `INSERT INTO d_corrections (id, teacher_id, class_id, student_id, activity_id, code_content, language, score, feedback, correction_type, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)`,
-        [
-          id,
-          teacher_id,
-          class_id || null,
-          student_id || null,
-          activity_id || null,
-          code_content || "",
-          language || "text",
-          score !== undefined ? parseFloat(score) : 0,
-          feedback || "",
-          correction_type,
-        ],
-      );
+      const query = `
+        INSERT INTO student_correction_results (
+          student_key, student_id, student_registration, student_name,
+          class_id, class_name,
+          question_id, question_title, activity_id, activity_title,
+          language, submitted_code,
+          score, max_score, percentage,
+          status, feedback, ai_feedback, teacher_feedback,
+          execution_output, execution_error,
+          test_results, rubric_result,
+          strengths, improvements, evidence, metadata,
+          source, corrected_by
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb, $23::jsonb, $24::jsonb, $25::jsonb, $26::jsonb, $27::jsonb, $28, $29
+        )
+        RETURNING *;
+      `;
 
-      // 2. Insert Pedagogical Evidence automatically (Priority 5)
-      const evidenceId = uuidv4();
-      const evidenceTypeMap: Record<string, string> = {
-        text: "code_correction",
-        image: "image_correction",
-        batch: "batch_correction",
-        sandbox: "sandbox_execution",
-        ai: "ai_feedback",
-      };
-      const evidenceType =
-        evidenceTypeMap[correction_type] || "code_correction";
-      const evidenceTitle = `Evidência de Aprendizado: Correção ${correction_type.toUpperCase()} (Nota ${score})`;
-      const evidenceDesc = `Atividade corrigida automaticamente via módulo de correção CodeCheck [${correction_type}]. Código em ${language}.`;
-      const tags = JSON.stringify([correction_type, language, `nota-${score}`]);
-
-      await pool.query(
-        `INSERT INTO d_pedagogical_evidence (id, teacher_id, class_id, student_id, activity_id, correction_id, title, description, evidence_type, score, feedback, tags, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)`,
-        [
-          evidenceId,
-          teacher_id,
-          class_id || null,
-          student_id || null,
-          activity_id || null,
-          id,
-          evidenceTitle,
-          evidenceDesc,
-          evidenceType,
-          score !== undefined ? parseFloat(score) : 0,
-          feedback || "",
-          tags,
-        ],
-      );
+      const result = await pool.query(query, [
+        studentKey,
+        studentId,
+        studentRegistration,
+        studentName,
+        classId,
+        className,
+        body.question_id ?? body.questionId ?? null,
+        body.question_title ?? body.questionTitle ?? "Correção manual",
+        body.activity_id ?? body.activityId ?? null,
+        body.activity_title ?? body.activityTitle ?? null,
+        language,
+        submittedCode,
+        score,
+        maxScore,
+        percentage,
+        body.status ?? "corrected",
+        feedback,
+        aiFeedback,
+        teacherFeedback,
+        executionOutput,
+        executionError,
+        JSON.stringify(testResults),
+        JSON.stringify(rubricResult),
+        JSON.stringify(strengths),
+        JSON.stringify(improvements),
+        JSON.stringify(evidence),
+        JSON.stringify(metadata),
+        source,
+        correctedBy
+      ]);
 
       res.status(201).json({
         success: true,
-        correction_id: id,
-        evidence_id: evidenceId,
+        message: "Correção salva no perfil do aluno.",
+        data: result.rows[0]
       });
     } catch (e: any) {
-      console.error("Error creating correction and evidence:", e);
-      res.status(500).json({ error: e.message });
+      console.error("Error creating student_correction_results:", e);
+      res.status(500).json({ success: false, message: e.message });
+    }
+  }
+
+  app.post("/api/student-correction-results", handleCorrectionSave);
+  app.post("/api/corrections", handleCorrectionSave);
+  app.post("/api/submissions", handleCorrectionSave);
+
+  app.get("/api/student-correction-results", async (req, res) => {
+    try {
+      const { student_key, student_id, student_registration, class_id } = req.query;
+      if (!pool) return res.json({ success: true, data: [] });
+
+      let query = "SELECT * FROM student_correction_results";
+      let params: string[] = [];
+      let whereClauses: string[] = [];
+
+      if (student_key) {
+        whereClauses.push(`student_key = $${params.length + 1}`);
+        params.push(student_key as string);
+      }
+      if (student_id) {
+        whereClauses.push(`student_id = $${params.length + 1}`);
+        params.push(student_id as string);
+      }
+      if (student_registration) {
+        whereClauses.push(`student_registration = $${params.length + 1}`);
+        params.push(student_registration as string);
+      }
+      if (class_id) {
+        whereClauses.push(`class_id = $${params.length + 1}`);
+        params.push(class_id as string);
+      }
+
+      if (whereClauses.length > 0) {
+        query += " WHERE " + whereClauses.join(" AND ");
+      }
+
+      query += " ORDER BY created_at DESC LIMIT 100";
+
+      const result = await pool.query(query, params);
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      console.error("Error listing student correction results:", e);
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 
+  app.get("/api/students/:studentKey/correction-results", async (req, res) => {
+    try {
+      const { studentKey } = req.params;
+      if (!pool) return res.json({ success: true, data: [] });
+
+      const query = `
+        SELECT *
+        FROM student_correction_results
+        WHERE student_key = $1
+           OR student_id = $1
+           OR student_registration = $1
+        ORDER BY created_at DESC;
+      `;
+      const result = await pool.query(query, [studentKey]);
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      console.error("Error fetching student correction results:", e);
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/submissions", async (req, res) => {
+    try {
+      const { student_id, class_id } = req.query;
+      if (!pool) return res.json({ success: true, data: [] });
+
+      let query = "SELECT * FROM student_correction_results";
+      let params: string[] = [];
+      let whereClauses: string[] = [];
+
+      if (student_id) {
+        whereClauses.push(`(student_key = $${params.length + 1} OR student_id = $${params.length + 1} OR student_registration = $${params.length + 1})`);
+        params.push(student_id as string);
+      }
+      if (class_id) {
+        whereClauses.push(`class_id = $${params.length + 1}`);
+        params.push(class_id as string);
+      }
+
+      if (whereClauses.length > 0) {
+        query += " WHERE " + whereClauses.join(" AND ");
+      }
+
+      query += " ORDER BY created_at DESC";
+
+      const result = await pool.query(query, params);
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/students/:student_id/submissions", async (req, res) => {
+    try {
+      const { student_id } = req.params;
+      if (!pool) return res.json({ success: true, data: [] });
+      const result = await pool.query(
+        `SELECT * FROM student_correction_results 
+         WHERE student_key = $1 OR student_id = $1 OR student_registration = $1 
+         ORDER BY created_at DESC`,
+        [student_id]
+      );
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // Alias
   app.get("/api/corrections", async (req, res) => {
     try {
-      if (!pool) return res.json([]);
-      const query = `
-        SELECT 
-          c.*,
-          cg.name AS class_name,
-          sr.name AS student_name,
-          a.title AS activity_title
-        FROM d_corrections c
-        LEFT JOIN d_class_group cg ON c.class_id = cg.id
-        LEFT JOIN d_student_record sr ON c.student_id = sr.id
-        LEFT JOIN d_activities a ON c.activity_id = a.id
-        ORDER BY c.created_at DESC
-      `;
-      const result = await pool.query(query);
-      res.json(result.rows);
+      const { student_id, class_id } = req.query;
+      if (!pool) return res.json({ success: true, data: [] });
+
+      let query = "SELECT * FROM student_correction_results";
+      let params: string[] = [];
+      let whereClauses: string[] = [];
+
+      if (student_id) {
+        whereClauses.push(`(student_key = $${params.length + 1} OR student_id = $${params.length + 1} OR student_registration = $${params.length + 1})`);
+        params.push(student_id as string);
+      }
+      if (class_id) {
+        whereClauses.push(`class_id = $${params.length + 1}`);
+        params.push(class_id as string);
+      }
+
+      if (whereClauses.length > 0) {
+        query += " WHERE " + whereClauses.join(" AND ");
+      }
+
+      query += " ORDER BY created_at DESC";
+
+      const result = await pool.query(query, params);
+      res.json({ success: true, data: result.rows });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 
@@ -915,6 +1267,25 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     }
   });
 
+  // --- PRIORIDADE 1: ENDPOINT DE HISTÓRICO DE CORREÇÕES DO ALUNO ---
+  app.get("/api/students/:student_id/corrections", async (req, res) => {
+    console.log("[DEBUG] Route hit: /api/students/:student_id/corrections", req.params);
+    try {
+      const { student_id } = req.params;
+      if (!pool) return res.json({ success: true, data: [] });
+      const result = await pool.query(
+        `SELECT * FROM student_correction_results 
+         WHERE student_key = $1 OR student_id = $1 OR student_registration = $1 
+         ORDER BY created_at DESC`,
+        [student_id]
+      );
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      console.error("[DEBUG] Error:", e);
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   app.get("/api/students/:student_id/profile", async (req, res) => {
     try {
       const { student_id } = req.params;
@@ -944,11 +1315,124 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         FROM d_corrections c 
         LEFT JOIN d_activities a ON c.activity_id = a.id 
         WHERE c.student_id = $1 
-        ORDER BY c.created_at ASC
+        ORDER BY c.created_at DESC
       `,
         [student_id],
       );
-      const corrections = correctionsQuery.rows;
+      const directCorrections = correctionsQuery.rows;
+
+      // Fetch new schema results from student_correction_results
+      const newResultsQuery = await pool.query(
+        `
+        SELECT scr.*, scr.status as result_status, scr.submitted_code, scr.score as final_score, scr.feedback as unified_feedback 
+        FROM student_correction_results scr 
+        WHERE scr.student_key = $1 OR scr.student_id = $1 OR scr.student_registration = $1
+        ORDER BY scr.created_at DESC
+      `,
+        [student_id],
+      );
+      
+      const crResults = newResultsQuery.rows.map(r => ({
+        id: r.id,
+        teacher_id: r.corrected_by || "teacher_1",
+        class_id: r.class_id,
+        student_id: r.student_id || r.student_key,
+        activity_id: r.activity_id,
+        code_content: r.submitted_code,
+        language: r.language,
+        score: r.score,
+        feedback: r.feedback,
+        correction_type: "sandbox",
+        created_at: r.created_at,
+        activity_title: r.question_title || r.activity_title || "Correção manual"
+      }));
+
+      // Also fetch from d_correction_submission / d_correction_result where student name matches
+      const studentName = student.name;
+      let extraCorrections: any[] = [];
+      if (studentName) {
+        try {
+          const extraQuery = await pool.query(
+            `
+            SELECT s.id, s.language, s.code as code_content, s.created_at,
+                   r.final_score as score, r.syntax_ok,
+                   f.summary, f.strengths, f.errors, f.improvements, f.concepts_to_review, f.next_steps,
+                   a.title as activity_title
+            FROM d_correction_submission s
+            JOIN d_correction_result r ON s.id = r.submission_id
+            LEFT JOIN d_correction_feedback f ON r.id = f.result_id
+            LEFT JOIN d_activities a ON s.activity_id = a.id
+            WHERE LOWER(TRIM(s.student_name)) = LOWER(TRIM($1))
+            ORDER BY s.created_at DESC
+          `,
+            [studentName]
+          );
+
+          extraCorrections = extraQuery.rows.map(r => {
+            const structuralFeedback = {
+              summary: r.summary || "",
+              strengths: r.strengths || [],
+              errors: r.errors || [],
+              improvements: r.improvements || [],
+              concepts_to_review: r.concepts_to_review || [],
+              next_steps: r.next_steps || []
+            };
+
+            const unifiedFeedbackString = `
+### RESUMO DA CORREÇÃO
+${structuralFeedback.summary || "Nenhuma descrição fornecida."}
+
+### NOTA DA CORREÇÃO
+- **Nota Final**: **${r.score || 0}/100**
+
+### PONTOS FORTES
+${structuralFeedback.strengths.length > 0 ? structuralFeedback.strengths.map((s: string) => `- ${s}`).join("\n") : "- Nenhuma observação de ponto forte."}
+
+### LISTA DE ERROS DE SISTEMA E COMPILAÇÃO
+${structuralFeedback.errors.length > 0 ? structuralFeedback.errors.map((e: string) => `- ${e}`).join("\n") : "- Nenhum erro impeditivo de compilação ou vulnerabilidade barrou a execução do seu código."}
+
+### PONTOS DE MELHORIA
+${structuralFeedback.improvements.length > 0 ? structuralFeedback.improvements.map((i: string) => `- ${i}`).join("\n") : "- Sem pontos de melhorias drásticas necessárias."}
+
+### CONCEITOS RECOMENDADOS PARA REVISÃO
+${structuralFeedback.concepts_to_review.length > 0 ? structuralFeedback.concepts_to_review.map((c: string) => `- ${c}`).join("\n") : "- Nenhum tópico didático indicado para reforço imediato."}
+
+### PRÓXIMOS PASSOS PEDAGÓGICOS
+${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((step: string) => `- ${step}`).join("\n") : "- Sem recomendações adicionais de próximos passos."}
+`.trim();
+
+            return {
+              id: r.id,
+              teacher_id: "teacher_1",
+              class_id: student.class_id,
+              student_id: student.id,
+              activity_id: r.activity_id || null,
+              code_content: r.code_content || "",
+              language: r.language || "text",
+              feedback: unifiedFeedbackString,
+              score: r.score,
+              status: "success",
+              syntax_ok: r.syntax_ok,
+              created_at: r.created_at,
+              activity_title: r.activity_title
+            };
+          });
+        } catch (err: any) {
+          console.error("Erro ao buscar submissões extras para perfil do estudante:", err.message);
+        }
+      }
+
+      // Combine direct corrections and mapped submissions, ensuring no duplicate IDs
+      const allCorrectionsMap = new Map();
+      directCorrections.forEach(c => allCorrectionsMap.set(c.id, c));
+      crResults.forEach(c => allCorrectionsMap.set(c.id, c));
+      extraCorrections.forEach(s => {
+        if (!allCorrectionsMap.has(s.id)) {
+          allCorrectionsMap.set(s.id, s);
+        }
+      });
+      // Sort descending by created_at
+      const corrections = Array.from(allCorrectionsMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       // 3. Fetch evidences from d_pedagogical_evidence
       const evidencesQuery = await pool.query(
@@ -961,7 +1445,41 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       `,
         [student_id],
       );
-      const evidences = evidencesQuery.rows;
+      let evidences = evidencesQuery.rows;
+      if (evidences.length === 0 && corrections.length > 0) {
+        evidences = corrections.map((c: any, idx: number) => {
+          let testResultsDesc = "";
+          if (c.test_results) {
+            try {
+              const tr = typeof c.test_results === 'string' ? JSON.parse(c.test_results) : c.test_results;
+              if (Array.isArray(tr) && tr.length > 0) {
+                testResultsDesc = `Casos de teste: ${tr.filter((t: any) => t.passed || t.success).length}/${tr.length} aprovados.`;
+              }
+            } catch (err) {}
+          }
+
+          let type = "Análise Prática";
+          const scoreNum = parseFloat(c.score || 0);
+          if (scoreNum >= 90) {
+            type = "Excelência Técnica";
+          } else if (scoreNum < 50) {
+            type = "Reforço Necessário";
+          }
+
+          return {
+            id: `evt-auto-${c.id || idx}`,
+            student_id: student_id,
+            activity_id: c.activity_id || null,
+            title: `Evidência Pedagógica: ${c.activity_title || "Correção de Código"}`,
+            evidence_type: type,
+            description: `Auto-gerado a partir da submissão corrigida em ${new Date(c.created_at).toLocaleDateString("pt-BR")}. Nota: ${scoreNum}/100. ${testResultsDesc}`,
+            score: scoreNum,
+            feedback: c.feedback || "Código avaliado com sucesso pelo sistema.",
+            tags: ["auto-gerado", c.language || "python"],
+            created_at: c.created_at
+          };
+        });
+      }
 
       // Calculate score analytics
       let totalScore = 0;
@@ -1010,6 +1528,57 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  
+  
+  // --- PRIORIDADE 1: ENDPOINT DE HISTÓRICO DE CORREÇÕES DO ALUNO ---
+  app.get("/api/students/:student_id/corrections", async (req, res) => {
+    try {
+      const { student_id } = req.params;
+      if (!pool) return res.json({ success: true, data: [] });
+      const result = await pool.query(
+        `SELECT * FROM student_correction_results 
+         WHERE student_key = $1 OR student_id = $1 OR student_registration = $1 
+         ORDER BY created_at DESC`,
+        [student_id]
+      );
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // --- PRIORIDADE 2: ENDPOINT DE HISTÓRICO DE CORREÇÕES (GERAL) ---
+  app.get("/api/corrections", async (req, res) => {
+    try {
+      const { student_id, class_id } = req.query;
+      if (!pool) return res.json({ success: true, data: [] });
+
+      let query = "SELECT * FROM student_correction_results";
+      let params: string[] = [];
+      let whereClauses: string[] = [];
+
+      if (student_id) {
+        whereClauses.push(`(student_key = $${params.length + 1} OR student_id = $${params.length + 1} OR student_registration = $${params.length + 1})`);
+        params.push(student_id as string);
+      }
+      if (class_id) {
+        whereClauses.push(`class_id = $${params.length + 1}`);
+        params.push(class_id as string);
+      }
+
+      if (whereClauses.length > 0) {
+        query += " WHERE " + whereClauses.join(" AND ");
+      }
+
+      query += " ORDER BY created_at DESC";
+
+      const result = await pool.query(query, params);
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 

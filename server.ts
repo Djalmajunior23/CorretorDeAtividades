@@ -7659,9 +7659,55 @@ ${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length 
     await persistFullResult(submissionData, serviceResult);
 
     // Save to unified d_corrections (Priority 4) and d_pedagogical_evidence (Priority 5)
-    if (pool && student_id && class_id) {
+    let resolvedStudentId = student_id;
+    if (pool && class_id && isValidUuid(class_id)) {
+      if (!resolvedStudentId || !isValidUuid(resolvedStudentId)) {
+        if (studentName) {
+          try {
+            // Find student by exact case-insensitive name match
+            const studentQ = await pool.query(
+              "SELECT id FROM d_student_record WHERE class_id = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2)) AND status != 'deleted' LIMIT 1",
+              [class_id, studentName]
+            );
+            if (studentQ.rows.length > 0) {
+              resolvedStudentId = studentQ.rows[0].id;
+              console.log(`[AutoStudentResolve] Found exact student match for "${studentName}": ${resolvedStudentId}`);
+            } else {
+              // Try substring/partial match
+              const partialStudentQ = await pool.query(
+                "SELECT id FROM d_student_record WHERE class_id = $1 AND name ILIKE $2 AND status != 'deleted' LIMIT 1",
+                [class_id, `%${studentName}%`]
+              );
+              if (partialStudentQ.rows.length > 0) {
+                resolvedStudentId = partialStudentQ.rows[0].id;
+                console.log(`[AutoStudentResolve] Found partial student match for "${studentName}": ${resolvedStudentId}`);
+              } else {
+                // Not found! Let's automatically insert a new student record
+                const newStudId = crypto.randomUUID();
+                const enrollmentCode = "AUTO-" + Math.floor(1000 + Math.random() * 9000);
+                await pool.query(
+                  "INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status) VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, 'active')",
+                  [newStudId, class_id, studentName, enrollmentCode, "", `Gerado automaticamente via corretor sandbox para ${studentName}`]
+                );
+                resolvedStudentId = newStudId;
+                console.log(`[AutoStudentCreate] Created record for student "${studentName}" with ID ${newStudId}`);
+              }
+            }
+          } catch (err: any) {
+            console.error("Error resolving/creating student in run correction:", err.message);
+          }
+        }
+      }
+    }
+
+    let finalCorrId = null;
+    console.log("[DEBUG] pool:", !!pool, "resolvedStudentId:", resolvedStudentId, "class_id:", class_id, "isValid:", isValidUuid(resolvedStudentId), isValidUuid(class_id));
+    if (pool && resolvedStudentId && class_id && isValidUuid(resolvedStudentId) && isValidUuid(class_id)) {
       try {
         const corrId = crypto.randomUUID();
+        finalCorrId = corrId;
+        
+        // Insert into legacy d_corrections
         await pool.query(
           `INSERT INTO d_corrections (id, teacher_id, class_id, student_id, activity_id, code_content, language, score, feedback, correction_type, created_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)`,
@@ -7669,13 +7715,48 @@ ${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length 
             corrId,
             "teacher_1",
             class_id,
-            student_id,
+            resolvedStudentId,
             activity_id || null,
             code || "",
             language || "text",
             serviceResult.final_score !== undefined ? serviceResult.final_score : 0,
             legacyCompatibleResult.feedback || "",
             "sandbox"
+          ]
+        );
+
+        // Insert into new correction_results table
+        await pool.query(
+          `INSERT INTO correction_results (
+             id, student_id, class_id, activity_id, student_name, class_name, 
+             language, submitted_code, score, max_score, status, feedback, 
+             ai_feedback, execution_output, execution_error, test_results, 
+             rubric_result, metadata, corrected_by, corrected_at, created_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())`,
+          [
+            crypto.randomUUID(),
+            resolvedStudentId,
+            class_id,
+            activity_id || null,
+            studentName || null,
+            className || null,
+            language || "text",
+            code || "",
+            serviceResult.final_score !== undefined ? serviceResult.final_score : 0,
+            100,
+            "corrected",
+            legacyCompatibleResult.feedback || "",
+            serviceResult.ai_pedagogical_feedback ? JSON.stringify(serviceResult.ai_pedagogical_feedback) : null,
+            serviceResult.stdout || "",
+            serviceResult.stderr || "",
+            JSON.stringify(serviceResult.test_results || []),
+            JSON.stringify(serviceResult.rubric_criteria || []),
+            JSON.stringify({
+              competencies: serviceResult.competencies || null,
+              ai_detection: serviceResult.ai_detection || null,
+              sandbox_metrics: serviceResult.sandbox_metrics || null
+            }),
+            "teacher_1"
           ]
         );
 
@@ -7692,7 +7773,7 @@ ${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length 
             evidenceId,
             "teacher_1",
             class_id,
-            student_id,
+            resolvedStudentId,
             activity_id || null,
             corrId,
             evidenceTitle,
@@ -7708,7 +7789,14 @@ ${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length 
       }
     }
 
-    return res.json(legacyCompatibleResult);
+    return res.json({
+      success: true,
+      message: "Correção salva no perfil do aluno.",
+      data: {
+        id: finalCorrId,
+        ...legacyCompatibleResult
+      }
+    });
 
   } catch (err: any) {
     console.error("Critical correction orchestration engine failure:", err);

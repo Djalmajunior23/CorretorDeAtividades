@@ -15,9 +15,19 @@ interface StudentProfileModalProps {
   onClose: () => void;
 }
 
+function normalizeCorrections(response: any) {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.corrections)) return response.corrections;
+  if (Array.isArray(response?.data?.corrections)) return response.data.corrections;
+  if (Array.isArray(response?.results)) return response.results;
+  return [];
+}
+
 export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfileModalProps) {
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<any>(null);
+  const [submissions, setSubmissions] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"corrections" | "evidences">("corrections");
 
@@ -25,12 +35,18 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
     if (!isOpen || !studentId) return;
 
     setLoading(true);
-    fetch(apiUrl(`/api/students/${studentId}/profile`))
-      .then(res => {
+
+    Promise.all([
+      fetch(apiUrl(`/api/students/${studentId}/profile`)).then(res => {
         if (!res.ok) throw new Error("Não foi possível carregar o perfil do aluno.");
         return res.json();
-      })
-      .then(data => {
+      }),
+      fetch(apiUrl(`/api/students/${studentId}/correction-results`)).then(res => res.json().catch(() => ({})))
+    ])
+      .then(([data, correctionsData]) => {
+        const fetchedSubmissions = normalizeCorrections(correctionsData.data || correctionsData);
+        
+        setSubmissions(fetchedSubmissions);
         setProfileData(data);
         setError(null);
       })
@@ -206,7 +222,7 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                   }`}
                 >
                   <Activity className="w-4 h-4 text-emerald-400" />
-                  Atividades Corrigidas ({profileData.corrections?.length || 0})
+                  Atividades Corrigidas ({submissions?.length || 0})
                 </button>
                 <button
                   type="button"
@@ -227,8 +243,8 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                 
                 {activeTab === "corrections" ? (
                   <>
-                    {profileData.corrections && profileData.corrections.length > 0 ? (
-                      profileData.corrections.map((corr: any) => (
+                    {submissions && submissions.length > 0 ? (
+                      submissions.map((corr: any) => (
                         <div 
                           key={corr.id} 
                           className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 hover:border-slate-700/60 transition-all flex flex-col gap-3"
@@ -236,11 +252,11 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                           <div className="flex justify-between items-start gap-4">
                             <div>
                               <h5 className="font-bold text-white text-sm">
-                                {corr.activity_title || "Correção de Instrução Livre"}
+                                {corr.question_title || corr.activity_title || "Correção de Instrução Livre"}
                               </h5>
                               <div className="flex items-center gap-3 mt-1.5 text-slate-400 text-[10px] font-mono">
                                 <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300 capitalize">
-                                  {corr.correction_type}
+                                  {corr.status || "corrected"}
                                 </span>
                                 <span className="uppercase text-rose-400 font-bold">{corr.language}</span>
                                 <span>{new Date(corr.created_at).toLocaleDateString("pt-BR")}</span>
@@ -252,10 +268,9 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                             </div>
                           </div>
 
-                          {void 0}
-                          {corr.code_content && (
+                          {corr.submitted_code && (
                             <div className="bg-[#030712] p-3 rounded-lg border border-slate-800 text-xs font-mono overflow-x-auto max-h-[140px] text-slate-300">
-                              <pre><code>{corr.code_content}</code></pre>
+                              <pre><code>{corr.submitted_code}</code></pre>
                             </div>
                           )}
 

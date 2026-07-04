@@ -43,14 +43,15 @@ export function StudentsManagerView() {
       setClasses(normalizeArray(clsData));
 
       const isInvalidClassId = (cid: string | undefined) => {
-        if (!cid) return true;
+        if (!cid) return false;
         if (typeof cid !== "string") return true;
         if (cid.includes("$") || cid.includes("{") || cid.includes("}")) return true;
         return false;
       };
 
       if (!isInvalidClassId(selectedClass)) {
-        const stdResp = await fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedClass)}`));
+        const url = selectedClass ? `/api/students?class_id=${encodeURIComponent(selectedClass)}` : "/api/students";
+        const stdResp = await fetch(apiUrl(url));
         const stdData = await stdResp.json().catch(() => null);
         setStudents(normalizeArray(stdData));
       } else {
