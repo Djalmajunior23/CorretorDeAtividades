@@ -26,10 +26,73 @@ function isValidUuid(value: unknown): value is string {
   );
 }
 
+export async function initializeDatabase(pool: Pool | null): Promise<void> {
+  if (!pool) {
+    console.log("[DEBUG] No PostgreSQL pool available for database initialization.");
+    return;
+  }
+  console.log("[DEBUG] initializeDatabase started...");
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS correction_vault (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        student_key TEXT NOT NULL,
+        student_id TEXT NULL,
+        student_registration TEXT NULL,
+        student_name TEXT NULL,
+        class_id TEXT NULL,
+        class_name TEXT NULL,
+        activity_id TEXT NULL,
+        activity_title TEXT NULL,
+        question_id TEXT NULL,
+        question_title TEXT NULL,
+        language TEXT NOT NULL,
+        submitted_code TEXT NOT NULL,
+        score NUMERIC(5,2) DEFAULT 0,
+        max_score NUMERIC(5,2) DEFAULT 100,
+        percentage NUMERIC(5,2) DEFAULT 0,
+        status TEXT DEFAULT 'saved',
+        feedback TEXT NULL,
+        ai_feedback TEXT NULL,
+        teacher_feedback TEXT NULL,
+        execution_output TEXT NULL,
+        execution_error TEXT NULL,
+        test_results JSONB DEFAULT '[]'::jsonb,
+        rubric_result JSONB DEFAULT '{}'::jsonb,
+        strengths JSONB DEFAULT '[]'::jsonb,
+        improvements JSONB DEFAULT '[]'::jsonb,
+        raw_correction JSONB DEFAULT '{}'::jsonb,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        source TEXT DEFAULT 'correction_vault',
+        saved_by TEXT NULL,
+        saved_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_key ON correction_vault(student_key);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_id ON correction_vault(student_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_registration ON correction_vault(student_registration);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_class_id ON correction_vault(class_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_activity_id ON correction_vault(activity_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_question_id ON correction_vault(question_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_created_at ON correction_vault(created_at DESC);
+    `);
+    console.log("[DEBUG] correction_vault table and indices verified/created successfully.");
+  } catch (err) {
+    console.error("Error in initializeDatabase:", err);
+    throw err;
+  }
+}
+
 export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   console.log("[DEBUG] setupTeacherAPIs called");
   // --- DATABASE MIGRATIONS FOR THE NEW COLUMNS ---
   if (pool) {
+    initializeDatabase(pool).catch((err) => {
+      console.error("[DEBUG] Failed to initializeDatabase correction_vault:", err);
+    });
+
     // 1. Migrate activities
     pool
       .query(
@@ -813,17 +876,19 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       body.studentId ??
       body.aluno_id ??
       body.alunoId ??
+      body.student_registration ??
+      body.registration ??
+      body.matricula ??
       body.student?.id ??
       body.student?.student_id ??
       body.student?.studentId ??
-      body.student?.matricula ??
       body.student?.registration ??
-      body.student_registration ??
+      body.student?.matricula ??
       null
     );
   }
 
-  async function handleCorrectionSave(req: express.Request, res: express.Response) {
+  async function handleCorrectionVaultSave(req: express.Request, res: express.Response) {
     try {
       if (!pool)
         return res.status(400).json({ success: false, message: "PostgreSQL indisponível." });
@@ -955,11 +1020,6 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         body.result?.improvements ??
         [];
 
-      const evidence =
-        body.evidence ??
-        body.result?.evidence ??
-        {};
-
       const metadata =
         body.metadata ??
         body.result?.metadata ??
@@ -967,9 +1027,10 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
 
       const source =
         body.source ??
-        "code_correction";
+        "correction_vault";
 
-      const correctedBy =
+      const savedBy =
+        body.saved_by ??
         body.corrected_by ??
         body.correctedBy ??
         "teacher_1";
@@ -991,7 +1052,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       }
 
       const query = `
-        INSERT INTO student_correction_results (
+        INSERT INTO correction_vault (
           student_key, student_id, student_registration, student_name,
           class_id, class_name,
           question_id, question_title, activity_id, activity_title,
@@ -1000,8 +1061,8 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
           status, feedback, ai_feedback, teacher_feedback,
           execution_output, execution_error,
           test_results, rubric_result,
-          strengths, improvements, evidence, metadata,
-          source, corrected_by
+          strengths, improvements, raw_correction, metadata,
+          source, saved_by
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb, $23::jsonb, $24::jsonb, $25::jsonb, $26::jsonb, $27::jsonb, $28, $29
@@ -1025,7 +1086,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         score,
         maxScore,
         percentage,
-        body.status ?? "corrected",
+        body.status ?? "saved",
         feedback,
         aiFeedback,
         teacherFeedback,
@@ -1035,33 +1096,100 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         JSON.stringify(rubricResult),
         JSON.stringify(strengths),
         JSON.stringify(improvements),
-        JSON.stringify(evidence),
+        JSON.stringify(body.raw_correction ?? body),
         JSON.stringify(metadata),
         source,
-        correctedBy
+        savedBy
       ]);
 
       res.status(201).json({
         success: true,
-        message: "Correção salva no perfil do aluno.",
+        message: "Correção salva no histórico do aluno.",
         data: result.rows[0]
       });
     } catch (e: any) {
-      console.error("Error creating student_correction_results:", e);
+      console.error("Error creating correction_vault row:", e);
       res.status(500).json({ success: false, message: e.message });
     }
   }
 
-  app.post("/api/student-correction-results", handleCorrectionSave);
-  app.post("/api/corrections", handleCorrectionSave);
-  app.post("/api/submissions", handleCorrectionSave);
+  async function getCorrectionVaultByStudent(req: express.Request, res: express.Response) {
+    try {
+      const studentKey = req.params.studentKey ?? req.params.student_id;
+      if (!pool) return res.json({ success: true, data: [] });
+
+      const query = `
+        SELECT *
+        FROM correction_vault
+        WHERE student_key = $1
+           OR student_id = $1
+           OR student_registration = $1
+        ORDER BY created_at DESC
+      `;
+      const result = await pool.query(query, [studentKey]);
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      console.error("Error fetching from correction-vault by studentKey:", e);
+      res.status(500).json({ success: false, error: e.message });
+    }
+  }
+
+  app.post("/api/correction-vault", handleCorrectionVaultSave);
+  app.post("/api/student-correction-results", handleCorrectionVaultSave);
+  app.post("/api/corrections", handleCorrectionVaultSave);
+  app.post("/api/submissions", handleCorrectionVaultSave);
+
+  app.get("/api/correction-vault/student/:studentKey", getCorrectionVaultByStudent);
+  app.get("/api/students/:studentKey/correction-results", getCorrectionVaultByStudent);
+  app.get("/api/students/:studentKey/corrections", getCorrectionVaultByStudent);
+  app.get("/api/students/:studentKey/submissions", getCorrectionVaultByStudent);
+
+  app.get("/api/correction-vault", async (req, res) => {
+    try {
+      const { student_key, student_id, student_registration, class_id } = req.query;
+      if (!pool) return res.json({ success: true, data: [] });
+
+      let query = "SELECT * FROM correction_vault";
+      let params: string[] = [];
+      let whereClauses: string[] = [];
+
+      if (student_key) {
+        whereClauses.push(`student_key = $${params.length + 1}`);
+        params.push(student_key as string);
+      }
+      if (student_id) {
+        whereClauses.push(`student_id = $${params.length + 1}`);
+        params.push(student_id as string);
+      }
+      if (student_registration) {
+        whereClauses.push(`student_registration = $${params.length + 1}`);
+        params.push(student_registration as string);
+      }
+      if (class_id) {
+        whereClauses.push(`class_id = $${params.length + 1}`);
+        params.push(class_id as string);
+      }
+
+      if (whereClauses.length > 0) {
+        query += " WHERE " + whereClauses.join(" AND ");
+      }
+
+      query += " ORDER BY created_at DESC LIMIT 100";
+
+      const result = await pool.query(query, params);
+      res.json({ success: true, data: result.rows });
+    } catch (e: any) {
+      console.error("Error listing correction-vault results:", e);
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
 
   app.get("/api/student-correction-results", async (req, res) => {
     try {
       const { student_key, student_id, student_registration, class_id } = req.query;
       if (!pool) return res.json({ success: true, data: [] });
 
-      let query = "SELECT * FROM student_correction_results";
+      let query = "SELECT * FROM correction_vault";
       let params: string[] = [];
       let whereClauses: string[] = [];
 
@@ -1096,33 +1224,14 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     }
   });
 
-  app.get("/api/students/:studentKey/correction-results", async (req, res) => {
-    try {
-      const { studentKey } = req.params;
-      if (!pool) return res.json({ success: true, data: [] });
-
-      const query = `
-        SELECT *
-        FROM student_correction_results
-        WHERE student_key = $1
-           OR student_id = $1
-           OR student_registration = $1
-        ORDER BY created_at DESC;
-      `;
-      const result = await pool.query(query, [studentKey]);
-      res.json({ success: true, data: result.rows });
-    } catch (e: any) {
-      console.error("Error fetching student correction results:", e);
-      res.status(500).json({ success: false, error: e.message });
-    }
-  });
+  // Registered at top level getCorrectionVaultByStudent
 
   app.get("/api/submissions", async (req, res) => {
     try {
       const { student_id, class_id } = req.query;
       if (!pool) return res.json({ success: true, data: [] });
 
-      let query = "SELECT * FROM student_correction_results";
+      let query = "SELECT * FROM correction_vault";
       let params: string[] = [];
       let whereClauses: string[] = [];
 
@@ -1148,21 +1257,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     }
   });
 
-  app.get("/api/students/:student_id/submissions", async (req, res) => {
-    try {
-      const { student_id } = req.params;
-      if (!pool) return res.json({ success: true, data: [] });
-      const result = await pool.query(
-        `SELECT * FROM student_correction_results 
-         WHERE student_key = $1 OR student_id = $1 OR student_registration = $1 
-         ORDER BY created_at DESC`,
-        [student_id]
-      );
-      res.json({ success: true, data: result.rows });
-    } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
-    }
-  });
+  // Registered at top level getCorrectionVaultByStudent
 
   // Alias
   app.get("/api/corrections", async (req, res) => {
@@ -1170,7 +1265,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       const { student_id, class_id } = req.query;
       if (!pool) return res.json({ success: true, data: [] });
 
-      let query = "SELECT * FROM student_correction_results";
+      let query = "SELECT * FROM correction_vault";
       let params: string[] = [];
       let whereClauses: string[] = [];
 
@@ -1267,24 +1362,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     }
   });
 
-  // --- PRIORIDADE 1: ENDPOINT DE HISTÓRICO DE CORREÇÕES DO ALUNO ---
-  app.get("/api/students/:student_id/corrections", async (req, res) => {
-    console.log("[DEBUG] Route hit: /api/students/:student_id/corrections", req.params);
-    try {
-      const { student_id } = req.params;
-      if (!pool) return res.json({ success: true, data: [] });
-      const result = await pool.query(
-        `SELECT * FROM student_correction_results 
-         WHERE student_key = $1 OR student_id = $1 OR student_registration = $1 
-         ORDER BY created_at DESC`,
-        [student_id]
-      );
-      res.json({ success: true, data: result.rows });
-    } catch (e: any) {
-      console.error("[DEBUG] Error:", e);
-      res.status(500).json({ success: false, error: e.message });
-    }
-  });
+  // Registered at top level getCorrectionVaultByStudent
 
   app.get("/api/students/:student_id/profile", async (req, res) => {
     try {
@@ -1321,11 +1399,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       );
       const directCorrections = correctionsQuery.rows;
 
-      // Fetch new schema results from student_correction_results
+      // Fetch new schema results from correction_vault
       const newResultsQuery = await pool.query(
         `
         SELECT scr.*, scr.status as result_status, scr.submitted_code, scr.score as final_score, scr.feedback as unified_feedback 
-        FROM student_correction_results scr 
+        FROM correction_vault scr 
         WHERE scr.student_key = $1 OR scr.student_id = $1 OR scr.student_registration = $1
         ORDER BY scr.created_at DESC
       `,
@@ -1533,22 +1611,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
 
   
   
-  // --- PRIORIDADE 1: ENDPOINT DE HISTÓRICO DE CORREÇÕES DO ALUNO ---
-  app.get("/api/students/:student_id/corrections", async (req, res) => {
-    try {
-      const { student_id } = req.params;
-      if (!pool) return res.json({ success: true, data: [] });
-      const result = await pool.query(
-        `SELECT * FROM student_correction_results 
-         WHERE student_key = $1 OR student_id = $1 OR student_registration = $1 
-         ORDER BY created_at DESC`,
-        [student_id]
-      );
-      res.json({ success: true, data: result.rows });
-    } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
-    }
-  });
+  // Registered at top level getCorrectionVaultByStudent
 
   // --- PRIORIDADE 2: ENDPOINT DE HISTÓRICO DE CORREÇÕES (GERAL) ---
   app.get("/api/corrections", async (req, res) => {
@@ -1556,7 +1619,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const { student_id, class_id } = req.query;
       if (!pool) return res.json({ success: true, data: [] });
 
-      let query = "SELECT * FROM student_correction_results";
+      let query = "SELECT * FROM correction_vault";
       let params: string[] = [];
       let whereClauses: string[] = [];
 

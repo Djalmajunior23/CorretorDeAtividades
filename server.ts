@@ -5,7 +5,7 @@ function isValidUuid(value: unknown): value is string {
 }
 
 // import { registerAddonEndpoints } from './server-addon';
-import { setupTeacherAPIs } from './server-apis-addon';
+import { setupTeacherAPIs, initializeDatabase } from './server-apis-addon';
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -9856,6 +9856,11 @@ app.post("/api/competencies/recommend", async (req, res) => {
 // Start listening and serve frontend UI
 async function main() {
   await initDatabase();
+  try {
+    await initializeDatabase(pool);
+  } catch (err) {
+    console.error("[CRITICAL] Failed to run initializeDatabase during main start:", err);
+  }
   if (pool) {
     analyticsService = new LearningAnalyticsService(pool);
   }

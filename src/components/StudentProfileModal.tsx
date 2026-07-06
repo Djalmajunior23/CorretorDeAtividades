@@ -15,12 +15,15 @@ interface StudentProfileModalProps {
   onClose: () => void;
 }
 
-function normalizeCorrections(response: any) {
+function normalizeCorrectionVault(response: any) {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response?.data)) return response.data;
-  if (Array.isArray(response?.corrections)) return response.corrections;
-  if (Array.isArray(response?.data?.corrections)) return response.data.corrections;
   if (Array.isArray(response?.results)) return response.results;
+  if (Array.isArray(response?.corrections)) return response.corrections;
+  if (Array.isArray(response?.submissions)) return response.submissions;
+  if (Array.isArray(response?.data?.results)) return response.data.results;
+  if (Array.isArray(response?.data?.corrections)) return response.data.corrections;
+  if (Array.isArray(response?.data?.submissions)) return response.data.submissions;
   return [];
 }
 
@@ -41,10 +44,11 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
         if (!res.ok) throw new Error("Não foi possível carregar o perfil do aluno.");
         return res.json();
       }),
-      fetch(apiUrl(`/api/students/${studentId}/correction-results`)).then(res => res.json().catch(() => ({})))
+      fetch(apiUrl(`/api/correction-vault/student/${studentId}`)).then(res => res.json().catch(() => ({})))
     ])
       .then(([data, correctionsData]) => {
-        const fetchedSubmissions = normalizeCorrections(correctionsData.data || correctionsData);
+        // Exclusively read from the correction-vault endpoint as single source of truth for corrections list
+        const fetchedSubmissions = normalizeCorrectionVault(correctionsData);
         
         setSubmissions(fetchedSubmissions);
         setProfileData(data);
@@ -222,7 +226,7 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                   }`}
                 >
                   <Activity className="w-4 h-4 text-emerald-400" />
-                  Atividades Corrigidas ({submissions?.length || 0})
+                  ATIVIDADES CORRIGIDAS ({submissions?.length || 0})
                 </button>
                 <button
                   type="button"
@@ -268,9 +272,9 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                             </div>
                           </div>
 
-                          {corr.submitted_code && (
+                          {(corr.submitted_code || corr.code_content || corr.code) && (
                             <div className="bg-[#030712] p-3 rounded-lg border border-slate-800 text-xs font-mono overflow-x-auto max-h-[140px] text-slate-300">
-                              <pre><code>{corr.submitted_code}</code></pre>
+                              <pre><code>{corr.submitted_code || corr.code_content || corr.code}</code></pre>
                             </div>
                           )}
 

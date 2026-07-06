@@ -927,6 +927,18 @@ export default function App() {
     });
   };
 
+  // Helper to resolve student key on frontend
+  const resolveStudentKey = (student: any): string | null => {
+    return (
+      student?.id ??
+      student?.student_id ??
+      student?.studentId ??
+      student?.registration ??
+      student?.matricula ??
+      null
+    );
+  };
+
   // Dispatch run code
   const handleRunCorrection = async () => {
     console.log("[Diagnostic] handleRunCorrection initiated at start of execution", {
@@ -1000,14 +1012,7 @@ export default function App() {
         const evalResult = await response.json();
         
         // Save the result to the profile
-        const resolvedStudentKey = currentStudent ? (
-          currentStudent.id ??
-          currentStudent.student_id ??
-          currentStudent.studentId ??
-          currentStudent.matricula ??
-          currentStudent.registration ??
-          selectedCorrectorStudent
-        ) : selectedCorrectorStudent;
+        const resolvedStudentKey = resolveStudentKey(currentStudent) || selectedCorrectorStudent;
 
         if (!resolvedStudentKey) {
           throw new Error("Selecione um aluno antes de corrigir e salvar o resultado.");
@@ -1017,8 +1022,10 @@ export default function App() {
           throw new Error("Informe o código antes de corrigir.");
         }
 
-        const scoreVal = evalResult.final_score ?? evalResult.score ?? evalResult.grade ?? evalResult.nota ?? evalResult.result?.score ?? 0;
-        const feedbackVal = evalResult.feedback ?? evalResult.ai_feedback ?? evalResult.message ?? evalResult.result?.feedback ?? "";
+        const realResult = evalResult.data ? evalResult.data : evalResult;
+
+        const scoreVal = realResult.final_score ?? realResult.score ?? realResult.grade ?? realResult.nota ?? realResult.result?.score ?? 0;
+        const feedbackVal = realResult.feedback ?? realResult.ai_feedback ?? realResult.message ?? realResult.result?.feedback ?? "";
 
         const savePayload = {
           student_key: resolvedStudentKey,
@@ -1050,33 +1057,43 @@ export default function App() {
           max_score: 100,
 
           feedback: feedbackVal,
-          ai_feedback: evalResult.ai_feedback ?? null,
+          ai_feedback: realResult.ai_feedback ?? realResult.aiFeedback ?? null,
 
           execution_output:
-            evalResult.stdout ??
-            evalResult.execution_output ??
-            evalResult.output ??
-            evalResult.result?.output ??
+            realResult.stdout ??
+            realResult.execution_output ??
+            realResult.output ??
+            realResult.result?.output ??
             "",
 
           execution_error:
-            evalResult.stderr ??
-            evalResult.execution_error ??
-            evalResult.error ??
-            evalResult.result?.error ??
+            realResult.stderr ??
+            realResult.execution_error ??
+            realResult.error ??
+            realResult.result?.error ??
             null,
 
           test_results:
-            evalResult.test_results ??
-            evalResult.testResults ??
-            evalResult.result?.test_results ??
+            realResult.test_results ??
+            realResult.testResults ??
+            realResult.result?.test_results ??
             [],
 
           rubric_result:
-            evalResult.rubric_result ??
-            evalResult.rubric ??
-            evalResult.result?.rubric_result ??
+            realResult.rubric_result ??
+            realResult.rubric ??
+            realResult.result?.rubric_result ??
             {},
+
+          strengths:
+            realResult.strengths ??
+            realResult.feedbackStructured?.strengths ??
+            [],
+
+          improvements:
+            realResult.improvements ??
+            realResult.feedbackStructured?.improvements ??
+            [],
 
           metadata: {
             source: "handleRunCorrection",
@@ -1090,24 +1107,33 @@ export default function App() {
           console.log("[Correction] savePayload", savePayload);
         }
 
-        const saveResponse = await fetch(apiUrl("/api/student-correction-results"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(savePayload)
-        });
+        let savedSuccessfully = false;
+        try {
+          const saveResponse = await fetch(apiUrl("/api/correction-vault"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(savePayload)
+          });
 
-        const savedResult = await saveResponse.json();
+          const savedResult = await saveResponse.json();
 
-        if (import.meta.env.DEV) {
-          console.log("[Correction] savedResult", savedResult);
-        }
+          if (import.meta.env.DEV) {
+            console.log("[Correction] savedResult", savedResult);
+          }
 
-        if (!saveResponse.ok) {
-          throw new Error(savedResult.message || "Erro ao salvar a correção no banco de dados.");
+          if (saveResponse.ok && savedResult?.success === true) {
+            savedSuccessfully = true;
+          }
+        } catch (saveErr) {
+          console.error("Error saving correction to vault:", saveErr);
         }
 
         setResult(evalResult.data ? evalResult.data : evalResult);
-        toast.success("Correção salva no perfil do aluno.");
+        if (savedSuccessfully) {
+          toast.success("Correção salva no histórico do aluno.");
+        } else {
+          toast.error("A correção foi executada, mas não foi possível salvar no histórico do aluno.");
+        }
         fetchSubmissions(); // reload logs list
       } else {
         const errText = await response.text();
