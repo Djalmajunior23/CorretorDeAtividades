@@ -187,6 +187,18 @@ const INITIAL_TEST_CASES: TestCase[] = [
   { input: "2 3", expected_output: "5" }
 ];
 
+function normalizeCorrectionVault(response: any) {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.results)) return response.results;
+  if (Array.isArray(response?.corrections)) return response.corrections;
+  if (Array.isArray(response?.submissions)) return response.submissions;
+  if (Array.isArray(response?.data?.results)) return response.data.results;
+  if (Array.isArray(response?.data?.corrections)) return response.data.corrections;
+  if (Array.isArray(response?.data?.submissions)) return response.data.submissions;
+  return [];
+}
+
 export default function App() {
   const [currentTab, setTab] = useState<string>("dashboard");
   const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
@@ -326,6 +338,8 @@ export default function App() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState("Vinícius Souza");
   const [studentEvolutionData, setStudentEvolutionData] = useState<any>(null);
+  const [correctionVaultItems, setCorrectionVaultItems] = useState<any[]>([]);
+  const [loadingCorrectionVault, setLoadingCorrectionVault] = useState<boolean>(false);
   const [classErrorData, setClassErrorData] = useState<any>(null);
   const [comparisonData, setComparisonData] = useState<any[]>([]);
   const [loadingClassErrors, setLoadingClassErrors] = useState(false);
@@ -536,6 +550,27 @@ export default function App() {
         .catch(e => {
           console.error("Error loading student evolution data:", e);
           setLoadingStudentPromo(false);
+        });
+    }
+  }, [currentTab, selectedStudent, featureFlags.ENABLE_STUDENT_EVOLUTION]);
+
+  useEffect(() => {
+    if ((currentTab === "analytics" && featureFlags.ENABLE_STUDENT_EVOLUTION) && selectedStudent) {
+      setLoadingCorrectionVault(true);
+      fetch(apiUrl(`/api/correction-vault/student/${encodeURIComponent(selectedStudent)}`))
+        .then(res => {
+          if (!res.ok) throw new Error("Não foi possível carregar o histórico de correções.");
+          return res.json();
+        })
+        .then(data => {
+          const items = normalizeCorrectionVault(data);
+          setCorrectionVaultItems(items);
+          setLoadingCorrectionVault(false);
+        })
+        .catch(err => {
+          console.error("Erro ao carregar correction_vault para o estudante:", err);
+          setCorrectionVaultItems([]);
+          setLoadingCorrectionVault(false);
         });
     }
   }, [currentTab, selectedStudent, featureFlags.ENABLE_STUDENT_EVOLUTION]);
@@ -1109,19 +1144,16 @@ export default function App() {
 
         let savedSuccessfully = false;
         try {
-          const saveResponse = await fetch(apiUrl("/api/correction-vault"), {
+          const savedResult = await apiFetch("/api/correction-vault", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(savePayload)
           });
-
-          const savedResult = await saveResponse.json();
 
           if (import.meta.env.DEV) {
             console.log("[Correction] savedResult", savedResult);
           }
 
-          if (saveResponse.ok && savedResult?.success === true) {
+          if (savedResult?.success === true) {
             savedSuccessfully = true;
           }
         } catch (saveErr) {
@@ -3473,6 +3505,110 @@ export default function App() {
                             </div>
                           )}
                         </div>
+                      </div>
+
+                      {/* Histórico de Atividades Corrigidas da Integratora */}
+                      <div className="col-span-12 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5 mt-6">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                          <div className="flex flex-col">
+                            <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono flex items-center gap-2">
+                              <Activity className="w-4 h-4 text-emerald-400" />
+                              Atividades Corrigidas ({correctionVaultItems.length})
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-1">Histórico completo de submissões corrigidas e analisadas pelo corretor inteligente.</p>
+                          </div>
+                        </div>
+
+                        {loadingCorrectionVault ? (
+                          <div className="py-8 text-center animate-pulse">
+                            <div className="w-6 h-6 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-2" />
+                            <span className="text-xs font-mono text-slate-500">Buscando atividades no cofre...</span>
+                          </div>
+                        ) : correctionVaultItems.length > 0 ? (
+                          <div className="grid grid-cols-1 gap-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin">
+                            {correctionVaultItems.map((corr: any) => (
+                              <div 
+                                key={corr.id} 
+                                className="p-5 rounded-2xl bg-[#030712]/55 border border-slate-800/80 hover:border-slate-700/60 transition-all flex flex-col gap-4"
+                              >
+                                <div className="flex justify-between items-start gap-4">
+                                  <div>
+                                    <h4 className="font-bold text-white text-sm">
+                                      {corr.question_title || corr.activity_title || "Correção de Instrução Livre"}
+                                    </h4>
+                                    <div className="flex items-center gap-3 mt-1.5 text-slate-400 text-[10px] font-mono">
+                                      <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded uppercase font-bold text-[9px]">
+                                        {corr.status || corr.result_status || "Corrigido"}
+                                      </span>
+                                      <span className="uppercase text-sky-400 font-bold">{corr.language}</span>
+                                      <span>{new Date(corr.created_at).toLocaleDateString("pt-BR")} às {new Date(corr.created_at).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'})}</span>
+                                    </div>
+                                  </div>
+                                  <div className="px-3 py-1 bg-[#0f172a] rounded-xl text-right shrink-0 border border-slate-800">
+                                    <span className="block text-[8px] text-slate-500 font-mono uppercase tracking-wider">Nota</span>
+                                    <span className="text-base font-bold font-mono text-emerald-400">
+                                      {typeof corr.score === 'number' && corr.score > 10 ? (corr.score / 10).toFixed(1) : (corr.score ?? 0)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {(corr.submitted_code || corr.code_content || corr.code) && (
+                                  <div className="bg-[#030712] p-3 rounded-lg border border-slate-800/50 text-xs font-mono overflow-x-auto max-h-[140px] text-slate-300">
+                                    <pre><code>{corr.submitted_code || corr.code_content || corr.code}</code></pre>
+                                  </div>
+                                )}
+
+                                {/* Structured feedback section */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
+                                  {/* Pontos Fortes */}
+                                  <div className="p-3.5 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex flex-col gap-1.5">
+                                    <span className="text-[10px] uppercase font-mono text-emerald-400 font-bold tracking-wider">Pontos Fortes</span>
+                                    {corr.strengths && corr.strengths.length > 0 ? (
+                                      <ul className="flex flex-col gap-1">
+                                        {corr.strengths.map((str: string, index: number) => (
+                                          <li key={index} className="text-[11px] text-slate-300 leading-tight flex items-start gap-1">
+                                            <span className="text-emerald-500 mt-0.5">•</span>
+                                            <span>{str}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-500 italic">Nenhum ponto forte destacado.</span>
+                                    )}
+                                  </div>
+
+                                  {/* Pontos a Otimizar */}
+                                  <div className="p-3.5 bg-amber-500/5 border border-amber-500/10 rounded-xl flex flex-col gap-1.5">
+                                    <span className="text-[10px] uppercase font-mono text-amber-400 font-bold tracking-wider">A Otimizar</span>
+                                    {corr.improvements && corr.improvements.length > 0 ? (
+                                      <ul className="flex flex-col gap-1">
+                                        {corr.improvements.map((imp: string, index: number) => (
+                                          <li key={index} className="text-[11px] text-slate-300 leading-tight flex items-start gap-1">
+                                            <span className="text-amber-500 mt-0.5">•</span>
+                                            <span>{imp}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-500 italic">Nenhuma melhoria sugerida.</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {(corr.feedback || corr.unified_feedback || corr.ai_feedback) && (
+                                  <div className="text-[11px] text-slate-300 bg-slate-950/40 p-3 rounded-lg border border-slate-800/60">
+                                    <span className="text-slate-500 font-mono text-[9px] uppercase tracking-wider block mb-1">Feedback Geral</span>
+                                    <p className="whitespace-pre-line leading-relaxed">{corr.feedback || corr.unified_feedback || corr.ai_feedback}</p>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-12 text-slate-500 italic text-xs font-mono">
+                            Nenhuma atividade corrigida encontrada no cofre para este estudante.
+                          </div>
+                        )}
                       </div>
 
                     </div>

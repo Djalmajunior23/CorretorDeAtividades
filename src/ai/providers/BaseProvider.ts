@@ -6,7 +6,7 @@ export interface AIConfig {
 }
 
 export abstract class BaseProvider {
-    protected config: AIConfig;
+    public config: AIConfig;
 
     constructor(config: AIConfig) {
         this.config = config;

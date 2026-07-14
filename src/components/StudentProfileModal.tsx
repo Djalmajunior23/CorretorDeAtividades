@@ -39,18 +39,29 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
 
     setLoading(true);
 
-    Promise.all([
-      fetch(apiUrl(`/api/students/${studentId}/profile`)).then(res => {
+    fetch(apiUrl(`/api/students/${studentId}/profile`))
+      .then(res => {
         if (!res.ok) throw new Error("Não foi possível carregar o perfil do aluno.");
         return res.json();
-      }),
-      fetch(apiUrl(`/api/correction-vault/student/${studentId}`)).then(res => res.json().catch(() => ({})))
-    ])
-      .then(([data, correctionsData]) => {
-        // Exclusively read from the correction-vault endpoint as single source of truth for corrections list
-        const fetchedSubmissions = normalizeCorrectionVault(correctionsData);
-        
-        setSubmissions(fetchedSubmissions);
+      })
+      .then(async (data) => {
+        const student = data?.student;
+        const studentKey = student?.id ?? student?.student_id ?? student?.studentId ?? student?.enrollment_code ?? student?.matricula ?? student?.registration ?? studentId ?? null;
+
+        try {
+          const vaultRes = await fetch(apiUrl(`/api/correction-vault/student/${studentKey}`));
+          if (vaultRes.ok) {
+            const correctionsData = await vaultRes.json();
+            const fetchedSubmissions = normalizeCorrectionVault(correctionsData);
+            setSubmissions(fetchedSubmissions);
+          } else {
+            setSubmissions([]);
+          }
+        } catch (vaultErr) {
+          console.error("Erro ao buscar correction_vault, usando dados do perfil:", vaultErr);
+          setSubmissions(data.corrections || []);
+        }
+
         setProfileData(data);
         setError(null);
       })
@@ -62,6 +73,27 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
         setLoading(false);
       });
   }, [studentId, isOpen]);
+
+  const computedAverageScore = React.useMemo(() => {
+    if (!submissions || submissions.length === 0) return "0.0";
+    const total = submissions.reduce((sum, s) => sum + parseFloat(s.score || 0), 0);
+    const avg = total / submissions.length;
+    return avg > 10 ? (avg / 10).toFixed(1) : avg.toFixed(1);
+  }, [submissions]);
+
+  const computedEvolution = React.useMemo(() => {
+    if (!submissions || submissions.length === 0) return [];
+    return [...submissions]
+      .reverse()
+      .map((c, idx) => {
+        const rawGrade = parseFloat(c.score || 0);
+        return {
+          name: c.question_title || c.activity_title || `Corr. ${idx + 1}`,
+          grade: rawGrade > 10 ? rawGrade / 10 : rawGrade,
+          date: new Date(c.created_at || new Date()).toLocaleDateString("pt-BR"),
+        };
+      });
+  }, [submissions]);
 
   if (!isOpen) return null;
 
@@ -124,7 +156,7 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                   </div>
                   <div className="px-3 py-1 bg-emerald-500/15 border border-emerald-500/20 rounded-full flex flex-col items-center justify-center min-w-[70px]">
                     <span className="text-[10px] uppercase font-mono text-emerald-400 block tracking-wider">Média</span>
-                    <span className="text-xl font-bold font-mono text-white leading-none mt-0.5">{profileData.average_score}</span>
+                    <span className="text-xl font-bold font-mono text-white leading-none mt-0.5">{computedAverageScore}</span>
                   </div>
                 </div>
 
@@ -153,9 +185,9 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                   <TrendingUp className="w-3.5 h-3.5 text-sky-400" /> Gráfico de Evolução
                 </span>
                 <div className="h-44 w-full bg-[#030712] rounded-xl border border-slate-800/80 p-3 flex flex-col justify-between">
-                  {profileData.evolution && profileData.evolution.length > 0 ? (
+                  {computedEvolution && computedEvolution.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={profileData.evolution} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <LineChart data={computedEvolution} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b/30" />
                         <XAxis dataKey="date" stroke="#64748b" fontSize={9} />
                         <YAxis stroke="#64748b" fontSize={9} domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} />

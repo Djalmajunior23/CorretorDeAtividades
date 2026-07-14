@@ -1405,9 +1405,10 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         SELECT scr.*, scr.status as result_status, scr.submitted_code, scr.score as final_score, scr.feedback as unified_feedback 
         FROM correction_vault scr 
         WHERE scr.student_key = $1 OR scr.student_id = $1 OR scr.student_registration = $1
+           OR scr.student_key = $2 OR scr.student_id = $2 OR scr.student_registration = $2
         ORDER BY scr.created_at DESC
       `,
-        [student_id],
+        [student_id, student.enrollment_code || student_id],
       );
       
       const crResults = newResultsQuery.rows.map(r => ({

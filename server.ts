@@ -1851,6 +1851,53 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE d_execution_log ADD COLUMN IF NOT EXISTS exit_code INTEGER DEFAULT 0;`);
     await pool.query(`ALTER TABLE d_execution_log ADD COLUMN IF NOT EXISTS execution_time INTEGER DEFAULT 0;`);
 
+    // Módulo de Cofre de Correções (correction_vault)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS correction_vault (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        student_key TEXT NOT NULL,
+        student_id TEXT NULL,
+        student_registration TEXT NULL,
+        student_name TEXT NULL,
+        class_id TEXT NULL,
+        class_name TEXT NULL,
+        activity_id TEXT NULL,
+        activity_title TEXT NULL,
+        question_id TEXT NULL,
+        question_title TEXT NULL,
+        language TEXT NOT NULL,
+        submitted_code TEXT NOT NULL,
+        score NUMERIC(5,2) DEFAULT 0,
+        max_score NUMERIC(5,2) DEFAULT 100,
+        percentage NUMERIC(5,2) DEFAULT 0,
+        status TEXT DEFAULT 'saved',
+        feedback TEXT NULL,
+        ai_feedback TEXT NULL,
+        teacher_feedback TEXT NULL,
+        execution_output TEXT NULL,
+        execution_error TEXT NULL,
+        test_results JSONB DEFAULT '[]'::jsonb,
+        rubric_result JSONB DEFAULT '{}'::jsonb,
+        strengths JSONB DEFAULT '[]'::jsonb,
+        improvements JSONB DEFAULT '[]'::jsonb,
+        raw_correction JSONB DEFAULT '{}'::jsonb,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        source TEXT DEFAULT 'correction_vault',
+        saved_by TEXT NULL,
+        saved_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_key ON correction_vault(student_key);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_id ON correction_vault(student_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_registration ON correction_vault(student_registration);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_class_id ON correction_vault(class_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_activity_id ON correction_vault(activity_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_question_id ON correction_vault(question_id);
+      CREATE INDEX IF NOT EXISTS idx_correction_vault_created_at ON correction_vault(created_at DESC);
+    `);
+
     console.log("Neon Postgres Correction Engine 2.0 SQL schema synced successfully.");
   } catch (error) {
     console.error("Error creating tables in Neon database:", error);
@@ -3453,6 +3500,25 @@ app.get("/api/ai/status", async (req, res) => {
       } catch (e: any) {
         clearTimeout(timeoutId);
         console.error(`[AI STATUS OBS] Provider: ollama | Available: false | Error: ${e.message} | Duration: ${Date.now() - start}ms`);
+        if (process.env.GEMINI_API_KEY) {
+          return res.json({
+            success: true,
+            message: "Ollama offline, usando fallback Gemini",
+            data: { provider: "gemini" },
+            ai_available: true,
+            fallback_used: true,
+            provider: "gemini",
+            available: true,
+            base_url: "",
+            models: [
+              "gemini-3.5-flash",
+              "gemini-3.1-flash-lite",
+              "gemini-2.5-flash",
+              "gemini-flash-latest"
+            ],
+            health: "ok"
+          });
+        }
         return res.json({
           success: true,
           message: "IA indisponível. Foi usado fallback local.",
