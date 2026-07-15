@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 declare global {
   interface Window {
@@ -62,7 +64,8 @@ import {
   EyeOff,
   Sun,
   Moon,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
 import { apiUrl, safeJsonResponse, apiFetch } from "./config/api";
@@ -217,10 +220,23 @@ export default function App() {
   });
   const [notificationOpen, setNotificationOpen] = useState<boolean>(false);
   const [language, setLanguage] = useState<string>("python");
+  const [lintErrors, setLintErrors] = useState<string[]>([]);
   const [code, setCode] = useState<string>(() => {
     const savedCode = localStorage.getItem('codecheck-code');
     return savedCode || CODE_TEMPLATES["python"];
   });
+
+  useEffect(() => {
+    const errors: string[] = [];
+    // Basic checks
+    if ((code.split('{').length - 1) !== (code.split('}').length - 1)) {
+        errors.push("Chaves desbalanceadas detectadas.");
+    }
+    if ((code.split('(').length - 1) !== (code.split(')').length - 1)) {
+        errors.push("Parênteses desbalanceados detectados.");
+    }
+    setLintErrors(errors);
+  }, [code]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -339,7 +355,94 @@ export default function App() {
   const [selectedStudent, setSelectedStudent] = useState("Vinícius Souza");
   const [studentEvolutionData, setStudentEvolutionData] = useState<any>(null);
   const [correctionVaultItems, setCorrectionVaultItems] = useState<any[]>([]);
+  const [pedagogicalNotes, setPedagogicalNotes] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem("pedagogicalNotes");
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem("pedagogicalNotes", JSON.stringify(pedagogicalNotes));
+  }, [pedagogicalNotes]);
   const [loadingCorrectionVault, setLoadingCorrectionVault] = useState<boolean>(false);
+  
+  const handleExportStudentReport = () => {
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.text(`Relatório de Desempenho: ${selectedStudent}`, 10, 10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Data: ${new Date().toLocaleDateString()}`, 10, 20);
+    
+    // Performance
+    doc.setFont("helvetica", "bold");
+    doc.text("Desempenho Geral", 10, 30);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Média: ${studentEvolutionData?.overall_average ?? 65}%`, 10, 37);
+    doc.text(`Submissões: ${studentEvolutionData?.attempts_count ?? 1}`, 10, 44);
+    
+    // Competencies
+    doc.setFont("helvetica", "bold");
+    doc.text("Competências Alcançadas", 10, 55);
+    const comps = studentEvolutionData?.competencies || {};
+    const compData = [
+      ["Variáveis", comps.variables || 0],
+      ["Condicionais", comps.conditionals || 0],
+      ["Loops", comps.loops || 0],
+      ["Vetores/Matrizes", comps.arrays || 0]
+    ];
+    (doc as any).autoTable({
+      startY: 60,
+      head: [["Competência", "Nota"]],
+      body: compData,
+    });
+    
+    // Feedback History
+    doc.addPage();
+    doc.setFont("helvetica", "bold");
+    doc.text("Histórico de Feedback e Observações", 10, 10);
+    doc.setFont("helvetica", "normal");
+    
+    correctionVaultItems.forEach((corr, index) => {
+      const y = 20 + (index * 30);
+      doc.text(`${index + 1}. ${corr.question_title || "Correção"} - Nota: ${corr.score}`, 10, y);
+      if (pedagogicalNotes[corr.id]) {
+        doc.text(`Obs: ${pedagogicalNotes[corr.id]}`, 10, y + 7);
+      }
+    });
+    
+    doc.save(`relatorio_${selectedStudent.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  const isInitialMount = useRef(true);
+
+  const syncPedagogicalNotes = async (notes: Record<string, string>, silent = false) => {
+    try {
+      const response = await fetch("/api/correction-vault/sync-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes }),
+      });
+      if (!response.ok) throw new Error("Falha ao sincronizar");
+      if (!silent) alert("Observações sincronizadas com sucesso!");
+    } catch (e) {
+      console.error(e);
+      if (!silent) alert("Erro ao sincronizar observações.");
+    }
+  };
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    const handler = setTimeout(() => {
+      syncPedagogicalNotes(pedagogicalNotes, true);
+    }, 2000);
+    return () => clearTimeout(handler);
+  }, [pedagogicalNotes]);
+
+  const handleSyncNotes = async () => {
+    await syncPedagogicalNotes(pedagogicalNotes, false);
+  };
   const [classErrorData, setClassErrorData] = useState<any>(null);
   const [comparisonData, setComparisonData] = useState<any[]>([]);
   const [loadingClassErrors, setLoadingClassErrors] = useState(false);
@@ -1769,13 +1872,22 @@ export default function App() {
                     )}
 
                     {editorInputMode === "text" ? (
-                      <textarea
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        spellCheck="false"
-                        className="w-full h-80 bg-[#070a1a] p-5 font-mono text-sm leading-relaxed text-slate-100 select-all focus:outline-none resize-none cursor-text shadow-inner"
-                        placeholder="Escreva ou cole seu código de programação aqui..."
-                      />
+                      <>
+                        <textarea
+                          value={code}
+                          onChange={(e) => setCode(e.target.value)}
+                          spellCheck="false"
+                          className="w-full h-80 bg-[#070a1a] p-5 font-mono text-sm leading-relaxed text-slate-100 select-all focus:outline-none resize-none cursor-text shadow-inner"
+                          placeholder="Escreva ou cole seu código de programação aqui..."
+                        />
+                        {lintErrors.length > 0 && (
+                          <div className="bg-red-900/20 border-t border-red-500/20 px-5 py-2 text-xs text-red-400">
+                            {lintErrors.map((err, i) => (
+                              <div key={i}>• {err}</div>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="p-8 flex flex-col items-center justify-center min-h-[320px] bg-[#070a1a] text-center">
                         <input
@@ -3378,6 +3490,13 @@ export default function App() {
                       <p className="text-xs text-slate-400 mt-1">Acompanhamento longitudinal de progresso didático por discente.</p>
                     </div>
                     <div className="flex items-center gap-3">
+                      <button 
+                        onClick={handleExportStudentReport}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white transition-colors"
+                      >
+                        <Layers className="w-3 h-3" />
+                        Exportar Relatório PDF
+                      </button>
                       <label className="text-xs text-slate-300 font-mono uppercase">Estudante:</label>
                       <select
                         value={selectedStudent}
@@ -3517,6 +3636,11 @@ export default function App() {
                             </h3>
                             <p className="text-xs text-slate-400 mt-1">Histórico completo de submissões corrigidas e analisadas pelo corretor inteligente.</p>
                           </div>
+                          
+                          <button onClick={handleSyncNotes} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-[10px] font-bold text-white transition-colors">
+                            <RefreshCw className="w-3 h-3" />
+                            Sincronizar
+                          </button>
                         </div>
 
                         {loadingCorrectionVault ? (
@@ -3601,6 +3725,17 @@ export default function App() {
                                     <p className="whitespace-pre-line leading-relaxed">{corr.feedback || corr.unified_feedback || corr.ai_feedback}</p>
                                   </div>
                                 )}
+                                
+                                <div className="mt-2">
+                                  <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider mb-1 block">Observações Pedagógicas</span>
+                                  <textarea 
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                                    placeholder="Adicionar notas qualitativas..."
+                                    value={pedagogicalNotes[corr.id] || ""}
+                                    onChange={(e) => setPedagogicalNotes({...pedagogicalNotes, [corr.id]: e.target.value})}
+                                    rows={2}
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>

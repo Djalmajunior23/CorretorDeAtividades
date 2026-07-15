@@ -106,6 +106,17 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         console.error("Error migrating d_activities columns:", err),
       );
 
+    // 3. Migrate correction_vault
+    pool
+      .query(
+        `
+      ALTER TABLE correction_vault ADD COLUMN IF NOT EXISTS pedagogical_notes TEXT;
+    `,
+      )
+      .catch((err) =>
+        console.error("Error migrating correction_vault columns:", err),
+      );
+
     // 2. Create correction_results table
     pool
       .query(
@@ -521,6 +532,23 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         attachment_filename,
         status: "active",
       });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/correction-vault/sync-notes", async (req, res) => {
+    try {
+      if (!pool) return res.status(500).json({ error: "Database not connected" });
+      const { notes } = req.body;
+      
+      for (const [id, note] of Object.entries(notes)) {
+        await pool.query(
+          "UPDATE correction_vault SET pedagogical_notes = $1 WHERE id = $2",
+          [note, id]
+        );
+      }
+      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
