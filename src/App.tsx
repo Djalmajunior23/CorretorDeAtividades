@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import html2canvas from "html2canvas";
 
 declare global {
   interface Window {
@@ -12,7 +13,7 @@ import { Toaster, toast } from 'sonner';
 import Sidebar from "./components/layout/Sidebar";
 import GeneratorView from "./components/GeneratorView";
 import ActivityBankView from "./components/ActivityBankView";
-import CompetencyMapView from "./components/CompetencyMapView";
+import CompetencyHeatmap from "./components/CompetencyHeatmap";
 import ReportsInterventionsView from "./components/ReportsInterventionsView";
 import AIAssistantView from "./components/AIAssistantView";
 import AutomationActionCenterView from "./components/AutomationActionCenterView";
@@ -253,6 +254,7 @@ export default function App() {
   const [currentStage, setCurrentStage] = useState<string>("idle");
   const [result, setResult] = useState<any | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionLog[]>([]);
+  const submissionsRef = useRef<SubmissionLog[]>([]);
   const [dbConnected, setDbConnected] = useState<boolean>(false);
 
   // Teacher portal state variables
@@ -281,7 +283,8 @@ export default function App() {
     input_test_1: "",
     output_test_1: "",
     input_test_2: "",
-    output_test_2: ""
+    output_test_2: "",
+    deadline: ""
   });
 
   // CodeCheck AI System Evolutionary State Hooks
@@ -353,19 +356,21 @@ export default function App() {
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"general" | "errors" | "student" | "competencies" | "comparison" | "pedagogical">("general");
   const [savingSettings, setSavingSettings] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState("Vinícius Souza");
+  const [studentSearch, setStudentSearch] = useState("");
   const [studentEvolutionData, setStudentEvolutionData] = useState<any>(null);
   const [correctionVaultItems, setCorrectionVaultItems] = useState<any[]>([]);
   const [pedagogicalNotes, setPedagogicalNotes] = useState<Record<string, string>>(() => {
     const saved = localStorage.getItem("pedagogicalNotes");
     return saved ? JSON.parse(saved) : {};
   });
+  const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem("pedagogicalNotes", JSON.stringify(pedagogicalNotes));
   }, [pedagogicalNotes]);
   const [loadingCorrectionVault, setLoadingCorrectionVault] = useState<boolean>(false);
   
-  const handleExportStudentReport = () => {
+  const handleExportStudentReport = async () => {
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
     doc.text(`Relatório de Desempenho: ${selectedStudent}`, 10, 10);
@@ -408,8 +413,113 @@ export default function App() {
         doc.text(`Obs: ${pedagogicalNotes[corr.id]}`, 10, y + 7);
       }
     });
+
+    if (chartRef.current) {
+        const canvas = await html2canvas(chartRef.current);
+        const imgData = canvas.toDataURL("image/png");
+        doc.addPage();
+        doc.setFont("helvetica", "bold");
+        doc.text("Gráficos Comparativos", 10, 10);
+        doc.addImage(imgData, "PNG", 10, 20, 180, 120);
+    }
     
     doc.save(`relatorio_${selectedStudent.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  const handleExportComparativeReport = async () => {
+    const dataA = comparisonData.find(c => c.class_name === classA);
+    const dataB = comparisonData.find(c => c.class_name === classB);
+
+    if (!dataA || !dataB || (dataA.total_submissions === 0 && dataB.total_submissions === 0)) {
+      alert("As turmas selecionadas não possuem dados suficientes para gerar um relatório comparativo válido.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.text(`Relatório Comparativo de Turmas`, 10, 10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Turmas: ${classA} vs ${classB}`, 10, 20);
+    doc.text(`Data: ${new Date().toLocaleDateString()}`, 10, 30);
+    
+    if (dataA && dataB) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Dados de Aproveitamento", 10, 45);
+      
+      const compData = [
+        [dataA.class_name, `${dataA.average_grade || 0}%`, dataA.total_submissions || 0],
+        [dataB.class_name, `${dataB.average_grade || 0}%`, dataB.total_submissions || 0],
+      ];
+      
+      (doc as any).autoTable({
+        startY: 50,
+        head: [["Turma", "Média", "Total Submissões"]],
+        body: compData,
+      });
+      
+      const diff = Math.abs((dataA.average_grade || 0) - (dataB.average_grade || 0));
+      const leader = (dataA.average_grade || 0) > (dataB.average_grade || 0) ? classA : classB;
+      
+      const finalY = (doc as any).lastAutoTable.finalY || 80;
+      doc.setFont("helvetica", "bold");
+      doc.text("Insights", 10, finalY + 10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Diferença de Aproveitamento: ${diff}%`, 10, finalY + 20);
+      doc.text(`Líder de Performance: ${leader}`, 10, finalY + 30);
+    }
+
+    if (chartRef.current) {
+        const canvas = await html2canvas(chartRef.current);
+        const imgData = canvas.toDataURL("image/png");
+        doc.addPage();
+        doc.setFont("helvetica", "bold");
+        doc.text("Gráfico Comparativo", 10, 10);
+        doc.addImage(imgData, "PNG", 10, 20, 180, 120);
+    }
+    
+    doc.save(`relatorio_comparativo_${classA}_vs_${classB}.pdf`);
+  };
+
+  const handleExportInterventionPlan = (student: any) => {
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(`Plano de Intervenção Pedagógica`, 105, 15, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.text(`Estudante:`, 15, 30);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${student.student_name}`, 40, 30);
+    
+    doc.setFont("helvetica", "bold");
+    doc.text(`Média Atual:`, 15, 40);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${parseInt(student.average_grade)}%`, 45, 40);
+    
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total de Submissões:`, 15, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${student.submissions_count}`, 60, 50);
+    
+    doc.setFont("helvetica", "bold");
+    doc.text(`Status:`, 15, 60);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(225, 29, 72); // rose-600
+    doc.text(`ATENÇÃO URGENTE`, 32, 60);
+    doc.setTextColor(0, 0, 0); // reset
+
+    doc.setFont("helvetica", "bold");
+    doc.text(`Ações Recomendadas:`, 15, 75);
+    doc.setFont("helvetica", "normal");
+    doc.text(`1. Agendar reunião individual para diagnóstico de dificuldades.`, 15, 85);
+    doc.text(`2. Revisar fundamentos da linguagem de programação.`, 15, 95);
+    doc.text(`3. Propor exercícios de fixação com menor nível de complexidade.`, 15, 105);
+    doc.text(`4. Acompanhamento semanal de progresso nas próximas 3 semanas.`, 15, 115);
+    
+    doc.setFont("helvetica", "italic");
+    doc.text(`Gerado pelo CodeCheck AI em ${new Date().toLocaleDateString()}`, 15, 140);
+    
+    doc.save(`intervencao_pedagogica_${student.student_name.replace(/\s+/g, '_')}.pdf`);
   };
 
   const isInitialMount = useRef(true);
@@ -529,6 +639,46 @@ export default function App() {
     } finally {
       setLoadingHealth(false);
     }
+  };
+
+  const exportSubmissionsCSV = () => {
+    if (!submissions || submissions.length === 0) return;
+
+    // Define CSV Headers
+    const headers = ["ID", "Estudante", "Linguagem", "Status", "Pontuacao", "Testes Passados", "Total Testes", "Sintaxe OK", "Data"];
+
+    // Format Data
+    const csvData = submissions.map(val => {
+      const sub = val.submission || {};
+      const res = val.result || {};
+      return [
+        sub.id || "",
+        sub.student_name || "N/A",
+        sub.language || "",
+        sub.status || "",
+        res.final_score ?? "",
+        res.tests_passed ?? "",
+        res.total_tests ?? "",
+        res.syntax_ok ? "Sim" : "Não",
+        sub.created_at ? new Date(sub.created_at).toLocaleString("pt-BR") : ""
+      ];
+    });
+
+    // Generate CSV Content
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    // Trigger Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `submissions_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Fetch teaching questions bank
@@ -883,6 +1033,14 @@ export default function App() {
         const ct = res.headers.get("content-type");
         if (ct && ct.includes("application/json")) {
           const data = await safeJsonResponse(res);
+          if (JSON.stringify(data) !== JSON.stringify(submissionsRef.current)) {
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("Nova submissão detectada!");
+            } else if ("Notification" in window && Notification.permission !== "denied") {
+              Notification.requestPermission();
+            }
+          }
+          submissionsRef.current = data;
           setSubmissions(data);
           setDbConnected(true);
           setSubmissionsError(null);
@@ -2600,12 +2758,21 @@ export default function App() {
               <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] overflow-hidden">
                 <div className="px-6 py-4 border-b border-[#1e295b]/30 bg-[#161f36] flex justify-between items-center">
                   <span className="text-xs font-mono font-bold uppercase tracking-wide text-slate-300">Últimos Lançamentos</span>
-                  <button 
-                    onClick={fetchSubmissions}
-                    className="text-xs font-mono text-emerald-400 hover:underline font-semibold"
-                  >
-                    FORÇAR SINCRONIZAÇÃO
-                  </button>
+                  <div className="flex gap-4 items-center">
+                    <button 
+                      onClick={exportSubmissionsCSV}
+                      className="text-xs font-mono text-indigo-400 hover:underline font-semibold flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      EXPORTAR CSV
+                    </button>
+                    <button 
+                      onClick={fetchSubmissions}
+                      className="text-xs font-mono text-emerald-400 hover:underline font-semibold"
+                    >
+                      FORÇAR SINCRONIZAÇÃO
+                    </button>
+                  </div>
                 </div>
 
                 {submissions.length > 0 ? (
@@ -2728,7 +2895,7 @@ export default function App() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Linguagem-Alvo</label>
                       <select 
@@ -2755,6 +2922,16 @@ export default function App() {
                         <option value="Intermediário">Intermediário</option>
                         <option value="Avançado">Avançado</option>
                       </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Prazo</label>
+                      <input 
+                        type="date" 
+                        className="px-3 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+                        value={newQuestionForm.deadline}
+                        onChange={(e) => setNewQuestionForm({ ...newQuestionForm, deadline: e.target.value })}
+                      />
                     </div>
                   </div>
 
@@ -2817,6 +2994,7 @@ export default function App() {
                             language: newQuestionForm.language,
                             difficulty: newQuestionForm.difficulty,
                             starter_code: newQuestionForm.starter_code,
+                            deadline: newQuestionForm.deadline,
                             test_cases: tcs,
                             rubric: rubricWeights
                           })
@@ -2834,7 +3012,8 @@ export default function App() {
                             input_test_1: "",
                             output_test_1: "",
                             input_test_2: "",
-                            output_test_2: ""
+                            output_test_2: "",
+                            deadline: ""
                           });
                           fetchQuestions();
                         }
@@ -3304,9 +3483,18 @@ export default function App() {
                                   <div className="text-xs font-bold text-white">{std.student_name}</div>
                                   <div className="text-[10px] font-mono text-slate-400 mt-0.5">Total de submissões: {std.submissions_count}</div>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right flex flex-col items-end gap-1">
                                   <div className="text-xs font-mono font-black text-rose-400">{parseInt(std.average_grade)}% nota média</div>
-                                  <div className="text-[8px] font-mono bg-rose-500/15 text-rose-400 border border-rose-500/25 px-1.5 py-0.5 rounded mt-0.5">ATENÇÃO CRÍTICA</div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <button 
+                                      onClick={() => handleExportInterventionPlan(std)}
+                                      className="flex items-center gap-1 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded text-[9px] font-bold uppercase transition-colors"
+                                      title="Plano de Intervenção"
+                                    >
+                                      <Layers className="w-2.5 h-2.5" /> PLANO
+                                    </button>
+                                    <div className="text-[8px] font-mono bg-rose-500/15 text-rose-400 border border-rose-500/25 px-1.5 py-0.5 rounded">ATENÇÃO CRÍTICA</div>
+                                  </div>
                                 </div>
                               </div>
                             ))
@@ -3363,6 +3551,14 @@ export default function App() {
                           ))}
                         </select>
                       </div>
+                      <button 
+                        onClick={handleExportComparativeReport}
+                        className="flex items-center gap-2 px-4 py-2 mt-2 sm:mt-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white transition-colors"
+                        title="Exportar Relatório PDF"
+                      >
+                        <Layers className="w-3 h-3" />
+                        PDF
+                      </button>
                     </div>
                   </div>
 
@@ -3374,7 +3570,7 @@ export default function App() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
                       {/* Bar Chart Comparison */}
-                      <div className="col-span-12 md:col-span-8 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                      <div className="col-span-12 md:col-span-8 rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4" ref={chartRef}>
                         <div className="w-full h-[400px] mt-2">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart
@@ -3497,22 +3693,17 @@ export default function App() {
                         <Layers className="w-3 h-3" />
                         Exportar Relatório PDF
                       </button>
+                      <label className="text-xs text-slate-300 font-mono uppercase">Buscar:</label>
+                      <input type="text" placeholder="Nome..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} className="px-3 py-2 rounded-xl bg-[#030712] border border-[#1e295b]/30 text-xs text-white" />
                       <label className="text-xs text-slate-300 font-mono uppercase">Estudante:</label>
                       <select
                         value={selectedStudent}
                         onChange={(e) => setSelectedStudent(e.target.value)}
                         className="px-4 py-2 rounded-xl bg-[#030712] border border-[#1e295b]/30 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
                       >
-                        <option value="Vinícius Souza">Vinícius Souza</option>
-                        <option value="Mariana Alencar">Mariana Alencar</option>
-                        <option value="Lucas Ferreira">Lucas Ferreira</option>
-                        {/* Merge any dynamically submitted student names */}
-                        {submissions
-                          .map(s => s?.submission?.student_name)
-                          .filter((name, idx, self) => name && self.indexOf(name) === idx && name !== "Vinícius Souza" && name !== "Mariana Alencar" && name !== "Lucas Ferreira")
-                          .map((name, sIdx) => (
-                            <option key={sIdx} value={name}>{name}</option>
-                          ))
+                        {Array.from(new Set(["Vinícius Souza", "Mariana Alencar", "Lucas Ferreira", ...submissions.map(s => s?.submission?.student_name).filter(Boolean)]))
+                          .filter((name): name is string => typeof name === 'string' && name.toLowerCase().includes(studentSearch.toLowerCase()))
+                          .map(name => <option key={name} value={name}>{name}</option>)
                         }
                       </select>
                     </div>
@@ -3754,7 +3945,7 @@ export default function App() {
 
               {/* Competency Map subtab */}
               {analyticsSubTab === "competencies" && featureFlags.ENABLE_COMPETENCY_TAGGING && (
-                <CompetencyMapView />
+                <CompetencyHeatmap />
               )}
 
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { getApiUrl } from "../utils/api";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import {
@@ -53,6 +54,9 @@ export default function SystemHealthView() {
 
   // Model Active list (Ativar/Desativar)
   const [activeModelsState, setActiveModelsState] = useState<Record<string, boolean>>({});
+  const [correctionLatency, setCorrectionLatency] = useState<number | null>(null);
+  const [neonLatency, setNeonLatency] = useState<number | null>(null);
+  const [neonLatencyHistory, setNeonLatencyHistory] = useState<{ time: string; latency: number }[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -69,7 +73,36 @@ export default function SystemHealthView() {
     };
     pollBackupStatus();
     const interval = setInterval(pollBackupStatus, 10000);
-    return () => clearInterval(interval);
+    
+    const pollLatency = async () => {
+        const startC = Date.now();
+        try {
+            await fetch(apiUrl("/api/health/corrections"));
+            setCorrectionLatency(Date.now() - startC);
+        } catch { setCorrectionLatency(null); }
+
+        const startN = Date.now();
+        try {
+            await fetch(apiUrl("/api/health/database"));
+            const latency = Date.now() - startN;
+            setNeonLatency(latency);
+            setNeonLatencyHistory(prev => {
+                const now = new Date();
+                const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                return [...prev, { time: timeStr, latency }].slice(-20);
+            });
+        } catch { 
+            setNeonLatency(null); 
+            setNeonLatencyHistory(prev => {
+                const now = new Date();
+                const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                return [...prev, { time: timeStr, latency: 0 }].slice(-20);
+            });
+        }
+    };
+    pollLatency();
+    const intervalLatency = setInterval(pollLatency, 5000);
+    return () => { clearInterval(interval); clearInterval(intervalLatency); };
   }, []);
 
   const fetchData = async () => {
@@ -273,6 +306,16 @@ export default function SystemHealthView() {
                 icon: <Database className="w-5 h-5 text-indigo-400" />,
               },
               {
+                label: "Correction API",
+                key: "correction",
+                icon: <BrainCircuit className="w-5 h-5 text-indigo-400" />,
+              },
+              {
+                label: "Neon DB",
+                key: "neon",
+                icon: <Database className="w-5 h-5 text-emerald-400" />,
+              },
+              {
                 label: "Ollama / IA",
                 key: "ai",
                 icon: <BrainCircuit className="w-5 h-5 text-purple-400" />,
@@ -301,13 +344,30 @@ export default function SystemHealthView() {
                     {item.label}
                   </h3>
                   {status ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full ${getStatusColor(item.key === 'backup' ? status[item.key]?.status : status[item.key])}`}
-                      ></span>
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        {item.key === 'backup' ? (status[item.key]?.status || 'Inativo') : status[item.key]}
-                      </span>
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                              item.key === 'correction' ? (correctionLatency !== null ? "bg-emerald-500" : "bg-red-500") :
+                              item.key === 'neon' ? (neonLatency !== null ? "bg-emerald-500" : "bg-red-500") :
+                              getStatusColor(item.key === 'backup' ? status[item.key]?.status : status[item.key])
+                          }`}
+                        ></span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          {
+                              item.key === 'correction' ? (correctionLatency !== null ? "Online" : "Offline") :
+                              item.key === 'neon' ? (neonLatency !== null ? "Online" : "Offline") :
+                              (item.key === 'backup' ? (status[item.key]?.status || 'Inativo') : status[item.key])
+                          }
+                        </span>
+                      </div>
+                      {(item.key === 'correction' || item.key === 'neon') && (
+                        <span className="text-[10px] text-slate-500 font-mono">
+                            { (item.key === 'correction' ? correctionLatency : neonLatency) !== null 
+                                ? `${(item.key === 'correction' ? correctionLatency : neonLatency)}ms` 
+                                : "N/A" }
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <div className="text-xs text-slate-600">Verificando...</div>
@@ -315,6 +375,44 @@ export default function SystemHealthView() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Neon DB Latency Chart */}
+          <div className="bg-slate-900/30 border border-white/10 rounded-3xl p-6 space-y-4">
+            <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+              <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
+                <Activity className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  Neon DB Latency Monitor
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Monitoramento em tempo real (5s) da latência de conexão com o banco de dados Neon.
+                </p>
+              </div>
+            </div>
+            <div className="h-48 w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={neonLatencyHistory}>
+                  <XAxis dataKey="time" stroke="#475569" fontSize={10} tickMargin={10} />
+                  <YAxis stroke="#475569" fontSize={10} tickFormatter={(val) => `${val}ms`} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e295b', borderRadius: '8px' }}
+                    itemStyle={{ color: '#34d399', fontWeight: 'bold' }}
+                    labelStyle={{ color: '#94a3b8', fontSize: '12px' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="latency" 
+                    stroke="#10b981" 
+                    strokeWidth={2} 
+                    dot={false}
+                    activeDot={{ r: 6, fill: '#10b981', stroke: '#0f172a', strokeWidth: 2 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Database Backup Section — SOLICITAÇAO PRINCIPAL */}

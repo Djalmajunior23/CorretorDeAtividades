@@ -9,34 +9,40 @@ import {
   Search,
 } from "lucide-react";
 
-export default function CompetencyMapView() {
+export default function CompetencyHeatmap() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [filterUnit, setFilterUnit] = useState<string>("");
+  const [filterPeriod, setFilterPeriod] = useState<string>("2026-1");
 
   useEffect(() => {
-    // We fetch data from the backend. We will mock initially while fetching
-    // if backend isn't ready or we can write the backend endpoint later.
+    // We fetch data from the backend. 
     const fetchCompetencies = async () => {
       setLoading(true);
       try {
-        const res = await fetch(apiUrl("/api/teacher-analytics/competencies"));
+        const res = await fetch(apiUrl(`/api/analytics/competencies?period=${filterPeriod}`));
         if (res.ok) {
           const json = await res.json();
           setData(json);
         } else {
-          // fallback mock data if endpoint doesn't exist
-          setData(generateMockData());
+          // fallback mock data
+          setData({
+            units: ["Lógica de Programação", "Estruturas de Dados"],
+            competencies: []
+          });
         }
       } catch (e) {
-        setData(generateMockData());
+        setData({
+          units: ["Lógica de Programação", "Estruturas de Dados"],
+          competencies: []
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchCompetencies();
-  }, []);
+  }, [filterPeriod]);
 
   const generateMockData = () => ({
     units: [
@@ -130,6 +136,18 @@ export default function CompetencyMapView() {
         </div>
 
         <div className="flex items-center gap-3">
+          <label className="text-xs text-slate-300 font-mono uppercase flex items-center gap-1">
+            <Search className="w-3 h-3" />
+            Período:
+          </label>
+          <select
+            value={filterPeriod}
+            onChange={(e) => setFilterPeriod(e.target.value)}
+            className="bg-[#030712] border border-[#1e295b]/40 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
+          >
+            <option value="2026-1">2026.1</option>
+            <option value="2026-2">2026.2</option>
+          </select>
           <label className="text-xs text-slate-300 font-mono uppercase flex items-center gap-1">
             <Search className="w-3 h-3" />
             Unidade Curricular:

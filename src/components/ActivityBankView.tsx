@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import DeadlineRemindersView from "./DeadlineRemindersView";
 import {
   Copy,
   Archive,
@@ -145,6 +146,8 @@ export default function ActivityBankView({ featureFlags = {} }: any) {
           </button>
         </div>
       </div>
+      
+      <DeadlineRemindersView activities={activities} />
 
       <div className="flex gap-4 p-4 rounded-xl border border-[#1e295b]/30 bg-[#0f172a]">
         <div className="flex flex-col flex-1 gap-1">

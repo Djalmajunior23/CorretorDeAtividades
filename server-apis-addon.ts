@@ -87,6 +87,18 @@ export async function initializeDatabase(pool: Pool | null): Promise<void> {
 
 export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   console.log("[DEBUG] setupTeacherAPIs called");
+  
+  app.get("/api/health/corrections", (req, res) => res.json({ status: "ok" }));
+  app.get("/api/health/database", async (req, res) => {
+    try {
+      if (!pool) return res.status(503).json({ status: "error", message: "Database not available" });
+      await pool.query("SELECT 1");
+      res.json({ status: "ok" });
+    } catch (e) {
+      res.status(500).json({ status: "error" });
+    }
+  });
+
   // --- DATABASE MIGRATIONS FOR THE NEW COLUMNS ---
   if (pool) {
     initializeDatabase(pool).catch((err) => {
@@ -551,6 +563,22 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/analytics/competencies", async (req, res) => {
+    try {
+      if (!pool) return res.json({ success: true, data: {} });
+      // Mocked data for class competency performance
+      res.json({
+        success: true,
+        data: {
+          "2026-1": { variables: 0.8, conditionals: 0.7, loops: 0.5, functions: 0.6, arrays: 0.4 },
+          "2026-2": { variables: 0.9, conditionals: 0.8, loops: 0.7, functions: 0.7, arrays: 0.6 }
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 

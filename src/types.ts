@@ -177,4 +177,11 @@ export interface TeacherLibraryItem {
   updated_at: string;
 }
 
+export interface ActivityDeadline {
+  id: string;
+  activity_id: string;
+  deadline: string; // ISO date
+  created_at: string;
+}
+
 
