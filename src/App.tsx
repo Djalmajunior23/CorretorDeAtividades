@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import html2canvas from "html2canvas";
+import Editor from "@monaco-editor/react";
 
 declare global {
   interface Window {
@@ -66,12 +67,21 @@ import {
   Sun,
   Moon,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Copy,
+  History,
+  Webhook,
+  Users,
+  Search
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
 import { apiUrl, safeJsonResponse, apiFetch } from "./config/api";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { CodeHistoryModal } from "./components/CodeHistoryModal";
+import { WebhookManagerModal } from "./components/WebhookManagerModal";
+import { PairProgrammingModal } from "./components/PairProgrammingModal";
+import { ExportSubmissionsModal } from "./components/ExportSubmissionsModal";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -226,6 +236,13 @@ export default function App() {
     const savedCode = localStorage.getItem('codecheck-code');
     return savedCode || CODE_TEMPLATES["python"];
   });
+  const [autosaveStatus, setAutosaveStatus] = useState<"saved" | "saving">("saved");
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [showPairModal, setShowPairModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
 
   useEffect(() => {
     const errors: string[] = [];
@@ -240,9 +257,11 @@ export default function App() {
   }, [code]);
 
   useEffect(() => {
+    setAutosaveStatus("saving");
     const handler = setTimeout(() => {
       localStorage.setItem('codecheck-code', code);
-    }, 1000); // 1s debounce
+      setAutosaveStatus("saved");
+    }, 800); // 800ms debounce
 
     return () => clearTimeout(handler);
   }, [code]);
@@ -345,13 +364,34 @@ export default function App() {
     ENABLE_STUDENT_ACHIEVEMENTS: false
   });
 
-  const [lintSettings, setLintSettings] = useState({
-    requireComments: true,
-    requireIndentation: true,
-    maxLinesLimit: 80,
-    requireNoSingleLetterVars: true,
-    requireFunctions: false
+  const [lintSettings, setLintSettings] = useState(() => {
+    const saved = localStorage.getItem("lintSettings");
+    return saved ? JSON.parse(saved) : {
+      requireComments: true,
+      requireIndentation: true,
+      maxLinesLimit: 80,
+      requireNoSingleLetterVars: true,
+      requireFunctions: false,
+      requireJsDoc: false
+    };
   });
+
+  const [slaSettings, setSlaSettings] = useState(() => {
+    const saved = localStorage.getItem("slaSettings");
+    return saved ? JSON.parse(saved) : {
+      selectedClass: "Todas as Turmas (Global)",
+      enableAlerts: true,
+      easySlaMinutes: 15,
+      mediumSlaMinutes: 30,
+      hardSlaMinutes: 60,
+      advancedSlaMinutes: 120,
+      quietHoursStart: "22:00",
+      quietHoursEnd: "07:00",
+      notifyEmail: true,
+      notifyInApp: true
+    };
+  });
+  const [savingSla, setSavingSla] = useState(false);
 
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"general" | "errors" | "student" | "competencies" | "comparison" | "pedagogical">("general");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -364,6 +404,173 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
   const chartRef = useRef<HTMLDivElement>(null);
+
+  // WebWorker & Monaco Lint Integration
+  const workerRef = useRef<Worker | null>(null);
+  const [editorMarkers, setEditorMarkers] = useState<any[]>([]);
+  const monacoRef = useRef<any>(null);
+  const editorInstanceRef = useRef<any>(null);
+
+  useEffect(() => {
+    const workerCode = `
+      self.onmessage = function(e) {
+        const { code, settings } = e.data;
+        const diagnostics = [];
+        const lines = code ? code.split('\\n') : [];
+
+        if (settings.maxLinesLimit && lines.length > settings.maxLinesLimit) {
+          diagnostics.push({
+            startLineNumber: settings.maxLinesLimit,
+            startColumn: 1,
+            endLineNumber: lines.length,
+            endColumn: 1,
+            message: \`Arquivo excede o limite configurado de \${settings.maxLinesLimit} linhas (atual: \${lines.length}).\`,
+            severity: 8
+          });
+        }
+
+        if (settings.requireComments) {
+          const hasComments = lines.some(l => l.trim().startsWith('//') || l.includes('/*') || l.includes('*/'));
+          if (!hasComments && code.trim().length > 10) {
+            diagnostics.push({
+              startLineNumber: 1,
+              startColumn: 1,
+              endLineNumber: 1,
+              endColumn: 10,
+              message: 'Regra de Lint: O código deve conter comentários explicativos.',
+              severity: 4
+            });
+          }
+        }
+
+        if (settings.requireNoSingleLetterVars) {
+          lines.forEach((l, idx) => {
+            const match = l.match(/\\b(let|var|const)\\s+([a-zA-Z])\\s*=/);
+            if (match) {
+              diagnostics.push({
+                startLineNumber: idx + 1,
+                startColumn: l.indexOf(match[2]) + 1,
+                endLineNumber: idx + 1,
+                endColumn: l.indexOf(match[2]) + 2,
+                message: \`Uso de variável de letra única ('\${match[2]}') desencorajado pelas diretrizes de legibilidade.\`,
+                severity: 4
+              });
+            }
+          });
+        }
+
+        if (settings.requireFunctions) {
+          const hasFunc = code.includes('function') || code.includes('=>') || code.includes('def ');
+          if (!hasFunc && code.trim().length > 20) {
+            diagnostics.push({
+              startLineNumber: 1,
+              startColumn: 1,
+              endLineNumber: 1,
+              endColumn: 10,
+              message: 'Regra de Lint: O código deve ser estruturado em funções reutilizáveis.',
+              severity: 4
+            });
+          }
+        }
+
+        if (settings.requireJsDoc) {
+          lines.forEach((l, idx) => {
+            if (l.includes('function ') || (l.includes('const ') && l.includes('=>'))) {
+              let hasJsDoc = false;
+              for (let i = Math.max(0, idx - 4); i < idx; i++) {
+                if (lines[i].includes('/**') || lines[i].includes('*')) {
+                  hasJsDoc = true;
+                  break;
+                }
+              }
+              if (!hasJsDoc) {
+                diagnostics.push({
+                  startLineNumber: idx + 1,
+                  startColumn: 1,
+                  endLineNumber: idx + 1,
+                  endColumn: l.length + 1,
+                  message: 'Regra de Lint: Função sem documentação JSDoc/docstring obrigatória.',
+                  severity: 8
+                });
+              }
+            }
+          });
+        }
+
+        self.postMessage(diagnostics);
+      };
+    `;
+
+    const blob = new Blob([workerCode], { type: "application/javascript" });
+    const workerUrl = URL.createObjectURL(blob);
+    workerRef.current = new Worker(workerUrl);
+
+    workerRef.current.onmessage = (event) => {
+      const markers = event.data;
+      setEditorMarkers(markers);
+      setLintErrors(markers.map((m: any) => m.message));
+
+      if (monacoRef.current && editorInstanceRef.current) {
+        const model = editorInstanceRef.current.getModel();
+        if (model) {
+          monacoRef.current.editor.setModelMarkers(model, "owner-lint", markers);
+        }
+      }
+    };
+
+    return () => {
+      workerRef.current?.terminate();
+      URL.revokeObjectURL(workerUrl);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (workerRef.current) {
+      workerRef.current.postMessage({ code, settings: lintSettings });
+    }
+  }, [code, lintSettings]);
+
+  const handleEditorDidMount = (editor: any, monaco: any) => {
+    editorInstanceRef.current = editor;
+    monacoRef.current = monaco;
+    if (workerRef.current) {
+      workerRef.current.postMessage({ code, settings: lintSettings });
+    }
+  };
+
+  const handleExportLintLog = () => {
+    const timestamp = new Date().toLocaleString();
+    let content = `=== RELATÓRIO DE LINT & CODESTYLE ===\n`;
+    content += `Data/Hora: ${timestamp}\n`;
+    content += `Total de Avisos/Erros: ${editorMarkers.length}\n`;
+    content += `=====================================\n\n`;
+
+    if (editorMarkers.length === 0) {
+      content += `Nenhum erro ou aviso de linter detectado. Código em conformidade!\n`;
+    } else {
+      editorMarkers.forEach((m, idx) => {
+        content += `[${idx + 1}] Linha ${m.startLineNumber}, Coluna ${m.startColumn}\n`;
+        content += `Severidade: ${m.severity === 8 ? 'Erro' : 'Aviso'}\n`;
+        content += `Mensagem: ${m.message}\n`;
+        content += `-------------------------------------\n`;
+      });
+    }
+
+    content += `\nTrecho do Código Analisado:\n`;
+    content += `-------------------------------------\n`;
+    content += code;
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `relatorio-lint-erros-${Date.now()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("Relatório de erros exportado com sucesso (.txt)!");
+  };
 
   useEffect(() => {
     localStorage.setItem("pedagogicalNotes", JSON.stringify(pedagogicalNotes));
@@ -842,6 +1049,7 @@ export default function App() {
   const handleSaveLintSettings = async () => {
     setSavingSettings(true);
     try {
+      localStorage.setItem("lintSettings", JSON.stringify(lintSettings));
       const res = await fetch(apiUrl("/api/settings/linting"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -851,12 +1059,27 @@ export default function App() {
         alert("Configurações de Codestyle e Linting da Turma salvas com sucesso!");
         fetchAuditLogs();
       } else {
-        alert("Erro detectado ao salvar configurações.");
+        alert("Configurações salvas localmente (servidor indisponível).");
       }
     } catch (e: any) {
       console.error("Error saving settings:", e.message);
+      localStorage.setItem("lintSettings", JSON.stringify(lintSettings));
+      alert("Configurações salvas localmente com sucesso!");
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSaveSlaSettings = async () => {
+    setSavingSla(true);
+    try {
+      localStorage.setItem("slaSettings", JSON.stringify(slaSettings));
+      await new Promise(r => setTimeout(r, 500));
+      alert("Configurações de Alertas de SLA e Limite de Tempo salvas com sucesso!");
+    } catch (e: any) {
+      alert("Erro ao salvar configurações de SLA.");
+    } finally {
+      setSavingSla(false);
     }
   };
 
@@ -1462,7 +1685,13 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[#030712] overflow-hidden text-slate-100 font-sans antialiased">
       {/* Visual Sidebar Layout */}
-      <Sidebar currentTab={currentTab} setTab={setTab} dbConnected={dbConnected} featureFlags={featureFlags} />
+      <Sidebar 
+        currentTab={currentTab} 
+        setTab={setTab} 
+        dbConnected={dbConnected} 
+        featureFlags={featureFlags} 
+        onOpenExportModal={() => setShowExportModal(true)} 
+      />
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#070a1a]">
@@ -1500,6 +1729,114 @@ export default function App() {
               </h2>
               <span className="text-[10px] text-slate-500 font-mono">Última conexão: {new Date().toLocaleDateString("pt-BR")}</span>
             </div>
+          </div>
+
+          {/* Global Search Bar */}
+          <div className="relative hidden md:block w-80">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Pesquisar submissões, turmas, alunos..."
+              value={globalSearchQuery}
+              onChange={(e) => {
+                setGlobalSearchQuery(e.target.value);
+                setGlobalSearchOpen(true);
+              }}
+              onFocus={() => setGlobalSearchOpen(true)}
+              className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all font-mono shadow-sm"
+            />
+
+            {globalSearchOpen && globalSearchQuery.trim().length > 0 && (() => {
+              const searchStudents = ["Vinícius Souza", "Mariana Alencar", "Lucas Ferreira", "Ana Clara Lima", "Carlos Eduardo"];
+              const searchTurmas = ["Turma A (Engenharia)", "Turma B (Sistemas)", "Turma C (Computação)"];
+
+              const matchedSubmissions = submissions.filter(s => {
+                const q = globalSearchQuery.toLowerCase();
+                const student = (s?.submission?.student_name || "").toLowerCase();
+                const lang = (s?.submission?.language || "").toLowerCase();
+                return student.includes(q) || lang.includes(q);
+              }).slice(0, 5);
+
+              const matchedStudents = searchStudents.filter(std => std.toLowerCase().includes(globalSearchQuery.toLowerCase()));
+              const matchedTurmas = searchTurmas.filter(t => t.toLowerCase().includes(globalSearchQuery.toLowerCase()));
+
+              return (
+                <div className="absolute right-0 left-0 mt-2 bg-[#0f172a] border border-[#1e295b]/60 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-80 overflow-y-auto p-2">
+                  <div className="px-3 py-1.5 text-[10px] font-mono uppercase text-slate-400 font-bold border-b border-slate-800 flex justify-between">
+                    <span>Resultados em Tempo Real</span>
+                    <button onClick={() => setGlobalSearchOpen(false)} className="hover:text-white">✕</button>
+                  </div>
+
+                  {matchedStudents.length > 0 && (
+                    <div className="py-2">
+                      <span className="px-3 text-[10px] font-mono text-emerald-400 uppercase font-bold">Estudantes</span>
+                      {matchedStudents.map((std, idx) => (
+                        <div 
+                          key={idx}
+                          onClick={() => {
+                            setGlobalSearchQuery(std);
+                            setGlobalSearchOpen(false);
+                            setTab("students");
+                            toast.success(`Navegando para o perfil de ${std}`);
+                          }}
+                          className="px-3 py-2 hover:bg-slate-800/80 rounded-xl cursor-pointer text-xs text-slate-200 flex items-center justify-between transition-colors"
+                        >
+                          <span>{std}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Estudante</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {matchedTurmas.length > 0 && (
+                    <div className="py-2 border-t border-slate-800/60">
+                      <span className="px-3 text-[10px] font-mono text-indigo-400 uppercase font-bold">Turmas</span>
+                      {matchedTurmas.map((t, idx) => (
+                        <div 
+                          key={idx}
+                          onClick={() => {
+                            setGlobalSearchQuery(t);
+                            setGlobalSearchOpen(false);
+                            setTab("turmas");
+                            toast.success(`Navegando para ${t}`);
+                          }}
+                          className="px-3 py-2 hover:bg-slate-800/80 rounded-xl cursor-pointer text-xs text-slate-200 flex items-center justify-between transition-colors"
+                        >
+                          <span>{t}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Turma</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {matchedSubmissions.length > 0 && (
+                    <div className="py-2 border-t border-slate-800/60">
+                      <span className="px-3 text-[10px] font-mono text-amber-400 uppercase font-bold">Submissões</span>
+                      {matchedSubmissions.map((s, idx) => (
+                        <div 
+                          key={idx}
+                          onClick={() => {
+                            setGlobalSearchOpen(false);
+                            setTab("analytics");
+                            toast.success(`Exibindo submissão de ${s?.submission?.student_name || 'Aluno'}`);
+                          }}
+                          className="px-3 py-2 hover:bg-slate-800/80 rounded-xl cursor-pointer text-xs text-slate-200 flex items-center justify-between transition-colors"
+                        >
+                          <span>{s?.submission?.student_name || 'Submissão'} ({s?.submission?.language})</span>
+                          <span className="text-[10px] text-emerald-400 font-mono font-bold">Nota: {s?.result?.final_score}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {matchedStudents.length === 0 && matchedTurmas.length === 0 && matchedSubmissions.length === 0 && (
+                    <div className="p-4 text-center text-xs text-slate-500 font-mono">
+                      Nenhum resultado encontrado para "{globalSearchQuery}"
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex items-center gap-4">
@@ -1983,33 +2320,75 @@ export default function App() {
                   {/* Code editor */}
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] shadow-xl overflow-hidden flex flex-col">
                     <div className="px-5 py-3.5 border-b border-[#1e295b]/30 bg-[#161f36] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Code2 className="w-4 h-4 text-emerald-400" />
-                        <span className="text-xs font-mono font-bold tracking-wide uppercase text-slate-300">Editor de Código</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Code2 className="w-4 h-4 text-emerald-400" />
+                          <span className="text-xs font-mono font-bold tracking-wide uppercase text-slate-300">Editor de Código</span>
+                        </div>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                          autosaveStatus === "saving" 
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse" 
+                            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${autosaveStatus === "saving" ? "bg-amber-400 animate-ping" : "bg-emerald-400"}`} />
+                          {autosaveStatus === "saving" ? "Salvando..." : "Salvo"}
+                        </span>
                       </div>
 
-                      {/* Mode Segmented Controls */}
-                      <div className="flex items-center gap-1 bg-[#070a1a] p-1 rounded-xl border border-[#1e295b]/30 self-start sm:self-auto">
+                      {/* Mode Segmented Controls & Copy Button */}
+                      <div className="flex items-center gap-3 self-start sm:self-auto">
                         <button
-                          onClick={() => setEditorInputMode("text")}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono tracking-wide transition-all ${
-                            editorInputMode === "text"
-                              ? "bg-[#1e295b] text-emerald-400 font-bold"
-                              : "text-slate-400 hover:text-slate-200"
-                          }`}
+                          onClick={() => {
+                            navigator.clipboard.writeText(code);
+                            toast.success("Código copiado para a área de transferência!");
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold font-mono tracking-wide text-slate-200 hover:text-white bg-[#070a1a] hover:bg-[#1e295b]/50 border border-[#1e295b]/30 transition-all shadow-sm"
+                          title="Copiar Código"
                         >
-                          Teclado
+                          <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                          Copiar Código
                         </button>
+
                         <button
-                          onClick={() => setEditorInputMode("image")}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono tracking-wide transition-all flex items-center gap-1.5 ${
-                            editorInputMode === "image"
-                              ? "bg-[#1e295b] text-emerald-400 font-bold"
-                              : "text-slate-400 hover:text-slate-200"
-                          }`}
+                          onClick={() => setShowHistoryModal(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold font-mono tracking-wide text-indigo-300 hover:text-white bg-[#070a1a] hover:bg-indigo-500/20 border border-indigo-500/30 transition-all shadow-sm"
+                          title="Histórico e Versões"
                         >
-                          📸 Corrigir por Imagem
+                          <History className="w-3.5 h-3.5 text-indigo-400" />
+                          Versões
                         </button>
+
+                        <button
+                          onClick={() => setShowPairModal(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold font-mono tracking-wide text-emerald-300 hover:text-white bg-[#070a1a] hover:bg-emerald-500/20 border border-emerald-500/30 transition-all shadow-sm"
+                          title="Pair Programming ao Vivo"
+                        >
+                          <Users className="w-3.5 h-3.5 text-emerald-400" />
+                          Pair Programming
+                        </button>
+
+                        <div className="flex items-center gap-1 bg-[#070a1a] p-1 rounded-xl border border-[#1e295b]/30">
+                          <button
+                            onClick={() => setEditorInputMode("text")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono tracking-wide transition-all ${
+                              editorInputMode === "text"
+                                ? "bg-[#1e295b] text-emerald-400 font-bold"
+                                : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            Teclado
+                          </button>
+                          <button
+                            onClick={() => setEditorInputMode("image")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono tracking-wide transition-all flex items-center gap-1.5 ${
+                              editorInputMode === "image"
+                                ? "bg-[#1e295b] text-emerald-400 font-bold"
+                                : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            📸 Corrigir por Imagem
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -2031,18 +2410,48 @@ export default function App() {
 
                     {editorInputMode === "text" ? (
                       <>
-                        <textarea
-                          value={code}
-                          onChange={(e) => setCode(e.target.value)}
-                          spellCheck="false"
-                          className="w-full h-80 bg-[#070a1a] p-5 font-mono text-sm leading-relaxed text-slate-100 select-all focus:outline-none resize-none cursor-text shadow-inner"
-                          placeholder="Escreva ou cole seu código de programação aqui..."
-                        />
-                        {lintErrors.length > 0 && (
-                          <div className="bg-red-900/20 border-t border-red-500/20 px-5 py-2 text-xs text-red-400">
-                            {lintErrors.map((err, i) => (
-                              <div key={i}>• {err}</div>
-                            ))}
+                        <div className="h-80 w-full relative">
+                          <Editor
+                            height="100%"
+                            language="javascript"
+                            theme="vs-dark"
+                            value={code}
+                            onChange={(val) => setCode(val || "")}
+                            onMount={handleEditorDidMount}
+                            options={{
+                              minimap: { enabled: false },
+                              fontSize: 13,
+                              fontFamily: '"JetBrains Mono", monospace',
+                              padding: { top: 12 },
+                              scrollBeyondLastLine: false,
+                              smoothScrolling: true,
+                              cursorBlinking: "smooth",
+                            }}
+                          />
+                        </div>
+                        {editorMarkers.length > 0 && (
+                          <div className="bg-red-900/20 border-t border-red-500/20 px-5 py-3 text-xs text-red-400 space-y-2">
+                            <div className="flex items-center justify-between pb-1 border-b border-red-500/20">
+                              <span className="font-bold flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                {editorMarkers.length} {editorMarkers.length === 1 ? 'aviso/erro detectado' : 'avisos/erros detectados'} pelo Linter:
+                              </span>
+                              <button
+                                onClick={handleExportLintLog}
+                                className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-200 font-mono text-[10px] font-bold transition-all flex items-center gap-1 border border-red-500/30 shadow-sm"
+                                title="Exportar log de erros em .txt"
+                              >
+                                📥 Exportar Log (.txt)
+                              </button>
+                            </div>
+                            <div className="space-y-1">
+                              {editorMarkers.map((m, i) => (
+                                <div key={i} className="flex items-center gap-1.5 font-mono">
+                                  <span className="font-bold">Linha {m.startLineNumber}:</span>
+                                  <span>{m.message}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </>
@@ -4114,12 +4523,12 @@ export default function App() {
                       <p className="text-xs text-slate-400 mt-1">Regras pedagógicas avaliadas na etapa "Qualidade & DRY" do scorecard.</p>
                     </div>
 
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-5">
                       {/* Rule: Comments */}
-                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
-                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                      <label className="flex items-start justify-between p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all shadow-sm">
+                        <div className="flex flex-col gap-1 max-w-[80%]">
                           <span className="text-xs font-bold text-slate-200">Obrigatoriedade de Comentários</span>
-                          <span className="text-[10px] text-slate-400 leading-snug">Exige a presença de comentários explicativos no código-fonte para aprovação.</span>
+                          <span className="text-[11px] text-slate-400 leading-relaxed">Exige a presença de comentários explicativos no código-fonte para aprovação.</span>
                         </div>
                         <input 
                           type="checkbox" 
@@ -4130,10 +4539,10 @@ export default function App() {
                       </label>
 
                       {/* Rule: Indentation */}
-                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
-                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                      <label className="flex items-start justify-between p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all shadow-sm">
+                        <div className="flex flex-col gap-1 max-w-[80%]">
                           <span className="text-xs font-bold text-slate-200">Verificar Indentação Correta</span>
-                          <span className="text-[10px] text-slate-400 leading-snug">Garante uso consistente de espaços ou tabs sem blocos desalinhados.</span>
+                          <span className="text-[11px] text-slate-400 leading-relaxed">Garante uso consistente de espaços ou tabs sem blocos desalinhados.</span>
                         </div>
                         <input 
                           type="checkbox" 
@@ -4144,10 +4553,10 @@ export default function App() {
                       </label>
 
                       {/* Rule: Single-Letter Variable names */}
-                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
-                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                      <label className="flex items-start justify-between p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all shadow-sm">
+                        <div className="flex flex-col gap-1 max-w-[80%]">
                           <span className="text-xs font-bold text-slate-200">Restringir Variáveis de Letra Única</span>
-                          <span className="text-[10px] text-slate-400 leading-snug">Impede o uso excessivo de variáveis curtas (ex: x, y, a) que dificultam a legibilidade.</span>
+                          <span className="text-[11px] text-slate-400 leading-relaxed">Impede o uso excessivo de variáveis curtas (ex: x, y, a) que dificultam a legibilidade.</span>
                         </div>
                         <input 
                           type="checkbox" 
@@ -4158,10 +4567,10 @@ export default function App() {
                       </label>
 
                       {/* Rule: Structured Functions requirement */}
-                      <label className="flex items-start justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all">
-                        <div className="flex flex-col gap-0.5 max-w-[80%]">
+                      <label className="flex items-start justify-between p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all shadow-sm">
+                        <div className="flex flex-col gap-1 max-w-[80%]">
                           <span className="text-xs font-bold text-slate-200">Exigir Estruturação por Funções</span>
-                          <span className="text-[10px] text-slate-400 leading-snug">Exige a criação de funções isoladas e escopos limpos ao invés de código linear solto.</span>
+                          <span className="text-[11px] text-slate-400 leading-relaxed">Exige a criação de funções isoladas e escopos limpos ao invés de código linear solto.</span>
                         </div>
                         <input 
                           type="checkbox" 
@@ -4171,20 +4580,34 @@ export default function App() {
                         />
                       </label>
 
+                      {/* Rule: JSDoc / Docstrings requirement */}
+                      <label className="flex items-start justify-between p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 hover:border-slate-800 cursor-pointer transition-all shadow-sm">
+                        <div className="flex flex-col gap-1 max-w-[80%]">
+                          <span className="text-xs font-bold text-slate-200">Obrigatoriedade de JSDoc / Docstrings</span>
+                          <span className="text-[11px] text-slate-400 leading-relaxed">Exige a presença de comentários JSDoc ou docstrings em todas as funções definidas no código.</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={lintSettings.requireJsDoc}
+                          onChange={(e) => setLintSettings({ ...lintSettings, requireJsDoc: e.target.checked })}
+                          className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
+                        />
+                      </label>
+
                       {/* Rule: Lines Limit */}
-                      <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2">
+                      <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-3 shadow-sm">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-slate-200">Limite de Linhas de Código</span>
                           <span className="font-mono text-xs font-bold text-emerald-400">{lintSettings.maxLinesLimit} linhas</span>
                         </div>
-                        <p className="text-[10px] text-slate-400 leading-snug mb-1">Alertará se o arquivo enviado ultrapassar este limite de tamanho.</p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">Alertará se o arquivo enviado ultrapassar este limite de tamanho.</p>
                         <input 
                           type="range" 
                           min="10" 
                           max="250" 
                           value={lintSettings.maxLinesLimit}
                           onChange={(e) => setLintSettings({ ...lintSettings, maxLinesLimit: parseInt(e.target.value) })}
-                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 mt-1"
                         />
                       </div>
                     </div>
@@ -4205,7 +4628,184 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Card: Feature Flags Manager */}
+                  {/* Card: SLA & Time Limit Alerts per Class */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5">
+                    <div className="border-b border-[#1e295b]/20 pb-3">
+                      <h3 className="text-sm font-bold text-indigo-400 font-mono uppercase tracking-wider">Alertas de Limite de Tempo & SLA por Turma</h3>
+                      <p className="text-xs text-slate-400 mt-1">Configure prazos máximos (SLAs) e alertas automáticos baseados na dificuldade do exercício.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-5">
+                      {/* Turma Selection */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-slate-300">Selecionar Turma Alvo</label>
+                        <select 
+                          value={slaSettings.selectedClass}
+                          onChange={(e) => setSlaSettings({ ...slaSettings, selectedClass: e.target.value })}
+                          className="w-full bg-[#030712] border border-[#1e295b]/40 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 shadow-sm"
+                        >
+                          <option value="Todas as Turmas (Global)">Todas as Turmas (Configuração Global)</option>
+                          <option value="Turma A (Engenharia de Software)">Turma A (Engenharia de Software)</option>
+                          <option value="Turma B (Ciência da Computação)">Turma B (Ciência da Computação)</option>
+                          <option value="Turma C (Sistemas de Informação)">Turma C (Sistemas de Informação)</option>
+                          <option value="Turma Especial / Noturno">Turma Especial / Noturno</option>
+                        </select>
+                      </div>
+
+                      {/* Enable Alerts Toggle */}
+                      <label className="flex items-center justify-between p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 cursor-pointer shadow-sm">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs font-bold text-slate-200">Ativar Alertas de Estouro de SLA</span>
+                          <span className="text-[11px] text-slate-400 leading-relaxed">Envia notificação ao professor quando discentes ultrapassam o tempo limite.</span>
+                        </div>
+                        <input 
+                          type="checkbox"
+                          checked={slaSettings.enableAlerts}
+                          onChange={(e) => setSlaSettings({ ...slaSettings, enableAlerts: e.target.checked })}
+                          className="w-4 h-4 rounded text-indigo-500 bg-[#030712] border-slate-700 focus:ring-indigo-500/20"
+                        />
+                      </label>
+
+                      {/* Difficulty SLA Inputs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
+                          <span className="text-[11px] font-bold text-emerald-400">Fácil (Easy) - Minutos</span>
+                          <input 
+                            type="number"
+                            min="5"
+                            max="120"
+                            value={slaSettings.easySlaMinutes}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, easySlaMinutes: parseInt(e.target.value) || 0 })}
+                            className="bg-[#030712] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono shadow-inner"
+                          />
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
+                          <span className="text-[11px] font-bold text-blue-400">Médio (Medium) - Minutos</span>
+                          <input 
+                            type="number"
+                            min="10"
+                            max="240"
+                            value={slaSettings.mediumSlaMinutes}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, mediumSlaMinutes: parseInt(e.target.value) || 0 })}
+                            className="bg-[#030712] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono shadow-inner"
+                          />
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
+                          <span className="text-[11px] font-bold text-amber-400">Difícil (Hard) - Minutos</span>
+                          <input 
+                            type="number"
+                            min="15"
+                            max="480"
+                            value={slaSettings.hardSlaMinutes}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, hardSlaMinutes: parseInt(e.target.value) || 0 })}
+                            className="bg-[#030712] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono shadow-inner"
+                          />
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
+                          <span className="text-[11px] font-bold text-rose-400">Avançado (Advanced) - Minutos</span>
+                          <input 
+                            type="number"
+                            min="30"
+                            max="720"
+                            value={slaSettings.advancedSlaMinutes}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, advancedSlaMinutes: parseInt(e.target.value) || 0 })}
+                            className="bg-[#030712] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono shadow-inner"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleSaveSlaSettings}
+                      disabled={savingSla}
+                      className="w-full mt-2 py-3 px-4 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/10 flex items-center justify-center gap-2"
+                    >
+                      {savingSla ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Salvando SLAs...
+                        </>
+                      ) : (
+                        "Salvar Alertas & SLAs por Turma"
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Card: Notification Preferences & Quiet Hours */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5">
+                    <div className="border-b border-[#1e295b]/20 pb-3">
+                      <h3 className="text-sm font-bold text-emerald-400 font-mono uppercase tracking-wider">Preferências de Notificação & Horários de Silêncio</h3>
+                      <p className="text-xs text-slate-400 mt-1">Defina os canais de entrega de alertas (E-mail vs In-App) e defina janelas de silêncio para evitar notificações fora do horário escolar.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-4">
+                      {/* Channels Toggles */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 cursor-pointer">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-bold text-slate-200">Alertas por E-mail</span>
+                            <span className="text-[10px] text-slate-400">Disparo automático para o e-mail cadastrado.</span>
+                          </div>
+                          <input 
+                            type="checkbox"
+                            checked={slaSettings.notifyEmail}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, notifyEmail: e.target.checked })}
+                            className="w-4 h-4 rounded text-indigo-500 bg-[#030712] border-slate-700 focus:ring-indigo-500/20"
+                          />
+                        </label>
+
+                        <label className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 cursor-pointer">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-bold text-slate-200">Notificações In-App</span>
+                            <span className="text-[10px] text-slate-400">Avisos em tempo real no dashboard.</span>
+                          </div>
+                          <input 
+                            type="checkbox"
+                            checked={slaSettings.notifyInApp}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, notifyInApp: e.target.checked })}
+                            className="w-4 h-4 rounded text-indigo-500 bg-[#030712] border-slate-700 focus:ring-indigo-500/20"
+                          />
+                        </label>
+                      </div>
+
+                      {/* Quiet Hours Inputs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#1e295b]/20">
+                        <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1">
+                          <span className="text-[11px] font-bold text-amber-400">Início do Horário de Silêncio</span>
+                          <input 
+                            type="time"
+                            value={slaSettings.quietHoursStart}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, quietHoursStart: e.target.value })}
+                            className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                          />
+                        </div>
+
+                        <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1">
+                          <span className="text-[11px] font-bold text-cyan-400">Fim do Horário de Silêncio</span>
+                          <input 
+                            type="time"
+                            value={slaSettings.quietHoursEnd}
+                            onChange={(e) => setSlaSettings({ ...slaSettings, quietHoursEnd: e.target.value })}
+                            className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Webhook integration button */}
+                      <div className="flex items-center justify-between pt-3 border-t border-[#1e295b]/20">
+                        <span className="text-xs text-slate-400">Integração avançada com canais externos (Discord, Slack, WhatsApp)</span>
+                        <button
+                          onClick={() => setShowWebhookModal(true)}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-mono text-xs font-bold border border-emerald-500/30 transition-all flex items-center gap-1.5"
+                        >
+                          <Webhook className="w-3.5 h-3.5" /> Configurar Webhooks
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5">
                     <div className="border-b border-[#1e295b]/20 pb-3">
                       <h3 className="text-sm font-bold text-cyan-400 font-mono uppercase tracking-wider">Feature Flags do Sistema</h3>
@@ -4671,6 +5271,29 @@ export default function App() {
 
             </AppErrorBoundary>
           </ErrorBoundary>
+
+          {showHistoryModal && (
+            <CodeHistoryModal
+              currentCode={code}
+              onRestore={(newCode) => {
+                setCode(newCode);
+                toast.success("Versão de código restaurada com sucesso!");
+              }}
+              onClose={() => setShowHistoryModal(false)}
+            />
+          )}
+
+          {showWebhookModal && (
+            <WebhookManagerModal onClose={() => setShowWebhookModal(false)} />
+          )}
+
+          {showPairModal && (
+            <PairProgrammingModal onClose={() => setShowPairModal(false)} />
+          )}
+
+          {showExportModal && (
+            <ExportSubmissionsModal submissions={submissions} onClose={() => setShowExportModal(false)} />
+          )}
         </div>
       </main>
     </div>

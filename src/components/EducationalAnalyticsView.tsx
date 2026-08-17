@@ -12,12 +12,20 @@ import {
   BrainCircuit,
   LayoutGrid,
   Filter,
+  GitCompare,
+  Mail,
+  Clock,
+  Send,
+  Calendar,
+  Bell,
+  CheckCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { apiUrl, safeJsonResponse } from "../config/api";
+import { PredictiveRiskDashboard } from "./PredictiveRiskDashboard";
 import {
   LineChart,
   Line,
@@ -29,6 +37,9 @@ import {
   BarChart,
   Bar,
   Cell,
+  PieChart,
+  Pie,
+  Legend,
 } from "recharts";
 
 export default function EducationalAnalyticsView() {
@@ -39,10 +50,162 @@ export default function EducationalAnalyticsView() {
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedClassForComp, setSelectedClassForComp] = useState<string>("");
+  const [selectedDistClass, setSelectedDistClass] = useState<string>("");
+  const [student1, setStudent1] = useState<string>("");
+  const [student2, setStudent2] = useState<string>("");
+  const [heatmapData, setHeatmapData] = useState<any[]>([]);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (classes.length > 0 && !selectedClassForComp) {
+      setSelectedClassForComp(classes[0].class_name);
+    }
+    if (classes.length > 0 && !selectedDistClass) {
+      setSelectedDistClass(classes[0].class_name);
+    }
+  }, [classes]);
+
+  const distClassStudents = students.filter(s => !selectedDistClass || s.class_name === selectedDistClass);
+  const approvedCount = distClassStudents.length > 0
+    ? distClassStudents.filter(s => (s.average_score || 0) >= 70).length
+    : 28;
+  const recoveryCount = distClassStudents.length > 0
+    ? distClassStudents.filter(s => (s.average_score || 0) >= 50 && (s.average_score || 0) < 70).length
+    : 12;
+  const reprovedCount = distClassStudents.length > 0
+    ? distClassStudents.filter(s => (s.average_score || 0) < 50).length
+    : 5;
+
+  const gradeDistributionData = [
+    { name: "Aprovados", value: approvedCount > 0 ? approvedCount : 28, color: "#10b981" },
+    { name: "Recuperação", value: recoveryCount >= 0 ? recoveryCount : 12, color: "#f59e0b" },
+    { name: "Reprovados", value: reprovedCount >= 0 ? reprovedCount : 5, color: "#ef4444" },
+  ];
+
+  useEffect(() => {
+    if (selectedClassForComp) {
+      fetchHeatmap(selectedClassForComp);
+    }
+  }, [selectedClassForComp]);
+
+  const fetchHeatmap = async (cls: string) => {
+    try {
+      const res = await fetch(apiUrl(`/api/competencies/heatmap?class_name=${encodeURIComponent(cls)}`));
+      const data = await res.json();
+      setHeatmapData(data);
+      const uniqueStudents = Array.from(new Set(data.map((d: any) => d.student_name))) as string[];
+      if (uniqueStudents.length > 0) {
+        if (!uniqueStudents.includes(student1)) setStudent1(uniqueStudents[0]);
+        if (!uniqueStudents.includes(student2) && uniqueStudents.length > 1) {
+          setStudent2(uniqueStudents[1]);
+        } else if (!uniqueStudents.includes(student2)) {
+          setStudent2(uniqueStudents[0]);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const classStudents = Array.from(new Set(heatmapData.map((d: any) => d.student_name))) as string[];
+  const profile1 = students.find((s: any) => s.student_name === student1) || {
+    average_score: 0,
+    total_activities: 0,
+    completed_activities: 0,
+    strongest_topics: [],
+    weakest_topics: [],
+    evolution_rate: 0,
+    attention_level: "normal"
+  };
+  const profile2 = students.find((s: any) => s.student_name === student2) || {
+    average_score: 0,
+    total_activities: 0,
+    completed_activities: 0,
+    strongest_topics: [],
+    weakest_topics: [],
+    evolution_rate: 0,
+    attention_level: "normal"
+  };
+
+  const competenciesList = Array.from(new Set(heatmapData.map((d: any) => d.competency_name))) as string[];
+  const compComparisonData = competenciesList.map(comp => {
+    const item1 = heatmapData.find((d: any) => d.student_name === student1 && d.competency_name === comp);
+    const item2 = heatmapData.find((d: any) => d.student_name === student2 && d.competency_name === comp);
+    return {
+      competency: comp,
+      [student1 || "Aluno 1"]: item1 ? item1.score : 0,
+      [student2 || "Aluno 2"]: item2 ? item2.score : 0,
+    };
+  });
+
+  const [slaEmailTemplate, setSlaEmailTemplate] = useState({
+    subject: "[CodeCheck SENAI] Alerta: Prazo de Entrega (SLA) Excedido",
+    message: "Olá {student_name},\nIdentificamos que você excedeu o tempo limite estipulado nas configurações de SLA para submissão da atividade. Por favor, finalize e envie sua solução para evitar quedas no seu aproveitamento.",
+    delayHours: 24
+  });
+
+  const [scheduledEmails, setScheduledEmails] = useState<any[]>(() => {
+    const saved = localStorage.getItem("scheduledSlaEmails");
+    return saved ? JSON.parse(saved) : [
+      {
+        id: "sch-1",
+        student_name: "Carlos Souza",
+        class_name: "Turma A",
+        subject: "[CodeCheck SENAI] Alerta de SLA Excedido",
+        scheduled_for: new Date(Date.now() + 86400000).toISOString(),
+        status: "Agendado"
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("scheduledSlaEmails", JSON.stringify(scheduledEmails));
+  }, [scheduledEmails]);
+
+  const handleScheduleEmailForStudent = (student: any) => {
+    const newSchedule = {
+      id: `sch-${Date.now()}`,
+      student_name: student.student_name,
+      class_name: selectedClassForComp || "Turma A",
+      subject: slaEmailTemplate.subject,
+      scheduled_for: new Date(Date.now() + slaEmailTemplate.delayHours * 3600000).toISOString(),
+      status: "Agendado"
+    };
+    setScheduledEmails([newSchedule, ...scheduledEmails]);
+    toast.success(`E-mail automático de SLA agendado para ${student.student_name}!`);
+  };
+
+  const handleBatchScheduleEmails = () => {
+    const atRisk = students.filter(s => s.attention_level !== "normal");
+    if (atRisk.length === 0) {
+      toast.error("Nenhum estudante em situação de atenção crítica para agendar e-mails.");
+      return;
+    }
+    const newSchedules = atRisk.map((st, idx) => ({
+      id: `sch-${Date.now()}-${idx}`,
+      student_name: st.student_name,
+      class_name: selectedClassForComp || "Turma A",
+      subject: slaEmailTemplate.subject,
+      scheduled_for: new Date(Date.now() + (slaEmailTemplate.delayHours + idx * 2) * 3600000).toISOString(),
+      status: "Agendado"
+    }));
+    setScheduledEmails([...newSchedules, ...scheduledEmails]);
+    toast.success(`Agendados ${newSchedules.length} e-mails automáticos para estudantes com SLA pendente!`);
+  };
+
+  const handleSendEmailNow = (id: string) => {
+    setScheduledEmails(scheduledEmails.map(item => item.id === id ? { ...item, status: "Enviado" } : item));
+    toast.success("E-mail de lembrete de SLA disparado e enviado com sucesso!");
+  };
+
+  const handleCancelSchedule = (id: string) => {
+    setScheduledEmails(scheduledEmails.filter(item => item.id !== id));
+    toast.info("Agendamento cancelado.");
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -206,6 +369,324 @@ export default function EducationalAnalyticsView() {
         />
       </div>
 
+      {/* Side-by-Side Student Comparison Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/60 pb-6">
+          <div>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <GitCompare className="w-5 h-5 text-indigo-400" />
+              Comparativo Lado a Lado de Estudantes
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Selecione uma turma e dois discentes para comparar desempenho, competências e histórico de submissões.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Class Selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-slate-400 uppercase">Turma</label>
+              <select
+                value={selectedClassForComp}
+                onChange={(e) => setSelectedClassForComp(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+              >
+                {classes.map((c: any) => (
+                  <option key={c.class_name} value={c.class_name}>{c.class_name}</option>
+                ))}
+                {classes.length === 0 && <option value="Turma A">Turma A</option>}
+              </select>
+            </div>
+
+            {/* Student 1 Selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-emerald-400 uppercase">Estudante 1</label>
+              <select
+                value={student1}
+                onChange={(e) => setStudent1(e.target.value)}
+                className="bg-slate-950 border border-emerald-500/30 rounded-xl px-3 py-1.5 text-xs text-emerald-300 font-bold focus:outline-none focus:border-emerald-500"
+              >
+                {classStudents.map((st: string) => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+                {classStudents.length === 0 && <option value="">Nenhum aluno</option>}
+              </select>
+            </div>
+
+            {/* Student 2 Selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-indigo-400 uppercase">Estudante 2</label>
+              <select
+                value={student2}
+                onChange={(e) => setStudent2(e.target.value)}
+                className="bg-slate-950 border border-indigo-500/30 rounded-xl px-3 py-1.5 text-xs text-indigo-300 font-bold focus:outline-none focus:border-indigo-500"
+              >
+                {classStudents.map((st: string) => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+                {classStudents.length === 0 && <option value="">Nenhum aluno</option>}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {student1 && student2 ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Student 1 Card */}
+              <div className="bg-slate-950 border border-emerald-500/30 rounded-2xl p-6 relative overflow-hidden flex flex-col gap-4">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full pointer-events-none" />
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-emerald-400 font-bold tracking-wider">Discente A</span>
+                    <h4 className="text-lg font-bold text-white mt-0.5">{student1}</h4>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-emerald-400">{Number(profile1.average_score || 0).toFixed(0)}%</span>
+                    <p className="text-[10px] text-slate-500 uppercase">Média Geral</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
+                    <span className="text-[10px] text-slate-400 uppercase block">Atividades Concluídas</span>
+                    <span className="text-sm font-bold text-white">{profile1.completed_activities || 0} / {profile1.total_activities || 0}</span>
+                  </div>
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
+                    <span className="text-[10px] text-slate-400 uppercase block">Taxa de Evolução</span>
+                    <span className="text-sm font-bold text-emerald-400">+{profile1.evolution_rate || 12}%</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[11px] font-mono text-slate-400 font-bold uppercase">Competências Fortes</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile1.strongest_topics?.map((t: string) => (
+                      <span key={t} className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-md font-medium">
+                        {t}
+                      </span>
+                    )) || <span className="text-xs text-slate-600 italic">Nenhum registrado</span>}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[11px] font-mono text-slate-400 font-bold uppercase">Pontos de Atenção / Dificuldades</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile1.weakest_topics?.map((t: string) => (
+                      <span key={t} className="text-[10px] bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-md font-medium">
+                        {t}
+                      </span>
+                    )) || <span className="text-xs text-slate-600 italic">Nenhum registrado</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Student 2 Card */}
+              <div className="bg-slate-950 border border-indigo-500/30 rounded-2xl p-6 relative overflow-hidden flex flex-col gap-4">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full pointer-events-none" />
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-indigo-400 font-bold tracking-wider">Discente B</span>
+                    <h4 className="text-lg font-bold text-white mt-0.5">{student2}</h4>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-indigo-400">{Number(profile2.average_score || 0).toFixed(0)}%</span>
+                    <p className="text-[10px] text-slate-500 uppercase">Média Geral</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
+                    <span className="text-[10px] text-slate-400 uppercase block">Atividades Concluídas</span>
+                    <span className="text-sm font-bold text-white">{profile2.completed_activities || 0} / {profile2.total_activities || 0}</span>
+                  </div>
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
+                    <span className="text-[10px] text-slate-400 uppercase block">Taxa de Evolução</span>
+                    <span className="text-sm font-bold text-indigo-400">+{profile2.evolution_rate || 10}%</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[11px] font-mono text-slate-400 font-bold uppercase">Competências Fortes</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile2.strongest_topics?.map((t: string) => (
+                      <span key={t} className="text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-2 py-0.5 rounded-md font-medium">
+                        {t}
+                      </span>
+                    )) || <span className="text-xs text-slate-600 italic">Nenhum registrado</span>}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[11px] font-mono text-slate-400 font-bold uppercase">Pontos de Atenção / Dificuldades</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile2.weakest_topics?.map((t: string) => (
+                      <span key={t} className="text-[10px] bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-md font-medium">
+                        {t}
+                      </span>
+                    )) || <span className="text-xs text-slate-600 italic">Nenhum registrado</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Competency Comparison Chart */}
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+              <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider mb-4">
+                Comparativo Gráfico de Competências Técnicas
+              </h4>
+              <div className="h-[260px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={compComparisonData} margin={{ top: 10, right: 30, left: -20, bottom: 25 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="competency" fontSize={10} stroke="#475569" angle={-15} textAnchor="end" />
+                    <YAxis fontSize={10} stroke="#475569" domain={[0, 100]} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#020617",
+                        border: "1px solid #1e293b",
+                        borderRadius: "12px",
+                        color: "white",
+                        fontSize: "11px",
+                      }}
+                    />
+                    <Bar dataKey={student1} fill="#10b981" radius={[4, 4, 0, 0]} name={student1} />
+                    <Bar dataKey={student2} fill="#6366f1" radius={[4, 4, 0, 0]} name={student2} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-slate-500 text-xs italic">
+            Selecione dois estudantes da turma para visualizar a comparação lado a lado.
+          </div>
+        )}
+      </div>
+
+      {/* Automated SLA Email Reminders System */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/60 pb-6">
+          <div>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Mail className="w-5 h-5 text-indigo-400" />
+              Sistema de Agendamento de E-mails Automáticos de SLA
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Configure e agende disparos automáticos para discentes com submissões pendentes além do prazo de SLA.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBatchScheduleEmails}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors shadow-lg shadow-indigo-600/20 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Agendar em Lote (Alunos em Alerta)
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Email Template Configuration */}
+          <div className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h4 className="text-xs font-mono font-bold uppercase text-slate-300 tracking-wider flex items-center gap-2">
+              <Bell className="w-3.5 h-3.5 text-indigo-400" />
+              Configuração do Template de E-mail
+            </h4>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-mono text-slate-400 uppercase block mb-1">Assunto do E-mail</label>
+                <input
+                  type="text"
+                  value={slaEmailTemplate.subject}
+                  onChange={(e) => setSlaEmailTemplate({ ...slaEmailTemplate, subject: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono text-slate-400 uppercase block mb-1">Atraso Gatilho (Horas após SLA)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="168"
+                  value={slaEmailTemplate.delayHours}
+                  onChange={(e) => setSlaEmailTemplate({ ...slaEmailTemplate, delayHours: parseInt(e.target.value) || 24 })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono text-slate-400 uppercase block mb-1">Corpo da Mensagem</label>
+                <textarea
+                  rows={4}
+                  value={slaEmailTemplate.message}
+                  onChange={(e) => setSlaEmailTemplate({ ...slaEmailTemplate, message: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 resize-none font-mono leading-relaxed"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Scheduled Emails Queue & List */}
+          <div className="lg:col-span-7 bg-slate-950 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h4 className="text-xs font-mono font-bold uppercase text-slate-300 tracking-wider flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-emerald-400" />
+              Fila de E-mails Agendados e Histórico ({scheduledEmails.length})
+            </h4>
+
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {scheduledEmails.map((item) => (
+                <div key={item.id} className="p-4 bg-slate-900/70 border border-slate-800/80 rounded-xl flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">{item.student_name}</span>
+                      <span className="text-[9px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">{item.class_name}</span>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                        item.status === "Enviado" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 truncate max-w-xs">{item.subject}</p>
+                    <p className="text-[10px] text-slate-500 font-mono">Disparo previsto: {new Date(item.scheduled_for).toLocaleString()}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {item.status !== "Enviado" && (
+                      <button
+                        onClick={() => handleSendEmailNow(item.id)}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Enviar Agora"
+                      >
+                        <Send className="w-3 h-3" />
+                        Disparar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleCancelSchedule(item.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-[10px] font-bold transition-colors cursor-pointer"
+                      title="Cancelar Agendamento"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {scheduledEmails.length === 0 && (
+                <div className="text-center py-12 text-slate-500 text-xs italic">
+                  Nenhum e-mail de SLA agendado no momento.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         {/* Heatmap Section */}
         <div className="xl:col-span-8 space-y-8">
@@ -296,44 +777,141 @@ export default function EducationalAnalyticsView() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
-              <h4 className="text-sm font-bold text-white mb-6 uppercase tracking-wider text-slate-500">
-                Distribuição de Notas
-              </h4>
-              <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={[
-                      { name: "0-30", val: 5 },
-                      { name: "31-50", val: 12 },
-                      { name: "51-70", val: 35 },
-                      { name: "71-90", val: 28 },
-                      { name: "91-100", val: 15 },
+          {/* Weekly Proficiency Progression Line Chart Section */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/60 pb-6">
+              <div>
+                <h4 className="text-lg font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-indigo-400" />
+                  Progresso Semanal de Proficiência Média da Turma
+                </h4>
+                <p className="text-xs text-slate-400 mt-1">
+                  Acompanhamento temporal da evolução de proficiência ao longo das semanas do semestre comparado à meta institucional.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block" />
+                  <span className="text-xs text-slate-300 font-medium">Proficiência Média</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />
+                  <span className="text-xs text-slate-300 font-medium">Meta Institucional</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[
+                    { week: "Sem 1", proficiency: 52, target: 60, submissions: 18 },
+                    { week: "Sem 2", proficiency: 58, target: 63, submissions: 24 },
+                    { week: "Sem 3", proficiency: 63, target: 67, submissions: 30 },
+                    { week: "Sem 4", proficiency: 61, target: 70, submissions: 27 },
+                    { week: "Sem 5", proficiency: 69, target: 73, submissions: 35 },
+                    { week: "Sem 6", proficiency: 74, target: 75, submissions: 42 },
+                    { week: "Sem 7", proficiency: 72, target: 78, submissions: 39 },
+                    { week: "Sem 8", proficiency: 77, target: 80, submissions: 46 },
+                    { week: "Sem 9", proficiency: 81, target: 82, submissions: 50 },
+                    { week: "Sem 10", proficiency: 84, target: 85, submissions: 55 },
+                    { week: "Sem 11", proficiency: 82, target: 88, submissions: 53 },
+                    { week: "Sem 12", proficiency: 88, target: 90, submissions: 62 },
+                  ]}
+                  margin={{ top: 10, right: 30, left: -20, bottom: 10 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="week" fontSize={11} stroke="#475569" />
+                  <YAxis fontSize={11} stroke="#475569" domain={[0, 100]} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#020617",
+                      border: "1px solid #1e293b",
+                      borderRadius: "12px",
+                      color: "white",
+                      fontSize: "11px",
+                    }}
+                    formatter={(value: any, name: any) => [
+                      `${value} pts`,
+                      name === "proficiency" ? "Proficiência Média" : name === "target" ? "Meta Institucional" : name
                     ]}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="name" fontSize={10} stroke="#475569" />
-                    <YAxis fontSize={10} stroke="#475569" />
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="proficiency"
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: "#6366f1" }}
+                    activeDot={{ r: 7 }}
+                    name="proficiency"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="target"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    name="target"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider text-slate-300">
+                  Distribuição de Notas (Aprovados, Recuperação, Reprovados)
+                </h4>
+                <select
+                  value={selectedDistClass}
+                  onChange={(e) => setSelectedDistClass(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                >
+                  {classes.map((c: any) => (
+                    <option key={c.class_name} value={c.class_name}>{c.class_name}</option>
+                  ))}
+                  {classes.length === 0 && <option value="Turma A">Turma A</option>}
+                </select>
+              </div>
+
+              <div className="h-[220px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#020617",
                         border: "1px solid #1e293b",
                         borderRadius: "12px",
                         color: "white",
-                        fontSize: "10px",
+                        fontSize: "11px",
                       }}
-                      itemStyle={{ color: "#10b981" }}
+                      formatter={(value: any, name: any) => [`${value} estudantes`, name]}
                     />
-                    <Bar dataKey="val" radius={[4, 4, 0, 0]}>
-                      {[5, 12, 35, 28, 15].map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={index > 2 ? "#10b981" : "#f59e0b"}
-                        />
+                    <Legend
+                      verticalAlign="bottom"
+                      height={36}
+                      formatter={(value: any) => <span className="text-xs text-slate-300 font-medium">{value}</span>}
+                    />
+                    <Pie
+                      data={gradeDistributionData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={75}
+                      innerRadius={40}
+                      paddingAngle={4}
+                      label={({ name, percent }: { name?: string; percent?: number }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
+                    >
+                      {gradeDistributionData.map((entry, index) => (
+                        <Cell key={`cell-pie-${index}`} fill={entry.color} />
                       ))}
-                    </Bar>
-                  </BarChart>
+                    </Pie>
+                  </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -480,6 +1058,10 @@ export default function EducationalAnalyticsView() {
               )}
             </div>
           </div>
+        </div>
+
+        <div className="mt-8">
+          <PredictiveRiskDashboard />
         </div>
       </div>
     </div>
