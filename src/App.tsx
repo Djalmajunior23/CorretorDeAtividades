@@ -5185,6 +5185,42 @@ export default function App() {
                         </div>
                       </div>
 
+                      {/* Student SLA Reminder Frequency & Method Configuration */}
+                      <div className="pt-3 border-t border-[#1e295b]/20 flex flex-col gap-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200">Lembretes Automáticos para Estudantes com SLA Excedido</span>
+                          <span className="text-[10px] text-slate-400">Configure quando e como os estudantes são notificados automaticamente ao ultrapassar o tempo limite de entrega.</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-indigo-400">Frequência de Envio</label>
+                            <select
+                              value={slaSettings.studentReminderFrequency || "daily"}
+                              onChange={(e) => setSlaSettings({ ...slaSettings, studentReminderFrequency: e.target.value })}
+                              className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                            >
+                              <option value="immediately">Imediatamente ao estourar</option>
+                              <option value="hourly">A cada 1 hora</option>
+                              <option value="daily">Diariamente (Resumo às 09:00)</option>
+                              <option value="twice_daily">Duas vezes ao dia (Manhã e Noite)</option>
+                            </select>
+                          </div>
+
+                          <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-emerald-400">Método de Envio</label>
+                            <select
+                              value={slaSettings.studentReminderMethod || "both"}
+                              onChange={(e) => setSlaSettings({ ...slaSettings, studentReminderMethod: e.target.value })}
+                              className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                            >
+                              <option value="both">Ambos (E-mail e Notificação In-App)</option>
+                              <option value="email">Apenas E-mail</option>
+                              <option value="inapp">Apenas Notificação In-App</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Webhook integration button */}
                       <div className="flex items-center justify-between pt-3 border-t border-[#1e295b]/20">
                         <span className="text-xs text-slate-400">Integração avançada com canais externos (Discord, Slack, WhatsApp)</span>
