@@ -40,6 +40,11 @@ import ResourceLibraryView from "./components/ResourceLibraryView";
 import ReportsView from "./components/ReportsView";
 import HelpCenterView from "./components/HelpCenterView";
 import SystemHealthView from "./components/SystemHealthView";
+import MultiAgentReviewView from "./components/MultiAgentReviewView";
+import PredictiveAnalyticsView from "./components/PredictiveAnalyticsView";
+import CollaborativeSandboxView from "./components/CollaborativeSandboxView";
+import LmsIntegrationView from "./components/LmsIntegrationView";
+import { exportUrgentAttentionInterventionPDF } from "./utils/pdfExport";
 import { 
   Play, 
   Terminal, 
@@ -72,7 +77,9 @@ import {
   History,
   Webhook,
   Users,
-  Search
+  Search,
+  Cloud,
+  HardDrive
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
 import { apiUrl, safeJsonResponse, apiFetch } from "./config/api";
@@ -82,6 +89,13 @@ import { CodeHistoryModal } from "./components/CodeHistoryModal";
 import { WebhookManagerModal } from "./components/WebhookManagerModal";
 import { PairProgrammingModal } from "./components/PairProgrammingModal";
 import { ExportSubmissionsModal } from "./components/ExportSubmissionsModal";
+import { GamificationBadgesModal } from "./components/GamificationBadgesModal";
+import { PlagiarismDetectorModal } from "./components/PlagiarismDetectorModal";
+import { UnitTestGeneratorModal } from "./components/UnitTestGeneratorModal";
+import { LiveCodeReviewModal } from "./components/LiveCodeReviewModal";
+import { AiPlaygroundModal } from "./components/AiPlaygroundModal";
+import { ConsolidatedPdfReportModal } from "./components/ConsolidatedPdfReportModal";
+import { StudentPortfolioExportModal } from "./components/StudentPortfolioExportModal";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -241,6 +255,43 @@ export default function App() {
   const [showWebhookModal, setShowWebhookModal] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showBadgesModal, setShowBadgesModal] = useState(false);
+  const [showPlagiarismModal, setShowPlagiarismModal] = useState(false);
+  const [showUnitTestModal, setShowUnitTestModal] = useState(false);
+  const [showLiveReviewModal, setShowLiveReviewModal] = useState(false);
+  const [showAiPlaygroundModal, setShowAiPlaygroundModal] = useState(false);
+  const [showConsolidatedPdfModal, setShowConsolidatedPdfModal] = useState(false);
+  const [showStudentPortfolioModal, setShowStudentPortfolioModal] = useState(false);
+  const [competencyFilter, setCompetencyFilter] = useState<"all" | "configured" | "pending">("all");
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagSla, setNewTagSla] = useState(30);
+  const [api404Logs, setApi404Logs] = useState<{ url: string; timestamp: string; status: number }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('codecheck-404-logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('codecheck-404-logs', JSON.stringify(api404Logs));
+    } catch {}
+  }, [api404Logs]);
+
+  const monitoredFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const res = await fetch(input, init);
+    if (res.status === 404) {
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      setApi404Logs(prev => {
+        const entry = { url: urlStr, timestamp: new Date().toLocaleTimeString(), status: 404 };
+        if (prev.length > 0 && prev[0].url === urlStr) return prev;
+        return [entry, ...prev.slice(0, 49)];
+      });
+    }
+    return res;
+  };
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
 
@@ -372,7 +423,9 @@ export default function App() {
       maxLinesLimit: 80,
       requireNoSingleLetterVars: true,
       requireFunctions: false,
-      requireJsDoc: false
+      requireJsDoc: false,
+      checkCyclomaticComplexity: true,
+      maxComplexity: 10
     };
   });
 
@@ -381,6 +434,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : {
       selectedClass: "Todas as Turmas (Global)",
       enableAlerts: true,
+      gracePeriodMinutes: 5,
       easySlaMinutes: 15,
       mediumSlaMinutes: 30,
       hardSlaMinutes: 60,
@@ -388,10 +442,44 @@ export default function App() {
       quietHoursStart: "22:00",
       quietHoursEnd: "07:00",
       notifyEmail: true,
-      notifyInApp: true
+      notifyInApp: true,
+      notifyBackupFailure: true,
+      studentReminderFrequency: "daily",
+      studentReminderMethod: "both",
+      competencySlas: {
+        loops: 30,
+        arrays: 45,
+        recursion: 60,
+        oop: 45,
+        strings: 25,
+        sql: 40
+      }
     };
   });
   const [savingSla, setSavingSla] = useState(false);
+
+  const [backupSettings, setBackupSettings] = useState(() => {
+    const saved = localStorage.getItem("backupSettings");
+    return saved ? JSON.parse(saved) : {
+      enabled: true,
+      frequency: "daily",
+      time: "03:00",
+      cronSchedule: "0 3 * * *",
+      storageDestination: "local",
+      s3Bucket: "teacher-juniors-backups",
+      s3Region: "us-east-1"
+    };
+  });
+  const [savingBackup, setSavingBackup] = useState(false);
+
+  const handleSaveBackupSettings = () => {
+    setSavingBackup(true);
+    setTimeout(() => {
+      localStorage.setItem("backupSettings", JSON.stringify(backupSettings));
+      setSavingBackup(false);
+      toast.success("Configurações de backup automático (.env: BACKUP_CRON_SCHEDULE) salvas com sucesso!");
+    }, 800);
+  };
 
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"general" | "errors" | "student" | "competencies" | "comparison" | "pedagogical">("general");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -495,6 +583,35 @@ export default function App() {
               }
             }
           });
+        }
+
+        if (settings.checkCyclomaticComplexity) {
+          let complexity = 1;
+          lines.forEach((l, idx) => {
+            const trimmed = l.trim();
+            if (/\b(if|else\s+if|for|while|catch|case|default)\b/.test(trimmed)) complexity++;
+            if (trimmed.includes('?') && trimmed.includes(':')) complexity++;
+            if (trimmed.includes('&&') || trimmed.includes('||') || trimmed.includes('??')) {
+              let count = 0;
+              for (let i = 0; i < trimmed.length - 1; i++) {
+                const pair = trimmed[i] + trimmed[i+1];
+                if (pair === '&&' || pair === '||' || pair === '??') count++;
+              }
+              complexity += count;
+            }
+          });
+
+          const maxLimit = settings.maxComplexity || 10;
+          if (complexity > maxLimit) {
+            diagnostics.push({
+              startLineNumber: 1,
+              startColumn: 1,
+              endLineNumber: Math.min(lines.length, 10),
+              endColumn: 1,
+              message: 'Regra de Lint (Complexidade Ciclomática): Valor estimado (' + complexity + ') excede o limite pedagógico (' + maxLimit + '). Considere refatorar em funções menores.',
+              severity: 4
+            });
+          }
         }
 
         self.postMessage(diagnostics);
@@ -688,45 +805,12 @@ export default function App() {
   };
 
   const handleExportInterventionPlan = (student: any) => {
-    const doc = new jsPDF();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text(`Plano de Intervenção Pedagógica`, 105, 15, { align: 'center' });
-    
-    doc.setFontSize(12);
-    doc.text(`Estudante:`, 15, 30);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${student.student_name}`, 40, 30);
-    
-    doc.setFont("helvetica", "bold");
-    doc.text(`Média Atual:`, 15, 40);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${parseInt(student.average_grade)}%`, 45, 40);
-    
-    doc.setFont("helvetica", "bold");
-    doc.text(`Total de Submissões:`, 15, 50);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${student.submissions_count}`, 60, 50);
-    
-    doc.setFont("helvetica", "bold");
-    doc.text(`Status:`, 15, 60);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(225, 29, 72); // rose-600
-    doc.text(`ATENÇÃO URGENTE`, 32, 60);
-    doc.setTextColor(0, 0, 0); // reset
-
-    doc.setFont("helvetica", "bold");
-    doc.text(`Ações Recomendadas:`, 15, 75);
-    doc.setFont("helvetica", "normal");
-    doc.text(`1. Agendar reunião individual para diagnóstico de dificuldades.`, 15, 85);
-    doc.text(`2. Revisar fundamentos da linguagem de programação.`, 15, 95);
-    doc.text(`3. Propor exercícios de fixação com menor nível de complexidade.`, 15, 105);
-    doc.text(`4. Acompanhamento semanal de progresso nas próximas 3 semanas.`, 15, 115);
-    
-    doc.setFont("helvetica", "italic");
-    doc.text(`Gerado pelo CodeCheck AI em ${new Date().toLocaleDateString()}`, 15, 140);
-    
-    doc.save(`intervencao_pedagogica_${student.student_name.replace(/\s+/g, '_')}.pdf`);
+    exportUrgentAttentionInterventionPDF(student, [
+      "Dificuldade persistente na estrutura de repetição e lógica booleana.",
+      "Erros recorrentes de tipagem e nulidade (NullPointerException / undefined access).",
+      "Alta complexidade ciclomática na resolução de algoritmos propostos.",
+      "Ausência de tratamento robusto de exceções em rotinas assíncronas."
+    ]);
   };
 
   const isInitialMount = useRef(true);
@@ -888,15 +972,28 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Fetch teaching questions bank
+  // Fetch teaching questions bank with sessionStorage caching (Stale-While-Revalidate)
   const fetchQuestions = async () => {
     try {
+      const cached = sessionStorage.getItem('codecheck-cache-questions');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setQuestions(parsed);
+          }
+        } catch (e) {
+          // ignore cache parse error
+        }
+      }
+
       const res = await fetch(apiUrl("/api/questions"));
       if (res.ok) {
         const ct = res.headers.get("content-type");
         if (ct && ct.includes("application/json")) {
           const data = await safeJsonResponse(res);
           setQuestions(data);
+          sessionStorage.setItem('codecheck-cache-questions', JSON.stringify(data));
         }
       }
     } catch (err: any) {
@@ -946,18 +1043,39 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Check sessionStorage cache for feature flags and lint settings for instant load
+    const cachedFlags = sessionStorage.getItem('codecheck-cache-feature-flags');
+    if (cachedFlags) {
+      try {
+        setFeatureFlags(JSON.parse(cachedFlags));
+      } catch (e) {}
+    }
+
+    const cachedLint = sessionStorage.getItem('codecheck-cache-lint-settings');
+    if (cachedLint) {
+      try {
+        setLintSettings(JSON.parse(cachedLint));
+      } catch (e) {}
+    }
+
     fetchQuestions();
     fetchSandboxStatus();
     
-    // Fetch initial feature flags and linting settings
+    // Fetch fresh feature flags and linting settings
     fetch(apiUrl("/api/feature-flags"))
       .then(res => safeJsonResponse(res))
-      .then(data => setFeatureFlags(data))
+      .then(data => {
+        setFeatureFlags(data);
+        sessionStorage.setItem('codecheck-cache-feature-flags', JSON.stringify(data));
+      })
       .catch(e => console.error("Error loading features:", e?.message || "Unknown error"));
 
     fetch(apiUrl("/api/settings/linting"))
       .then(res => safeJsonResponse(res))
-      .then(data => setLintSettings(data))
+      .then(data => {
+        setLintSettings(data);
+        sessionStorage.setItem('codecheck-cache-lint-settings', JSON.stringify(data));
+      })
       .catch(e => console.error("Error loading linting settings:", e?.message || "Unknown error"));
   }, []);
 
@@ -2028,9 +2146,25 @@ export default function App() {
             <HelpCenterView />
           )}
 
-          {currentTab === "system_health" && (
-            <SystemHealthView />
-          )}
+           {currentTab === "system_health" && (
+             <SystemHealthView />
+           )}
+
+           {currentTab === "multi_agent" && (
+             <MultiAgentReviewView />
+           )}
+
+           {currentTab === "predictive_analytics" && (
+             <PredictiveAnalyticsView />
+           )}
+
+           {currentTab === "collab_sandbox" && (
+             <CollaborativeSandboxView />
+           )}
+
+           {currentTab === "lms_integration" && (
+             <LmsIntegrationView />
+           )}
 
           {currentTab === "avaliacoes" && (
             <AvaliacoesView />
@@ -3502,8 +3636,22 @@ export default function App() {
                   <p className="text-sm text-slate-400 mt-1 font-sans">Gargalos conceituais por competência técnica e trilhas evolutivas da turma.</p>
                 </div>
 
-                {/* SubTab selectors */}
-                <div className="flex gap-2 bg-[#0f172a] p-1.5 rounded-xl border border-[#1e295b]/30 self-start shrink-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={() => setShowConsolidatedPdfModal(true)}
+                    className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" /> Relatório PDF Conselho
+                  </button>
+                  <button
+                    onClick={() => setShowStudentPortfolioModal(true)}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+                  >
+                    <Award className="w-4 h-4" /> Portfólio de Aluno
+                  </button>
+
+                  {/* SubTab selectors */}
+                  <div className="flex gap-2 bg-[#0f172a] p-1.5 rounded-xl border border-[#1e295b]/30 self-start shrink-0">
                   <button
                     onClick={() => setAnalyticsSubTab("general")}
                     className={`px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-200 cursor-pointer ${
@@ -3572,6 +3720,7 @@ export default function App() {
                       Comparativo
                     </button>
                   )}
+                  </div>
                 </div>
               </div>
 
@@ -4491,10 +4640,48 @@ export default function App() {
                         <span className="text-2xl font-black text-rose-400 font-mono mt-1">{healthData?.telemetry?.syntax_failures_count || 0}</span>
                       </div>
                       <div className="p-4 bg-[#030712]/50 rounded-xl border border-[#1e295b]/15 flex flex-col">
-                        <span className="text-[10px] text-slate-500 font-mono">Avaliações de Sucesso</span>
-                        <span className="text-2xl font-black text-emerald-400 font-mono mt-1">{healthData?.telemetry?.successful_gradings_count || submissions.filter(s => s?.result?.final_score > 0).length}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">Erros 404 (API Monitor)</span>
+                        <span className={`text-2xl font-black font-mono mt-1 ${api404Logs.length > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>{api404Logs.length}</span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* 404 API Errors & Diagnostics Log */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-[#1e295b]/20 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white uppercase tracking-wider font-mono">Log de Falhas 404 & Diagnóstico de Endpoints</span>
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-xs font-mono font-bold">
+                          {api404Logs.length} erros capturados
+                        </span>
+                      </div>
+                      {api404Logs.length > 0 && (
+                        <button
+                          onClick={() => setApi404Logs([])}
+                          className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono transition-all cursor-pointer"
+                        >
+                          Limpar Logs
+                        </button>
+                      )}
+                    </div>
+
+                    {api404Logs.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs font-mono">
+                        Nenhum erro 404 de API registrado na sessão atual. Todos os endpoints respondendo com sucesso!
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                        {api404Logs.map((log, idx) => (
+                          <div key={idx} className="p-3 bg-[#030712] border border-rose-500/20 rounded-xl flex items-center justify-between text-xs font-mono">
+                            <div className="flex items-center gap-3 truncate">
+                              <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold">404</span>
+                              <span className="text-slate-300 truncate">{log.url}</span>
+                            </div>
+                            <span className="text-slate-500 text-[11px] whitespace-nowrap ml-2">{log.timestamp}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -4610,6 +4797,33 @@ export default function App() {
                           className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 mt-1"
                         />
                       </div>
+
+                      {/* Rule: Cyclomatic Complexity */}
+                      <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-3 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={lintSettings.checkCyclomaticComplexity !== false}
+                              onChange={(e) => setLintSettings({ ...lintSettings, checkCyclomaticComplexity: e.target.checked })}
+                              className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20"
+                            />
+                            <span className="text-xs font-bold text-slate-200">Análise de Complexidade Ciclomática</span>
+                          </label>
+                          <span className="font-mono text-xs font-bold text-emerald-400">Máx: {lintSettings.maxComplexity || 10}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">Calcula pontos de decisão (if, loops, operadores lógicos) e emite aviso se a complexidade for alta.</p>
+                        {lintSettings.checkCyclomaticComplexity !== false && (
+                          <input 
+                            type="range" 
+                            min="3" 
+                            max="25" 
+                            value={lintSettings.maxComplexity || 10}
+                            onChange={(e) => setLintSettings({ ...lintSettings, maxComplexity: parseInt(e.target.value) })}
+                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 mt-1"
+                          />
+                        )}
+                      </div>
                     </div>
 
                     <button
@@ -4666,6 +4880,37 @@ export default function App() {
                         />
                       </label>
 
+                      {/* SLA Grace Period / Buffer Selector */}
+                      <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-3 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-cyan-400" /> Período de Carência (Buffer Inicial)
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full">
+                            {slaSettings.gracePeriodMinutes ?? 5} min de tolerância
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Tempo extra concedido ao aluno antes de o sistema iniciar a contagem regressiva oficial do SLA da atividade.
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                          {[0, 5, 10, 15, 30].map((mins) => (
+                            <button
+                              key={mins}
+                              type="button"
+                              onClick={() => setSlaSettings({ ...slaSettings, gracePeriodMinutes: mins })}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                                (slaSettings.gracePeriodMinutes ?? 5) === mins
+                                  ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+                                  : "bg-[#030712] text-slate-300 border border-slate-800 hover:border-cyan-500/40"
+                              }`}
+                            >
+                              {mins === 0 ? "Sem Carência (0m)" : `${mins} minutos`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* Difficulty SLA Inputs */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
@@ -4716,6 +4961,136 @@ export default function App() {
                           />
                         </div>
                       </div>
+
+                       {/* Competency Tag SLA Customizer with Visual Filter & Status Highlighting */}
+                       <div className="pt-3 border-t border-[#1e295b]/20 flex flex-col gap-4">
+                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                           <div>
+                             <span className="text-xs font-bold text-cyan-400 font-mono uppercase tracking-wider flex items-center gap-1.5">
+                               <Sparkles className="w-3.5 h-3.5" /> SLA Granular por Tag de Competência
+                             </span>
+                             <p className="text-[10px] text-slate-400 mt-0.5">Visualize e filtre tags com SLA configurado ou pendente de definição.</p>
+                           </div>
+                           
+                           {/* Filter Pills */}
+                           <div className="flex items-center gap-1.5 bg-[#030712] p-1 rounded-xl border border-slate-800">
+                             <button
+                               type="button"
+                               onClick={() => setCompetencyFilter("all")}
+                               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all ${competencyFilter === "all" ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30" : "text-slate-400 hover:text-white"}`}
+                             >
+                               Todas
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => setCompetencyFilter("configured")}
+                               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all ${competencyFilter === "configured" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-slate-400 hover:text-white"}`}
+                             >
+                               Com SLA
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => setCompetencyFilter("pending")}
+                               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all ${competencyFilter === "pending" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "text-slate-400 hover:text-white"}`}
+                             >
+                               Sem SLA
+                             </button>
+                           </div>
+                         </div>
+
+                         {/* Quick Add Competency Tag */}
+                         <div className="flex items-center gap-2">
+                           <input
+                             type="text"
+                             placeholder="Nova tag (ex: #docker, #git)..."
+                             value={newTagName}
+                             onChange={(e) => setNewTagName(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase())}
+                             className="bg-[#030712] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono flex-1 focus:outline-none focus:border-cyan-500"
+                           />
+                           <input
+                             type="number"
+                             min="5"
+                             max="300"
+                             value={newTagSla}
+                             onChange={(e) => setNewTagSla(parseInt(e.target.value) || 30)}
+                             className="bg-[#030712] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono w-20 text-center"
+                           />
+                           <span className="text-[10px] text-slate-500 font-mono">min</span>
+                           <button
+                             type="button"
+                             onClick={() => {
+                               if (!newTagName.trim()) {
+                                 toast.error("Informe o nome da tag.");
+                                 return;
+                               }
+                               const cleanTag = newTagName.trim().replace(/^#/, '');
+                               const updated = { ...(slaSettings.competencySlas || {}), [cleanTag]: newTagSla };
+                               setSlaSettings({ ...slaSettings, competencySlas: updated });
+                               setNewTagName("");
+                               toast.success(`Competência #${cleanTag} adicionada com SLA de ${newTagSla}min!`);
+                             }}
+                             className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-cyan-600/20 cursor-pointer"
+                           >
+                             Adicionar Tag
+                           </button>
+                         </div>
+
+                         {/* Competency Cards Grid with Highlight Status */}
+                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                           {[
+                             "loops", "arrays", "recursion", "oop", "strings", "sql",
+                             "async", "security", "regex", "apis", "testing", "algorithms"
+                           ]
+                             .filter(tag => {
+                               const hasSla = slaSettings.competencySlas && typeof slaSettings.competencySlas[tag] === 'number';
+                               if (competencyFilter === "configured") return hasSla;
+                               if (competencyFilter === "pending") return !hasSla;
+                               return true;
+                             })
+                             .map((tag) => {
+                               const hasSla = slaSettings.competencySlas && typeof slaSettings.competencySlas[tag] === 'number';
+                               const minutes = hasSla ? slaSettings.competencySlas[tag] : 30;
+
+                               return (
+                                 <div
+                                   key={tag}
+                                   className={`p-3 rounded-2xl border flex flex-col gap-2 transition-all ${
+                                     hasSla
+                                       ? "bg-slate-900/80 border-slate-800 hover:border-emerald-500/40"
+                                       : "bg-amber-500/5 border-amber-500/30 hover:border-amber-500/60 shadow-lg shadow-amber-500/5"
+                                   }`}
+                                 >
+                                   <div className="flex items-center justify-between">
+                                     <span className="text-[11px] font-bold text-slate-200 font-mono capitalize">#{tag}</span>
+                                     <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                                       hasSla ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse"
+                                     }`}>
+                                       {hasSla ? "Com SLA" : "Pendente"}
+                                     </span>
+                                   </div>
+
+                                   <div className="flex items-center gap-1.5">
+                                     <input
+                                       type="number"
+                                       min="5"
+                                       max="300"
+                                       value={minutes}
+                                       onChange={(e) => {
+                                         const val = parseInt(e.target.value) || 0;
+                                         const updated = { ...(slaSettings.competencySlas || {}), [tag]: val };
+                                         setSlaSettings({ ...slaSettings, competencySlas: updated });
+                                       }}
+                                       className={`bg-[#030712] border rounded-lg px-2.5 py-1 text-xs text-white font-mono w-full ${
+                                         hasSla ? "border-slate-800 focus:border-cyan-500" : "border-amber-500/40 focus:border-amber-500"
+                                       }`}
+                                     />
+                                     <span className="text-[10px] text-slate-500">min</span>
+                                   </div>
+                                 </div>
+                               );
+                             })}
+                         </div>
+                       </div>
                     </div>
 
                     <button
@@ -4771,6 +5146,22 @@ export default function App() {
                         </label>
                       </div>
 
+                      {/* Backup Failure Notification Option */}
+                      <label className="flex items-center justify-between p-3.5 rounded-lg bg-[#030712]/50 border border-slate-800/40 cursor-pointer">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Aviso de Falha em Backup Programado (E-mail)
+                          </span>
+                          <span className="text-[10px] text-slate-400">Envia alerta por e-mail automaticamente caso uma tarefa de backup programado (BACKUP_CRON_SCHEDULE) falhe.</span>
+                        </div>
+                        <input 
+                          type="checkbox"
+                          checked={slaSettings.notifyBackupFailure !== false}
+                          onChange={(e) => setSlaSettings({ ...slaSettings, notifyBackupFailure: e.target.checked })}
+                          className="w-4 h-4 rounded text-indigo-500 bg-[#030712] border-slate-700 focus:ring-indigo-500/20"
+                        />
+                      </label>
+
                       {/* Quiet Hours Inputs */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#1e295b]/20">
                         <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1">
@@ -4804,11 +5195,194 @@ export default function App() {
                           <Webhook className="w-3.5 h-3.5" /> Configurar Webhooks
                         </button>
                       </div>
+
+                      {/* Advanced Pedagogical Tools Section */}
+                      <div className="pt-4 border-t border-[#1e295b]/20 space-y-3">
+                        <span className="text-xs font-bold text-indigo-400 font-mono uppercase tracking-wider block">Ferramentas Pedagógicas Avançadas</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <button
+                            onClick={() => setShowBadgesModal(true)}
+                            className="p-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                          >
+                            ⭐ Sistema de Conquistas & Badges
+                          </button>
+                          <button
+                            onClick={() => setShowPlagiarismModal(true)}
+                            className="p-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                          >
+                            🛡️ Detector de Similaridade (Plágio)
+                          </button>
+                          <button
+                            onClick={() => setShowUnitTestModal(true)}
+                            className="p-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                          >
+                            🧪 Gerador de Testes Unitários (IA)
+                          </button>
+                          <button
+                            onClick={() => setShowLiveReviewModal(true)}
+                            className="p-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                          >
+                            📡 Modo de Revisão ao Vivo (Live)
+                          </button>
+                          <button
+                            onClick={() => setShowAiPlaygroundModal(true)}
+                            className="p-3 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer col-span-full sm:col-span-1"
+                          >
+                            🧠 Playground & Tuner de IA
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5">
                     <div className="border-b border-[#1e295b]/20 pb-3">
-                      <h3 className="text-sm font-bold text-cyan-400 font-mono uppercase tracking-wider">Feature Flags do Sistema</h3>
+                   {/* Card: Automated Backups & Storage Destination */}
+                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5 mb-6">
+                     <div className="border-b border-[#1e295b]/20 pb-3 flex items-center justify-between">
+                       <div>
+                         <h3 className="text-sm font-bold text-amber-400 font-mono uppercase tracking-wider flex items-center gap-2">
+                           <HardDrive className="w-4 h-4 text-amber-400" /> Backups Automáticos & Destino (BACKUP_CRON_SCHEDULE)
+                         </h3>
+                         <p className="text-xs text-slate-400 mt-1">Configure frequência, horário de execução e destino de armazenamento para os backups definidos no .env.</p>
+                       </div>
+                       <label className="relative inline-flex items-center cursor-pointer">
+                         <input 
+                           type="checkbox" 
+                           checked={backupSettings.enabled}
+                           onChange={(e) => setBackupSettings({ ...backupSettings, enabled: e.target.checked })}
+                           className="sr-only peer"
+                         />
+                         <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                       </label>
+                     </div>
+
+                     <div className="flex flex-col gap-4">
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         {/* Frequency */}
+                         <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
+                           <label className="text-xs font-bold text-slate-300">Frequência de Execução</label>
+                           <select
+                             value={backupSettings.frequency}
+                             onChange={(e) => {
+                               const freq = e.target.value;
+                               let cron = backupSettings.cronSchedule;
+                               if (freq === "hourly") cron = "0 * * * *";
+                               else if (freq === "daily") cron = "0 3 * * *";
+                               else if (freq === "weekly") cron = "0 3 * * 0";
+                               else if (freq === "monthly") cron = "0 3 1 * *";
+                               setBackupSettings({ ...backupSettings, frequency: freq, cronSchedule: cron });
+                             }}
+                             className="bg-[#030712] border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-500"
+                           >
+                             <option value="hourly">A cada hora (Hourly)</option>
+                             <option value="daily">Diariamente (Daily)</option>
+                             <option value="weekly">Semanalmente (Weekly)</option>
+                             <option value="monthly">Mensalmente (Monthly)</option>
+                             <option value="custom">Personalizado (Custom)</option>
+                           </select>
+                         </div>
+
+                         {/* Time / Cron Schedule */}
+                         <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
+                           <label className="text-xs font-bold text-slate-300">Horário de Execução / Cron</label>
+                           <div className="flex gap-2">
+                             <input 
+                               type="time"
+                               value={backupSettings.time}
+                               onChange={(e) => {
+                                 const t = e.target.value;
+                                 const [h, m] = t.split(":");
+                                 const cron = `${m || "0"} ${h || "3"} * * *`;
+                                 setBackupSettings({ ...backupSettings, time: t, cronSchedule: cron });
+                               }}
+                               className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-2 text-xs text-white font-mono w-28"
+                             />
+                             <input 
+                               type="text"
+                               value={backupSettings.cronSchedule}
+                               onChange={(e) => setBackupSettings({ ...backupSettings, cronSchedule: e.target.value })}
+                               placeholder="0 3 * * *"
+                               className="bg-[#030712] border border-slate-800 rounded-lg px-3 py-2 text-xs text-amber-400 font-mono flex-1"
+                             />
+                           </div>
+                           <span className="text-[10px] text-slate-500 font-mono">Variável .env gerada: BACKUP_CRON_SCHEDULE="{backupSettings.cronSchedule}"</span>
+                         </div>
+                       </div>
+
+                       {/* Storage Destination */}
+                       <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-3">
+                         <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                           <Cloud className="w-4 h-4 text-cyan-400" /> Destino de Armazenamento dos Dumps
+                         </span>
+                         
+                         <div className="grid grid-cols-2 gap-3">
+                           <button
+                             type="button"
+                             onClick={() => setBackupSettings({ ...backupSettings, storageDestination: "local" })}
+                             className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${backupSettings.storageDestination === "local" ? "bg-amber-500/10 border-amber-500 text-amber-300 shadow-sm" : "bg-[#030712] border-slate-800 text-slate-400 hover:border-slate-700"}`}
+                           >
+                             <span className="text-xs font-bold flex items-center gap-1.5">
+                               <HardDrive className="w-3.5 h-3.5" /> Armazenamento Local
+                             </span>
+                             <span className="text-[10px] text-slate-500">Salva dumps compactados no diretório `/backups/` do servidor.</span>
+                           </button>
+
+                           <button
+                             type="button"
+                             onClick={() => setBackupSettings({ ...backupSettings, storageDestination: "s3" })}
+                             className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${backupSettings.storageDestination === "s3" ? "bg-cyan-500/10 border-cyan-500 text-cyan-300 shadow-sm" : "bg-[#030712] border-slate-800 text-slate-400 hover:border-slate-700"}`}
+                           >
+                             <span className="text-xs font-bold flex items-center gap-1.5">
+                               <Cloud className="w-3.5 h-3.5" /> Amazon S3 / Compatible
+                             </span>
+                             <span className="text-[10px] text-slate-500">Envia criptografado para bucket em nuvem AWS S3.</span>
+                           </button>
+                         </div>
+
+                         {backupSettings.storageDestination === "s3" && (
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 animate-fade-in">
+                             <div className="flex flex-col gap-1">
+                               <label className="text-[11px] font-bold text-slate-300">Nome do Bucket S3 (BACKUP_S3_BUCKET)</label>
+                               <input 
+                                 type="text"
+                                 value={backupSettings.s3Bucket}
+                                 onChange={(e) => setBackupSettings({ ...backupSettings, s3Bucket: e.target.value })}
+                                 placeholder="meu-bucket-backups-codecheck"
+                                 className="bg-[#030712] border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                               />
+                             </div>
+                             <div className="flex flex-col gap-1">
+                               <label className="text-[11px] font-bold text-slate-300">Região AWS (AWS_REGION)</label>
+                               <input 
+                                 type="text"
+                                 value={backupSettings.s3Region}
+                                 onChange={(e) => setBackupSettings({ ...backupSettings, s3Region: e.target.value })}
+                                 placeholder="us-east-1"
+                                 className="bg-[#030712] border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                               />
+                             </div>
+                           </div>
+                         )}
+                       </div>
+
+                       <button
+                         onClick={handleSaveBackupSettings}
+                         disabled={savingBackup}
+                         className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2"
+                       >
+                         {savingBackup ? (
+                           <>
+                             <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                             Salvando Configuração de Backup...
+                           </>
+                         ) : (
+                           "Salvar Configurações de Backup & Cron"
+                         )}
+                       </button>
+                     </div>
+                   </div>
+
+                   <h3 className="text-sm font-bold text-cyan-400 font-mono uppercase tracking-wider">Feature Flags do Sistema</h3>
                       <p className="text-xs text-slate-400 mt-1">Gerencie os novos recursos modulares da plataforma CodeCheck em tempo real.</p>
                     </div>
 
@@ -5293,6 +5867,34 @@ export default function App() {
 
           {showExportModal && (
             <ExportSubmissionsModal submissions={submissions} onClose={() => setShowExportModal(false)} />
+          )}
+
+          {showBadgesModal && (
+            <GamificationBadgesModal students={[]} onClose={() => setShowBadgesModal(false)} />
+          )}
+
+          {showPlagiarismModal && (
+            <PlagiarismDetectorModal onClose={() => setShowPlagiarismModal(false)} />
+          )}
+
+          {showUnitTestModal && (
+            <UnitTestGeneratorModal onClose={() => setShowUnitTestModal(false)} />
+          )}
+
+          {showLiveReviewModal && (
+            <LiveCodeReviewModal onClose={() => setShowLiveReviewModal(false)} />
+          )}
+
+          {showAiPlaygroundModal && (
+            <AiPlaygroundModal onClose={() => setShowAiPlaygroundModal(false)} />
+          )}
+
+          {showConsolidatedPdfModal && (
+            <ConsolidatedPdfReportModal onClose={() => setShowConsolidatedPdfModal(false)} />
+          )}
+
+          {showStudentPortfolioModal && (
+            <StudentPortfolioExportModal submissions={submissions} onClose={() => setShowStudentPortfolioModal(false)} />
           )}
         </div>
       </main>

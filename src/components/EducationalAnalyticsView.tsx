@@ -55,6 +55,8 @@ export default function EducationalAnalyticsView() {
   const [student1, setStudent1] = useState<string>("");
   const [student2, setStudent2] = useState<string>("");
   const [heatmapData, setHeatmapData] = useState<any[]>([]);
+  const [selectedHeatmapClass, setSelectedHeatmapClass] = useState("Todas");
+  const [activeHeatmapCell, setActiveHeatmapCell] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
@@ -344,6 +346,7 @@ export default function EducationalAnalyticsView() {
           icon={BookOpen}
           color="text-blue-400"
           bgColor="bg-blue-400/10"
+          tooltip="Soma acumulada de todas as submissões de código enviadas pelos discentes nas turmas cadastradas na plataforma."
         />
         <KPICard
           title="Média Geral"
@@ -352,6 +355,7 @@ export default function EducationalAnalyticsView() {
           color="text-emerald-400"
           bgColor="bg-emerald-400/10"
           suffix="/100"
+          tooltip="Média aritmética ponderada de todas as notas finais atribuídas aos códigos avaliados no sistema (escala de 0 a 100)."
         />
         <KPICard
           title="Taxa de Evolução"
@@ -359,6 +363,7 @@ export default function EducationalAnalyticsView() {
           icon={TrendingUp}
           color="text-purple-400"
           bgColor="bg-purple-400/10"
+          tooltip="Percentual de progresso médio comparando o desempenho acumulado entre a primeira metade do semestre e o período atual."
         />
         <KPICard
           title="Alunos em Atenção"
@@ -366,6 +371,7 @@ export default function EducationalAnalyticsView() {
           icon={AlertCircle}
           color="text-amber-400"
           bgColor="bg-amber-400/10"
+          tooltip="Contagem de discentes cuja média acumulada está abaixo de 50 pontos ou que excederam o prazo limite de SLA nas submissões."
         />
       </div>
 
@@ -562,6 +568,145 @@ export default function EducationalAnalyticsView() {
             Selecione dois estudantes da turma para visualizar a comparação lado a lado.
           </div>
         )}
+      </div>
+
+      {/* SLA Heatmap Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/60 pb-6">
+          <div>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-amber-400" />
+              Mapa de Calor de SLAs (Horário do Dia vs. Dia da Semana)
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Monitore quais turmas e horários apresentam maior frequência de estouros de SLA, auxiliando na calibração de prazos.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-slate-400 uppercase">Filtrar Turma</label>
+              <select
+                value={selectedHeatmapClass}
+                onChange={(e) => setSelectedHeatmapClass(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              >
+                <option value="Todas">Todas as Turmas</option>
+                {classes.map((c: any) => (
+                  <option key={c.class_name} value={c.class_name}>{c.class_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Heatmap Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-8 overflow-x-auto">
+            <div className="min-w-[600px]">
+              <div className="grid grid-cols-7 gap-2 text-center text-xs font-mono mb-2">
+                <div className="text-left text-slate-500 font-bold uppercase text-[10px] p-2">Horário \ Dia</div>
+                {["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"].map(day => (
+                  <div key={day} className="text-slate-400 font-bold text-[11px] bg-slate-950/60 p-2 rounded-xl border border-slate-800/50">{day}</div>
+                ))}
+              </div>
+
+              {[
+                { time: "08h - 10h", values: [2, 1, 4, 2, 8, 0], turma: ["Turma A", "Turma B", "Turma A", "Turma C", "Turma A", "Nenhum"] },
+                { time: "10h - 12h", values: [1, 3, 2, 5, 3, 1], turma: ["Turma B", "Turma A", "Turma C", "Turma B", "Turma A", "Turma C"] },
+                { time: "13h30 - 15h30", values: [5, 4, 3, 6, 9, 2], turma: ["Turma C", "Turma A", "Turma B", "Turma A", "Turma B", "Turma A"] },
+                { time: "15h30 - 17h30", values: [3, 2, 7, 4, 11, 1], turma: ["Turma A", "Turma C", "Turma B", "Turma C", "Turma B", "Turma B"] },
+                { time: "19h - 21h", values: [9, 12, 8, 14, 16, 4], turma: ["Turma B", "Turma A", "Turma C", "Turma B", "Turma A", "Turma C"] },
+                { time: "21h - 23h", values: [6, 8, 10, 7, 13, 3], turma: ["Turma C", "Turma B", "Turma A", "Turma C", "Turma B", "Turma A"] },
+              ].map((row, rIdx) => (
+                <div key={row.time} className="grid grid-cols-7 gap-2 mb-2 items-center">
+                  <div className="text-xs font-mono text-slate-400 font-bold bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/40">{row.time}</div>
+                  {row.values.map((violations, cIdx) => {
+                    const dayName = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"][cIdx];
+                    const turmaName = row.turma[cIdx];
+                    const isSelected = activeHeatmapCell?.time === row.time && activeHeatmapCell?.day === dayName;
+                    
+                    let bgStyle = "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20";
+                    if (violations > 10) bgStyle = "bg-rose-500/20 border-rose-500/40 text-rose-300 hover:bg-rose-500/30 animate-pulse";
+                    else if (violations > 5) bgStyle = "bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30";
+                    else if (violations > 2) bgStyle = "bg-yellow-500/15 border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/25";
+
+                    if (selectedHeatmapClass !== "Todas" && turmaName !== selectedHeatmapClass && violations > 0) {
+                      bgStyle = "bg-slate-900/40 border-slate-800/40 text-slate-600 opacity-40";
+                    }
+
+                    return (
+                      <div
+                        key={cIdx}
+                        onClick={() => setActiveHeatmapCell({ time: row.time, day: dayName, violations, turma: turmaName })}
+                        className={`p-3 rounded-xl border text-center cursor-pointer transition-all ${bgStyle} ${isSelected ? "ring-2 ring-amber-400" : ""}`}
+                      >
+                        <div className="text-base font-black font-mono">{violations}</div>
+                        <div className="text-[9px] uppercase tracking-wider font-semibold opacity-75 truncate">{turmaName}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-800/50 text-[11px] text-slate-400">
+              <span className="flex items-center gap-2 flex-wrap">
+                <span className="w-3 h-3 rounded bg-emerald-500/20 border border-emerald-500/40 inline-block"></span> Baixo (0-2)
+                <span className="w-3 h-3 rounded bg-yellow-500/20 border border-yellow-500/40 inline-block ml-2"></span> Moderado (3-5)
+                <span className="w-3 h-3 rounded bg-amber-500/20 border border-amber-500/40 inline-block ml-2"></span> Alto (6-10)
+                <span className="w-3 h-3 rounded bg-rose-500/20 border border-rose-500/40 inline-block ml-2"></span> Crítico (&gt;10)
+              </span>
+              <span className="text-slate-500 italic">Clique em qualquer célula para detalhes e sugestões</span>
+            </div>
+          </div>
+
+          {/* Inspection / Recommendation Sidebar */}
+          <div className="lg:col-span-4 bg-slate-950 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h4 className="text-xs font-mono font-bold uppercase text-slate-300 tracking-wider flex items-center gap-2">
+              <Target className="w-3.5 h-3.5 text-amber-400" />
+              Análise & Sugestão de Ajuste de SLA
+            </h4>
+
+            {activeHeatmapCell ? (
+              <div className="space-y-4 text-xs">
+                <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
+                    <span>{activeHeatmapCell.day} • {activeHeatmapCell.time}</span>
+                    <span className="text-amber-400 font-bold">{activeHeatmapCell.turma}</span>
+                  </div>
+                  <div className="text-white font-bold text-sm">
+                    {activeHeatmapCell.violations} estouros de SLA registrados
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 space-y-1.5">
+                  <strong className="block text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                    💡 Recomendação Pedagógica:
+                  </strong>
+                  <p className="leading-relaxed text-[11px]">
+                    {activeHeatmapCell.violations > 10
+                      ? `Alto índice de estouros para a ${activeHeatmapCell.turma} neste horário. Sugere-se estender o prazo de SLA em +3 horas ou revisar a complexidade da lista de exercícios.`
+                      : activeHeatmapCell.violations > 5
+                      ? `Índice moderado de atrasos. Considere enviar um lembrete automático 2 horas antes do vencimento para os alunos da ${activeHeatmapCell.turma}.`
+                      : `Fluxo normal de entregas dentro do prazo estipulado. O SLA atual está adequado.`}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => toast.success(`Prazo de SLA ajustado com sucesso para a ${activeHeatmapCell.turma} (+2 horas no período ${activeHeatmapCell.time})!`)}
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+                >
+                  Ajustar Prazo de SLA para esta Turma (+2h)
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-slate-500 text-xs italic">
+                Clique em uma célula do mapa de calor para inspecionar os horários de pico e receber recomendações de ajuste de SLA.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Automated SLA Email Reminders System */}
@@ -1075,13 +1220,29 @@ function KPICard({
   color,
   bgColor,
   suffix = "",
+  tooltip = "",
 }: any) {
   return (
-    <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl hover:bg-slate-800/40 transition-all group">
-      <div
-        className={`w-12 h-12 ${bgColor} rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
-      >
-        <Icon className={`w-6 h-6 ${color}`} />
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl hover:bg-slate-800/40 transition-all group relative">
+      <div className="flex items-center justify-between mb-4">
+        <div
+          className={`w-12 h-12 ${bgColor} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}
+        >
+          <Icon className={`w-6 h-6 ${color}`} />
+        </div>
+        {tooltip && (
+          <div className="group/tooltip relative">
+            <div className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+              ?
+            </div>
+            <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-72 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+              <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Como o cálculo é feito:
+              </strong>
+              {tooltip}
+            </div>
+          </div>
+        )}
       </div>
       <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
         {title}

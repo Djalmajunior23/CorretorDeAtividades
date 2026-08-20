@@ -236,3 +236,86 @@ export const exportGenericResultToPDF = (title: string, result: any) => {
 
   doc.save(`${title.toLowerCase().replace(/\s+/g, '_')}.pdf`);
 };
+
+export const exportUrgentAttentionInterventionPDF = (student: any, frequentErrors?: string[]) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Header
+  doc.setFontSize(20);
+  doc.setTextColor(225, 29, 72); // Rose 600
+  doc.text("PLANO DE INTERVENÇÃO PEDAGÓGICA", 14, 20);
+
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Módulo de Gestão de Alunos em Atenção Urgente (CodeCheck AI)", 14, 26);
+  doc.text(`Data de Emissão: ${new Date().toLocaleDateString()}`, pageWidth - 14, 26, { align: "right" });
+
+  // Student Info Box
+  doc.setFillColor(254, 242, 242); // Light rose background
+  doc.roundedRect(14, 35, pageWidth - 28, 28, 2, 2, "F");
+
+  doc.setFontSize(11);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Estudante: ${student.student_name || "Desconhecido"}`, 20, 45);
+  doc.text(`Média Atual: ${parseInt(student.average_grade || 0)}% (Status: ATENÇÃO CRÍTICA)`, 20, 53);
+  doc.text(`Total de Submissões: ${student.submissions_count || 0}`, pageWidth / 2 + 10, 45);
+
+  // Frequent Errors Analysis Section
+  let currentY = 75;
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Erros Frequentes Identificados nas Submissões:", 14, currentY);
+  currentY += 8;
+
+  const errorsList = frequentErrors && frequentErrors.length > 0 ? frequentErrors : [
+    "Alta complexidade ciclomática em funções principais (> 12 pontos de decisão).",
+    "Presença de tratamento de exceções incompleto (blocos catch vazios ou sem logging).",
+    "Erros de sintaxe recorrentes em declaração de tipos e tipagem TypeScript.",
+    "Acoplamento excessivo e falta de modularização de componentes/funções."
+  ];
+
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  errorsList.forEach((err, idx) => {
+    const lines = doc.splitTextToSize(`${idx + 1}. ${err}`, pageWidth - 28);
+    doc.text(lines, 14, currentY);
+    currentY += (lines.length * 5) + 4;
+  });
+
+  // Actionable Intervention Plan Section
+  currentY += 10;
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Plano de Ação e Recomendações Estruturadas:", 14, currentY);
+  currentY += 8;
+
+  const recommendations = [
+    "Agendar reunião de mentoria individual de 30 minutos para diagnóstico de lacunas conceituais.",
+    "Participar do ciclo de nivelamento prático em Clean Code e refatoração de código.",
+    "Realizar reentrega assistida dos desafios com pontuação inferior a 70%",
+    "Acompanhamento quinzenal de evolução de métricas de complexidade e qualidade de código."
+  ];
+
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  recommendations.forEach((rec, idx) => {
+    const lines = doc.splitTextToSize(`[  ]  ${rec}`, pageWidth - 28);
+    doc.text(lines, 14, currentY);
+    currentY += (lines.length * 5) + 6;
+  });
+
+  // Signature Block
+  currentY += 15;
+  doc.setLineWidth(0.5);
+  doc.line(14, currentY, 90, currentY);
+  doc.line(pageWidth - 90, currentY, pageWidth - 14, currentY);
+  currentY += 5;
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Assinatura da Coordenação / Professor", 14, currentY);
+  doc.text("Assinatura do Estudante", pageWidth - 90, currentY);
+
+  doc.save(`plano_intervencao_${(student.student_name || "aluno").toLowerCase().replace(/\s+/g, '_')}.pdf`);
+};
+

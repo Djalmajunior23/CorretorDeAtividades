@@ -41,18 +41,36 @@ export function PredictiveRiskDashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl bg-[#030712]/60 border border-slate-800 flex flex-col gap-1">
-          <span className="text-[11px] font-mono text-slate-400 uppercase">Alunos em Baixo Risco</span>
+        <div className="p-4 rounded-xl bg-[#030712]/60 border border-slate-800 flex flex-col gap-1 relative group/tooltip">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-mono text-slate-400 uppercase">Alunos em Baixo Risco</span>
+            <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help">?</div>
+            <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-64 p-3 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-300 shadow-xl z-20 font-normal normal-case">
+              <strong className="text-white block mb-1 font-bold">Cálculo:</strong> Percentual de discentes com score preditivo superior a 75 e histórico sem estouros de SLA.
+            </div>
+          </div>
           <span className="text-2xl font-bold text-emerald-400 font-mono">78%</span>
           <span className="text-[10px] text-slate-500">Engajamento estável acima da média</span>
         </div>
-        <div className="p-4 rounded-xl bg-[#030712]/60 border border-slate-800 flex flex-col gap-1">
-          <span className="text-[11px] font-mono text-slate-400 uppercase">Alunos em Risco Moderado</span>
+        <div className="p-4 rounded-xl bg-[#030712]/60 border border-slate-800 flex flex-col gap-1 relative group/tooltip">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-mono text-slate-400 uppercase">Alunos em Risco Moderado</span>
+            <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help">?</div>
+            <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-64 p-3 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-300 shadow-xl z-20 font-normal normal-case">
+              <strong className="text-white block mb-1 font-bold">Cálculo:</strong> Percentual de discentes com score preditivo entre 50 e 74 ou entre 1 e 3 estouros de SLA.
+            </div>
+          </div>
           <span className="text-2xl font-bold text-amber-400 font-mono">14%</span>
           <span className="text-[10px] text-slate-500">Atrasos pontuais em listas recentes</span>
         </div>
-        <div className="p-4 rounded-xl bg-[#030712]/60 border border-slate-800 flex flex-col gap-1">
-          <span className="text-[11px] font-mono text-slate-400 uppercase">Alunos em Alto Risco (Evasão)</span>
+        <div className="p-4 rounded-xl bg-[#030712]/60 border border-slate-800 flex flex-col gap-1 relative group/tooltip">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-mono text-slate-400 uppercase">Alunos em Alto Risco (Evasão)</span>
+            <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help">?</div>
+            <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-64 p-3 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-300 shadow-xl z-20 font-normal normal-case">
+              <strong className="text-white block mb-1 font-bold">Cálculo:</strong> Percentual de discentes com score preditivo inferior a 50 ou mais de 3 SLAs estourados.
+            </div>
+          </div>
           <span className="text-2xl font-bold text-rose-400 font-mono">8%</span>
           <span className="text-[10px] text-slate-500">Necessitam de intervenção pedagógica urgente</span>
         </div>

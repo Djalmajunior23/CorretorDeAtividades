@@ -17,6 +17,10 @@ export interface BackupStatus {
   lastFilename: string | null;
   tablesCount: any | null;
   cronExpression: string;
+  fileSize?: number;
+  integrityStatus?: "healthy" | "corrupted" | "warning" | "missing";
+  integrityMessage?: string;
+  alertDispatched?: boolean;
 }
 
 export let globalBackupStatus: BackupStatus = {
@@ -25,7 +29,11 @@ export let globalBackupStatus: BackupStatus = {
   lastError: null,
   lastFilename: null,
   tablesCount: null,
-  cronExpression: "0 2 * * *"
+  cronExpression: "0 2 * * *",
+  fileSize: 0,
+  integrityStatus: "missing",
+  integrityMessage: "Nenhum backup gerado ainda no ciclo atual.",
+  alertDispatched: false
 };
 
 /**
@@ -106,7 +114,20 @@ export async function runBackupExport(pool: Pool, options: BackupOptions = {}): 
     };
 
     fs.writeFileSync(targetFilePath, JSON.stringify(backupMetadata, null, 2), "utf8");
-    console.log(`[BACKUP] Backup salvo localmente com sucesso: ${filename}`);
+    const stats = fs.statSync(targetFilePath);
+    const fileSize = stats.size;
+    console.log(`[BACKUP] Backup salvo localmente com sucesso: ${filename} (${fileSize} bytes)`);
+
+    let integrityStatus: "healthy" | "corrupted" | "warning" = "healthy";
+    let integrityMessage = "Arquivo de backup gerado com sucesso e íntegro (> 1KB).";
+    let alertDispatched = false;
+
+    if (fileSize < 1024) {
+      integrityStatus = "corrupted";
+      integrityMessage = `ALERTA CRÍTICO: Arquivo de backup (${fileSize} bytes) menor que 1KB! Possível corrupção ou perda de dados.`;
+      alertDispatched = true;
+      console.warn(`[BACKUP ALERTA] ${integrityMessage} Alerta imediato disparado no dashboard System Health e por e-mail (Preferências de Notificação).`);
+    }
 
     // 4. Try to upload to Amazon S3 if credentials are provided in env / options
     const s3Bucket = options.s3Bucket || process.env.AWS_S3_BUCKET;
@@ -147,6 +168,10 @@ export async function runBackupExport(pool: Pool, options: BackupOptions = {}): 
     globalBackupStatus.lastError = null;
     globalBackupStatus.lastFilename = filename;
     globalBackupStatus.tablesCount = tablesCount;
+    globalBackupStatus.fileSize = fileSize;
+    globalBackupStatus.integrityStatus = integrityStatus;
+    globalBackupStatus.integrityMessage = integrityMessage;
+    globalBackupStatus.alertDispatched = alertDispatched;
 
     return {
       success: true,
@@ -159,6 +184,9 @@ export async function runBackupExport(pool: Pool, options: BackupOptions = {}): 
     globalBackupStatus.lastExecutionTime = new Date().toISOString();
     globalBackupStatus.status = "failed";
     globalBackupStatus.lastError = err.message;
+    globalBackupStatus.integrityStatus = "corrupted";
+    globalBackupStatus.integrityMessage = `Falha crítica no backup: ${err.message}`;
+    globalBackupStatus.alertDispatched = true;
 
     return {
       success: false,

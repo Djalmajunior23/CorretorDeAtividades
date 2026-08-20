@@ -1,7 +1,7 @@
 const envApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
 export const API_BASE_URL =
-  envApiUrl && envApiUrl.length > 0 && envApiUrl !== "https://api.teacherjuniors.com.br"
+  envApiUrl && envApiUrl.length > 0
     ? envApiUrl.replace(/\/$/, "")
     : (typeof window !== "undefined" ? window.location.origin : "");
 

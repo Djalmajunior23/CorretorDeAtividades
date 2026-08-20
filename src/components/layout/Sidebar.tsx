@@ -26,7 +26,9 @@ import {
   ClipboardList,
   Library,
   FileCheck,
-  HelpCircle
+  HelpCircle,
+  Cpu,
+  TrendingUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -80,6 +82,10 @@ export default function Sidebar({
     { id: "assistant", label: "Assistente IA", icon: Sparkles, desc: "Copiloto Pedagógico IA", visible: featureFlags.ENABLE_TEACHER_AI_ASSISTANT !== false },
     { id: "help_center", label: "Central de Ajuda", icon: HelpCircle, desc: "Manual, FAQ e Onboarding", visible: true },
     { id: "system_health", label: "Saúde do Sistema", icon: Activity, desc: "Status e Auditoria", visible: true },
+    { id: "multi_agent", label: "Multi-Agent IA", icon: Cpu, desc: "Agentes Especializados RAG", visible: true },
+    { id: "predictive_analytics", label: "Analytics Preditivo", icon: TrendingUp, desc: "Previsão de Evasão & Risco", visible: true },
+    { id: "collab_sandbox", label: "Sandbox Live", icon: Users, desc: "Programação Colaborativa", visible: true },
+    { id: "lms_integration", label: "Integração LMS", icon: BookOpen, desc: "Moodle & Google Classroom", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];
 

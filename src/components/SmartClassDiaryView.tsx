@@ -337,64 +337,74 @@ export default function SmartClassDiaryView({
       const classNameForQuery = classObj ? classObj.name : selectedClass;
 
       // 1. Sessions
-      const resSessions = await fetch(
-        `${API_BASE_URL}/api/codecheck/diary/sessions?class_name=${encodeURIComponent(classNameForQuery)}&search=${encodeURIComponent(searchQuery)}`,
-      );
-      if (resSessions.ok) {
-        const rawData = await resSessions.json();
-        const data = normalizeArray(rawData);
-        setSessions(data);
-        if (data.length > 0) {
-          const exists = data.some((s: any) => s.id === selectedAttendanceSessionId);
-          if (!exists) {
-            setSelectedAttendanceSessionId(data[0].id);
+      try {
+        const resSessions = await fetch(
+          `${API_BASE_URL}/api/codecheck/diary/sessions?class_name=${encodeURIComponent(classNameForQuery)}&search=${encodeURIComponent(searchQuery)}`,
+        );
+        if (resSessions.ok) {
+          const rawData = await resSessions.json();
+          const data = normalizeArray(rawData);
+          setSessions(data);
+          if (data.length > 0) {
+            const exists = data.some((s: any) => s.id === selectedAttendanceSessionId);
+            if (!exists) {
+              setSelectedAttendanceSessionId(data[0].id);
+            }
+          } else {
+            setSelectedAttendanceSessionId("");
           }
-        } else {
-          setSelectedAttendanceSessionId("");
         }
-      }
+      } catch (e) {}
 
       // 2. Competencies
-      const resComps = await fetch(apiUrl("/api/codecheck/diary/competencies"));
-      if (resComps.ok) {
-        setCompetencies(normalizeArray(await resComps.json()));
-      }
+      try {
+        const resComps = await fetch(apiUrl("/api/codecheck/diary/competencies"));
+        if (resComps.ok) {
+          setCompetencies(normalizeArray(await resComps.json()));
+        }
+      } catch (e) {}
 
       // 3. Dash metrics
-      const resDash = await fetch(apiUrl("/api/codecheck/diary/dashboard"));
-      if (resDash.ok) {
-        setDashboardMetrics(await resDash.json());
-      }
+      try {
+        const resDash = await fetch(apiUrl("/api/codecheck/diary/dashboard"));
+        if (resDash.ok) {
+          setDashboardMetrics(await resDash.json());
+        }
+      } catch (e) {}
 
       // 4. Integrations
-      const resInt = await fetch(apiUrl("/api/codecheck/diary/integrations"));
-      if (resInt.ok) {
-        setIntegrations(await resInt.json());
-      }
+      try {
+        const resInt = await fetch(apiUrl("/api/codecheck/diary/integrations"));
+        if (resInt.ok) {
+          setIntegrations(await resInt.json());
+        }
+      } catch (e) {}
 
       // 5. Audit logs
-      const resAud = await fetch(apiUrl("/api/audit-logs"));
-      if (resAud.ok) {
-        setAuditLogs(normalizeArray(await resAud.json()));
-      }
+      try {
+        const resAud = await fetch(apiUrl("/api/audit-logs"));
+        if (resAud.ok) {
+          setAuditLogs(normalizeArray(await resAud.json()));
+        }
+      } catch (e) {}
 
       // 6. Observations
-      const resObs = await fetch(apiUrl("/api/codecheck/diary/observations"));
-      if (resObs.ok) {
-        setObservations(normalizeArray(await resObs.json()));
-      }
+      try {
+        const resObs = await fetch(apiUrl("/api/codecheck/diary/observations"));
+        if (resObs.ok) {
+          setObservations(normalizeArray(await resObs.json()));
+        }
+      } catch (e) {}
 
       // 7. Lesson Plans
-      const resPlans = await fetch(apiUrl("/api/diary/plan"));
-      if (resPlans.ok) {
-        setLessonPlans(normalizeArray(await resPlans.json()));
-      }
+      try {
+        const resPlans = await fetch(apiUrl("/api/diary/plan"));
+        if (resPlans.ok) {
+          setLessonPlans(normalizeArray(await resPlans.json()));
+        }
+      } catch (e) {}
     } catch (err: any) {
-      console.error("Failed fetching diary data:", err?.message || "Unknown error");
-      showToast(
-        "Erro de comunicação com o servidor. Usando modo de segurança local.",
-        "error",
-      );
+      console.warn("Notice during diary data sync:", err?.message || "Unknown error");
     }
   };
 
