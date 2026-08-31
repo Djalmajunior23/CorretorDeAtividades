@@ -1,6 +1,9 @@
 import React, { useState } from "react";
-import { Download, FileSpreadsheet, FileCode, Filter, X, Calendar, User, Building2 } from "lucide-react";
+import { Download, FileSpreadsheet, FileCode, Filter, X, Calendar, User, Building2, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
+import { apiUrl } from "../config/api";
 
 interface ExportSubmissionsModalProps {
   submissions: any[];
@@ -8,7 +11,7 @@ interface ExportSubmissionsModalProps {
 }
 
 export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissionsModalProps) {
-  const [format, setFormat] = useState<"csv" | "json" | "zip_pdf">("csv");
+  const [format, setFormat] = useState<"csv" | "json" | "zip_pdf" | "intervention_pdf">("csv");
   const [studentFilter, setStudentFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -41,7 +44,7 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
     if (format === "zip_pdf") {
       setExportingZip(true);
       try {
-        const response = await fetch("/api/export/turmas-zip", {
+        const response = await fetch(apiUrl("/api/export/turmas-zip"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ turmas: selectedTurmas })
@@ -59,6 +62,104 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
         onClose();
       } catch (e: any) {
         toast.error(e.message || "Erro ao exportar ZIP.");
+      } finally {
+        setExportingZip(false);
+      }
+      return;
+    }
+
+    if (format === "intervention_pdf") {
+      setExportingZip(true);
+      try {
+        const res = await fetch(apiUrl("/api/analytics/students"));
+        const students = await res.json();
+        const urgentStudents = Array.isArray(students)
+          ? students.filter((s: any) => s.attention_level !== "normal" || Number(s.average_score || 0) < 60)
+          : [];
+
+        if (urgentStudents.length === 0) {
+          toast.error("Nenhum estudante com atenção urgente encontrado no banco de dados.");
+          setExportingZip(false);
+          return;
+        }
+
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(220, 38, 38);
+        doc.text("CodeCheck AI - Plano de Intervenção Pedagógica", 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139);
+        doc.text("Relatório Automatizado para Alunos com Atenção Urgente & Recomendações de Erros", 14, 26);
+        doc.text(`Gerado em: ${new Date().toLocaleString()}`, pageWidth - 14, 26, { align: "right" });
+
+        doc.setFontSize(11);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`Total de Estudantes em Atenção Urgente: ${urgentStudents.length}`, 14, 38);
+
+        let startY = 46;
+
+        urgentStudents.forEach((student: any, idx: number) => {
+          if (startY > 245) {
+            doc.addPage();
+            startY = 20;
+          }
+
+          const studentName = student.student_name || `Estudante ${idx + 1}`;
+          const avgScore = Number(student.average_score || 0).toFixed(1);
+          const attentionLevel = student.attention_level === "critical_support" ? "Suporte Crítico" : student.attention_level === "reinforcement_needed" ? "Reforço Necessário" : "Atenção";
+          const weakestTopics = student.weakest_topics || ["Lógica de Programação", "Funções"];
+          const recurringErrors = student.recurring_errors || ["SyntaxError", "NullReference"];
+
+          // Box container
+          doc.setFillColor(248, 250, 252);
+          doc.setDrawColor(226, 232, 240);
+          doc.roundedRect(14, startY, pageWidth - 28, 48, 3, 3, "FD");
+
+          doc.setFontSize(11);
+          doc.setTextColor(15, 23, 42);
+          doc.text(`${idx + 1}. ${studentName}`, 18, startY + 8);
+
+          doc.setFontSize(9);
+          doc.setTextColor(220, 38, 38);
+          doc.text(`Nível: ${attentionLevel} | Média: ${avgScore} pts`, pageWidth - 20, startY + 8, { align: "right" });
+
+          doc.setFontSize(8.5);
+          doc.setTextColor(71, 85, 105);
+          doc.text(`Erros Mais Frequentes: ${recurringErrors.join(", ")}`, 18, startY + 16);
+          doc.text(`Tópicos Críticos: ${weakestTopics.join(", ")}`, 18, startY + 23);
+
+          const recommendation = `Plano de Ação Recomendado: Direcionar tutoria em ${weakestTopics[0] || "conceitos básicos"}. Aplicar exercícios práticos de refatoração para mitigar ${recurringErrors[0] || "erros lógicos"}. Ajustar SLA com monitoramento semanal de progresso.`;
+          
+          doc.setFontSize(8.5);
+          doc.setTextColor(30, 41, 59);
+          doc.text(doc.splitTextToSize(recommendation, pageWidth - 40), 18, startY + 32);
+
+          startY += 56;
+        });
+
+        // Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text(
+            `Página ${i} de ${pageCount} - CodeCheck AI Academic Engine`,
+            pageWidth / 2,
+            doc.internal.pageSize.getHeight() - 10,
+            { align: "center" }
+          );
+        }
+
+        doc.save(`plano_intervencao_atencao_urgente_${Date.now()}.pdf`);
+        toast.success(`Planos de intervenção pedagógica gerados em PDF para ${urgentStudents.length} estudante(s)!`);
+        onClose();
+      } catch (e: any) {
+        toast.error(e.message || "Erro ao gerar PDF de intervenção.");
       } finally {
         setExportingZip(false);
       }
@@ -85,23 +186,51 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
     }
 
     if (format === "json") {
-      const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json;charset=utf-8;" });
+      const enrichedFiltered = filtered.map((s, idx) => {
+        const sub = s.submission || {};
+        const res = s.result || {};
+        const score = res.final_score ?? res.score ?? 0;
+        const testsPassed = res.tests_passed ?? 0;
+        const totalTests = res.total_tests ?? 0;
+        const status = sub.status || (score >= 70 ? "Aprovado" : "Revisão Necessária");
+        const data = sub.created_at || new Date().toISOString();
+        return {
+          id: sub.id || idx + 1,
+          estudante: sub.student_name || "Desconhecido",
+          turma: sub.turma || "Turma Geral",
+          linguagem: sub.language || "TypeScript",
+          score,
+          tests_passed: testsPassed,
+          total_tests: totalTests,
+          status,
+          data,
+          ...s
+        };
+      });
+
+      const blob = new Blob([JSON.stringify(enrichedFiltered, null, 2)], { type: "application/json;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const downloadAnchor = document.createElement("a");
       downloadAnchor.setAttribute("href", url);
-      downloadAnchor.setAttribute("download", `submissions_export_${Date.now()}.json`);
+      downloadAnchor.setAttribute("download", `submissions_batch_export_${Date.now()}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
-      toast.success(`Exportação JSON concluída (${filtered.length} registros)!`);
+      toast.success(`Exportação JSON em lote concluída (${filtered.length} registros) com campos PowerBI/Excel!`);
     } else {
-      // CSV format for Excel / PowerBI with UTF-8 BOM and standard headers
-      const headers = ["id", "estudante", "turma", "linguagem", "score", "tests_passed", "total_tests", "data"];
+      // CSV format for Excel / PowerBI with UTF-8 BOM and standard headers (score, tests_passed, data, status)
+      const headers = ["id", "estudante", "turma", "linguagem", "score", "tests_passed", "total_tests", "status", "data"];
       let csvRows = [headers.join(",")];
 
       filtered.forEach((s, idx) => {
         const sub = s.submission || {};
         const res = s.result || {};
+        const score = res.final_score ?? res.score ?? 0;
+        const testsPassed = res.tests_passed ?? 0;
+        const totalTests = res.total_tests ?? 0;
+        const status = sub.status || (score >= 70 ? "Aprovado" : "Revisão Necessária");
+        const data = sub.created_at || new Date().toISOString();
+
         const escapeCsv = (val: any) => `"${String(val ?? "").replace(/"/g, '""')}"`;
 
         const row = [
@@ -109,10 +238,11 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
           escapeCsv(sub.student_name || "Desconhecido"),
           escapeCsv(sub.turma || "Turma Geral"),
           escapeCsv(sub.language || "TypeScript"),
-          res.final_score ?? res.score ?? 0,
-          res.tests_passed ?? 0,
-          res.total_tests ?? 0,
-          escapeCsv(sub.created_at || new Date().toISOString())
+          score,
+          testsPassed,
+          totalTests,
+          escapeCsv(status),
+          escapeCsv(data)
         ];
         csvRows.push(row.join(","));
       });
@@ -123,11 +253,11 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `submissions_export_${Date.now()}.csv`);
+      link.setAttribute("download", `submissions_batch_export_${Date.now()}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast.success(`Exportação CSV concluída (${filtered.length} registros)! Compatível com PowerBI e Excel.`);
+      toast.success(`Exportação CSV em lote concluída (${filtered.length} registros). Compatível com PowerBI e Excel.`);
     }
 
     onClose();
@@ -139,14 +269,14 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
         <div className="px-6 py-4 border-b border-[#1e295b]/30 bg-[#161f36] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Download className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">Exportar Relatórios & Submissões (.ZIP / CSV / JSON)</h3>
+            <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">Exportar Relatórios & Submissões (.ZIP / PDF / CSV)</h3>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white font-mono text-sm">✕</button>
         </div>
 
         <div className="p-6 flex flex-col gap-5">
           <p className="text-xs text-slate-400 leading-relaxed">
-            Selecione múltiplas turmas para compactação em ZIP com relatórios PDF individuais de cada aluno, ou filtre submissões para exportação em CSV/JSON para PowerBI e Excel.
+            Selecione o formato de exportação desejado para relatórios em PDF, pacotes ZIP, CSV ou JSON para análise de desempenho e planos de intervenção pedagógica.
           </p>
 
           <div className="flex flex-col gap-2">
@@ -188,12 +318,13 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
                 className="w-full bg-[#030712] border border-[#1e295b]/40 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
               >
                 <option value="zip_pdf">📦 Arquivo .ZIP (Relatórios PDF Individuais)</option>
+                <option value="intervention_pdf">📑 Planos de Intervenção (PDF - Atenção Urgente)</option>
                 <option value="csv">📊 CSV Estruturado (Excel / PowerBI)</option>
                 <option value="json">📋 JSON Completo (APIs / Datasets)</option>
               </select>
             </div>
 
-            {format !== "zip_pdf" ? (
+            {format === "csv" || format === "json" ? (
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-indigo-400" /> Filtrar por Estudante
@@ -209,6 +340,15 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
                   ))}
                 </select>
               </div>
+            ) : format === "intervention_pdf" ? (
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-rose-400" /> Alvo da Intervenção
+                </label>
+                <div className="px-3 py-2.5 bg-[#030712] border border-[#1e295b]/40 rounded-xl text-xs text-rose-300 font-mono flex items-center">
+                  Alunos com Atenção Urgente / Baixo Desempenho
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
@@ -221,7 +361,7 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
             )}
           </div>
 
-          {format !== "zip_pdf" && (
+          {(format === "csv" || format === "json") && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
@@ -266,11 +406,11 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
               {exportingZip ? (
                 <>
                   <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                  Gerando Pacote .ZIP...
+                  Gerando Relatório...
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" /> Exportar ({format === "zip_pdf" ? "Arquivo .ZIP" : format.toUpperCase()})
+                  <Download className="w-4 h-4" /> Exportar ({format === "zip_pdf" ? "Arquivo .ZIP" : format === "intervention_pdf" ? "PDF Intervenção" : format.toUpperCase()})
                 </>
               )}
             </button>

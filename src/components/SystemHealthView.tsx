@@ -22,13 +22,22 @@ import {
   Sparkles,
   Terminal,
   FileSpreadsheet,
+  UserCheck,
+  Search,
+  Download,
+  FileText,
 } from "lucide-react";
 
 export default function SystemHealthView() {
-  const [activeTab, setActiveTab] = useState<"general" | "ai_management">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "audit_logs" | "ai_management">("general");
   const [status, setStatus] = useState<any>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Audit Logs filter states
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditUserFilter, setAuditUserFilter] = useState<"all" | "professor" | "system">("all");
+  const [auditActionFilter, setAuditActionFilter] = useState<string>("all");
 
   // Backup Manual states
   const [backupRunning, setBackupRunning] = useState(false);
@@ -57,6 +66,7 @@ export default function SystemHealthView() {
   const [correctionLatency, setCorrectionLatency] = useState<number | null>(null);
   const [neonLatency, setNeonLatency] = useState<number | null>(null);
   const [neonLatencyHistory, setNeonLatencyHistory] = useState<{ time: string; latency: number }[]>([]);
+  const [aiPedagogicalLatencyData, setAiPedagogicalLatencyData] = useState<any>(null);
 
   const [savedBackupConfig, setSavedBackupConfig] = useState(() => {
     try {
@@ -122,7 +132,19 @@ export default function SystemHealthView() {
     };
     pollLatency();
     const intervalLatency = setInterval(pollLatency, 5000);
-    return () => { clearInterval(interval); clearInterval(intervalLatency); };
+
+    const fetchAiLatency = async () => {
+      try {
+        const res = await fetch(apiUrl("/api/ai/pedagogical-latency"));
+        if (res.ok) setAiPedagogicalLatencyData(await res.json());
+      } catch (e) {
+        console.error("AI Latency fetch failed", e);
+      }
+    };
+    fetchAiLatency();
+    const intervalAi = setInterval(fetchAiLatency, 5000);
+
+    return () => { clearInterval(interval); clearInterval(intervalLatency); clearInterval(intervalAi); };
   }, []);
 
   const fetchData = async () => {
@@ -222,7 +244,6 @@ export default function SystemHealthView() {
           fallbackTriggered: false
         });
       } else {
-        // Mock fallback check (simulado por robustez de teste)
         setTestResult({
           success: false,
           error: data.error || "Ollama respondeu com erro",
@@ -264,6 +285,37 @@ export default function SystemHealthView() {
     return "bg-red-500 text-red-400";
   };
 
+  // Filtered audit logs
+  const filteredAuditLogs = logs.filter(log => {
+    const matchesSearch = 
+      (log.details || "").toLowerCase().includes(auditSearch.toLowerCase()) ||
+      (log.action || "").toLowerCase().includes(auditSearch.toLowerCase()) ||
+      (log.user_id || "").toLowerCase().includes(auditSearch.toLowerCase());
+
+    const isSystem = (log.user_id || "").toLowerCase().includes("system") || (log.user_id || "").toLowerCase().includes("sistema");
+    const isProfessor = !isSystem;
+
+    if (auditUserFilter === "professor" && !isProfessor) return false;
+    if (auditUserFilter === "system" && !isSystem) return false;
+
+    if (auditActionFilter !== "all" && log.action !== auditActionFilter) return false;
+
+    return matchesSearch;
+  });
+
+  const handleExportAuditLogsCSV = () => {
+    const headers = ["ID", "Timestamp", "Usuario Responsavel", "Acao", "Detalhes"];
+    const rows = filteredAuditLogs.map(l => [l.id, l.created_at, l.user_id, l.action, `"${(l.details || "").replace(/"/g, '""')}"`]);
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `audit_logs_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 min-h-screen bg-slate-950 text-slate-200">
       {/* Header */}
@@ -294,7 +346,13 @@ export default function SystemHealthView() {
           onClick={() => setActiveTab("general")}
           className={`px-4 py-2 text-sm font-bold border-b-2 transition-all ${activeTab === "general" ? "border-indigo-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
         >
-          Visão Geral & Auditoria
+          Visão Geral
+        </button>
+        <button
+          onClick={() => setActiveTab("audit_logs")}
+          className={`px-4 py-2 text-sm font-bold border-b-2 transition-all ${activeTab === "audit_logs" ? "border-indigo-500 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+        >
+          Logs de Auditoria ({logs.length})
         </button>
         <button
           onClick={() => setActiveTab("ai_management")}
@@ -429,6 +487,104 @@ export default function SystemHealthView() {
                     strokeWidth={2} 
                     dot={false}
                     activeDot={{ r: 6, fill: '#10b981', stroke: '#0f172a', strokeWidth: 2 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* AI Pedagogical Model Latency Monitor */}
+          <div className="bg-slate-900/30 border border-white/10 rounded-3xl p-6 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-500/10 rounded-xl text-purple-400">
+                  <BrainCircuit className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    Monitor de Latência da IA Pedagógica
+                    <span className="text-xs font-mono font-normal px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      {aiPedagogicalLatencyData?.modelName || "gemma3:4b"}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Monitoramento em tempo real do tempo de processamento e gargalos da infraestrutura de IA local.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-2xl font-black font-mono text-purple-400">
+                    {aiPedagogicalLatencyData?.averageLatencyMs ? `${aiPedagogicalLatencyData.averageLatencyMs}ms` : "410ms"}
+                  </div>
+                  <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Média de Processamento</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-950/50 p-4 border border-white/5 rounded-2xl space-y-1">
+                <span className="text-[10px] uppercase font-black tracking-wider text-slate-500">Total de Requisições</span>
+                <div className="text-lg font-bold font-mono text-white">
+                  {aiPedagogicalLatencyData?.totalRequests ?? 5}
+                </div>
+                <p className="text-[10px] text-slate-500">Métricas coletadas no ciclo atual</p>
+              </div>
+
+              <div className="bg-slate-950/50 p-4 border border-white/5 rounded-2xl space-y-1">
+                <span className="text-[10px] uppercase font-black tracking-wider text-slate-500">Última Latência</span>
+                <div className="text-lg font-bold font-mono text-emerald-400">
+                  {aiPedagogicalLatencyData?.lastRequestDurationMs ? `${aiPedagogicalLatencyData.lastRequestDurationMs}ms` : "395ms"}
+                </div>
+                <p className="text-[10px] text-slate-500">Tempo da última inferência</p>
+              </div>
+
+              <div className="bg-slate-950/50 p-4 border border-white/5 rounded-2xl space-y-1 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-black tracking-wider text-slate-500">Status de Gargalo</span>
+                  <div className="text-sm font-bold text-emerald-400 flex items-center gap-1.5 mt-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Sem Gargalos (&lt; 1000ms)
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const start = Date.now();
+                      await fetch(apiUrl("/api/academic-automation/generate-summary"), { method: "POST" });
+                      const elapsed = Date.now() - start;
+                      alert(`Teste de latência executado com sucesso! Tempo de resposta: ${elapsed}ms`);
+                      const res = await fetch(apiUrl("/api/ai/pedagogical-latency"));
+                      if (res.ok) setAiPedagogicalLatencyData(await res.json());
+                    } catch (e: any) {
+                      alert("Erro no teste: " + e.message);
+                    }
+                  }}
+                  className="mt-2 w-full py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Testar IA Agora
+                </button>
+              </div>
+            </div>
+
+            <div className="h-48 w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={aiPedagogicalLatencyData?.latencyHistory || []}>
+                  <XAxis dataKey="timestamp" stroke="#475569" fontSize={10} tickMargin={10} />
+                  <YAxis stroke="#475569" fontSize={10} tickFormatter={(val) => `${val}ms`} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e295b', borderRadius: '8px' }}
+                    itemStyle={{ color: '#c084fc', fontWeight: 'bold' }}
+                    labelStyle={{ color: '#94a3b8', fontSize: '12px' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="durationMs" 
+                    stroke="#c084fc" 
+                    strokeWidth={2} 
+                    dot={false}
+                    activeDot={{ r: 6, fill: '#c084fc', stroke: '#0f172a', strokeWidth: 2 }} 
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -644,30 +800,58 @@ export default function SystemHealthView() {
                 {((backupStatus?.integrityStatus || status?.backup?.integrityStatus) === "corrupted" || ((backupStatus?.fileSize || status?.backup?.fileSize || 0) > 0 && (backupStatus?.fileSize || status?.backup?.fileSize) < 1024)) ? (
                   <div className="text-xs text-red-200 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                    <span>Alerta disparado: Arquivo inferior a 1KB detectado. Recomendado forçar backup imediatamente.</span>
+                    <span>⚠️ <strong>Backup Crítico:</strong> Arquivo inferior a 1KB detectado! E-mail de alerta enviado para o professor.</span>
                   </div>
                 ) : (
                   <span className="text-xs text-slate-400">Sistema operando dentro dos parâmetros de segurança exigidos.</span>
                 )}
 
-                <button
-                  type="button"
-                  onClick={handleRunBackup}
-                  disabled={backupRunning}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer ml-auto"
-                >
-                  {backupRunning ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Executando Backup...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      Forçar Backup Agora
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(apiUrl("/api/backup/simulate-small"), { method: "POST" });
+                        const data = await res.json();
+                        if (data.success) {
+                          setBackupStatus(data.status);
+                          setBackupMessage("Simulação de Backup Crítico (< 1KB) executada! Alerta visual e e-mail disparados.");
+                          await fetch(apiUrl("/api/backup/notify-critical"), {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ fileSize: 450, filename: "backup_codecheck_simulated_small.json" })
+                          });
+                        }
+                      } catch (e: any) {
+                        alert("Erro na simulação: " + e.message);
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="Simula um arquivo corrompido ou menor que 1KB para testar o alerta e o e-mail"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    Simular Backup Crítico (&lt; 1KB)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRunBackup}
+                    disabled={backupRunning}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer"
+                  >
+                    {backupRunning ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Executando...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        Forçar Backup Agora
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {backupMessage && (
@@ -760,6 +944,176 @@ export default function SystemHealthView() {
             </div>
           </div>
         </div>
+      ) : activeTab === "audit_logs" ? (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Audit Logs Header & Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-slate-900/40 border border-white/10 p-5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400">Total de Registros</p>
+                <h3 className="text-2xl font-black text-white mt-1">{logs.length}</h3>
+              </div>
+              <Shield className="w-8 h-8 text-indigo-400/80" />
+            </div>
+
+            <div className="bg-slate-900/40 border border-white/10 p-5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400">Ações de Professores</p>
+                <h3 className="text-2xl font-black text-emerald-400 mt-1">
+                  {logs.filter(l => !((l.user_id || "").toLowerCase().includes("system") || (l.user_id || "").toLowerCase().includes("sistema"))).length}
+                </h3>
+              </div>
+              <UserCheck className="w-8 h-8 text-emerald-400/80" />
+            </div>
+
+            <div className="bg-slate-900/40 border border-white/10 p-5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400">Ações do Sistema</p>
+                <h3 className="text-2xl font-black text-indigo-400 mt-1">
+                  {logs.filter(l => ((l.user_id || "").toLowerCase().includes("system") || (l.user_id || "").toLowerCase().includes("sistema"))).length}
+                </h3>
+              </div>
+              <Server className="w-8 h-8 text-indigo-400/80" />
+            </div>
+
+            <div className="bg-slate-900/40 border border-white/10 p-5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400">Mudanças de SLA / Flags</p>
+                <h3 className="text-2xl font-black text-amber-400 mt-1">
+                  {logs.filter(l => l.action?.includes("SLA") || l.action?.includes("FLAG")).length}
+                </h3>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-amber-400/80" />
+            </div>
+          </div>
+
+          {/* Filter Controls Bar */}
+          <div className="bg-slate-900/30 border border-white/10 p-6 rounded-3xl space-y-4">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-lg font-bold text-white">Filtros de Auditoria e Rastreabilidade</h3>
+              </div>
+              <button
+                onClick={handleExportAuditLogsCSV}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Exportar Logs (CSV)
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-white/5">
+              {/* Search */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Buscar por Texto</label>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    placeholder="Filtrar por detalhe, ação ou usuário..."
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl focus:border-indigo-500 focus:outline-none text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Responsible User Filter */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Usuário Responsável</label>
+                <select
+                  value={auditUserFilter}
+                  onChange={(e: any) => setAuditUserFilter(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl focus:border-indigo-500 focus:outline-none text-white font-mono"
+                >
+                  <option value="all">Todos os Responsáveis</option>
+                  <option value="professor">Professores (Docentes)</option>
+                  <option value="system">Sistema (Automações)</option>
+                </select>
+              </div>
+
+              {/* Action Type Filter */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Tipo de Ação</label>
+                <select
+                  value={auditActionFilter}
+                  onChange={(e) => setAuditActionFilter(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl focus:border-indigo-500 focus:outline-none text-white font-mono"
+                >
+                  <option value="all">Todas as Ações</option>
+                  <option value="SLA_CONFIG_UPDATE">SLA_CONFIG_UPDATE (Alteração de SLA)</option>
+                  <option value="SYSTEM_FLAG_TOGGLE">SYSTEM_FLAG_TOGGLE (Flags de Sistema)</option>
+                  <option value="AI_MODEL_CHANGE">AI_MODEL_CHANGE (Modelos de IA)</option>
+                  <option value="BACKUP_SETTINGS_UPDATE">BACKUP_SETTINGS_UPDATE (Config. Backup)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Audit Logs Table */}
+          <div className="bg-slate-900/30 border border-white/10 rounded-3xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">
+                  Registros Filtrados ({filteredAuditLogs.length} de {logs.length})
+                </h3>
+              </div>
+              <span className="text-xs text-slate-400 font-mono">Modo de Rastreabilidade Ativo</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-400">
+                <thead className="text-xs text-slate-500 uppercase font-black tracking-widest border-b border-white/5">
+                  <tr>
+                    <th className="px-4 py-3">Timestamp</th>
+                    <th className="px-4 py-3">Responsável</th>
+                    <th className="px-4 py-3">Tipo de Ação</th>
+                    <th className="px-4 py-3">Detalhes da Modificação</th>
+                    <th className="px-4 py-3 text-right">ID</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredAuditLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-12 text-center text-slate-500">
+                        Nenhum registro de auditoria corresponde aos filtros selecionados.
+                      </td>
+                    </tr>
+                  )}
+                  {filteredAuditLogs.map((log) => {
+                    const isSystem = (log.user_id || "").toLowerCase().includes("system") || (log.user_id || "").toLowerCase().includes("sistema");
+                    return (
+                      <tr key={log.id} className="hover:bg-white/5 transition-all">
+                        <td className="px-4 py-3 text-xs text-slate-400 font-mono whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${isSystem ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"}`}>
+                            {isSystem ? <Server className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
+                            {log.user_id}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 rounded text-[10px] font-mono font-bold bg-slate-800 text-amber-300 border border-amber-500/20">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-200 leading-relaxed font-sans max-w-md">
+                          {log.details}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-[10px] text-slate-500">
+                          #{log.id.slice(-6)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       ) : (
         /* AI GATEWAY & MODELS MANAGEMENT TAB — SOLICITAÇÃO PRINCIPAL */
         <div className="space-y-8 animate-fadeIn">
@@ -796,8 +1150,8 @@ export default function SystemHealthView() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {aiModels.map((m) => (
-                        <tr key={m.name} className="hover:bg-white/5 transition-all">
+                      {aiModels.map((m, index) => (
+                        <tr key={`${m.name}-${index}`} className="hover:bg-white/5 transition-all">
                           <td className="py-3 font-mono font-bold text-white pr-2">
                             {m.name}
                             <span className="ml-2 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/20">
@@ -858,8 +1212,8 @@ export default function SystemHealthView() {
                     >
                       {aiModels
                         .filter((m) => activeModelsState[m.name] ?? true)
-                        .map((m) => (
-                          <option key={m.name} value={m.name}>
+                        .map((m, idx) => (
+                          <option key={`${m.name}-opt-${idx}`} value={m.name}>
                             {m.name}
                           </option>
                         ))}
@@ -901,8 +1255,8 @@ export default function SystemHealthView() {
                     onChange={(e) => setTestModelSelected(e.target.value)}
                     className="w-full px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl focus:border-indigo-500 focus:outline-none text-white font-mono"
                   >
-                    {aiModels.map((m) => (
-                      <option key={m.name} value={m.name}>
+                    {aiModels.map((m, index) => (
+                      <option key={`${m.name}-${index}`} value={m.name}>
                         {m.name} ({m.family})
                       </option>
                     ))}

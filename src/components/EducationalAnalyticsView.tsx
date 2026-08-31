@@ -26,6 +26,8 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import { PredictiveRiskDashboard } from "./PredictiveRiskDashboard";
+import { SlaBreachHeatmapWidget } from "./SlaBreachHeatmapWidget";
+import { AiPredictiveRetentionWidget } from "./AiPredictiveRetentionWidget";
 import {
   LineChart,
   Line,
@@ -355,7 +357,7 @@ export default function EducationalAnalyticsView() {
           color="text-emerald-400"
           bgColor="bg-emerald-400/10"
           suffix="/100"
-          tooltip="Média aritmética ponderada de todas as notas finais atribuídas aos códigos avaliados no sistema (escala de 0 a 100)."
+          tooltip="A média geral é a soma das notas ponderadas das submissões dos últimos 30 dias, dividida pelo total de entregas no período (escala de 0 a 100)."
         />
         <KPICard
           title="Taxa de Evolução"
@@ -363,7 +365,7 @@ export default function EducationalAnalyticsView() {
           icon={TrendingUp}
           color="text-purple-400"
           bgColor="bg-purple-400/10"
-          tooltip="Percentual de progresso médio comparando o desempenho acumulado entre a primeira metade do semestre e o período atual."
+          tooltip="Calculada comparando o desvio percentual entre a média da primeira quinzena do semestre e a quinzena atual."
         />
         <KPICard
           title="Alunos em Atenção"
@@ -447,20 +449,63 @@ export default function EducationalAnalyticsView() {
                     <span className="text-[10px] font-mono uppercase text-emerald-400 font-bold tracking-wider">Discente A</span>
                     <h4 className="text-lg font-bold text-white mt-0.5">{student1}</h4>
                   </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-black text-emerald-400">{Number(profile1.average_score || 0).toFixed(0)}%</span>
-                    <p className="text-[10px] text-slate-500 uppercase">Média Geral</p>
+                  <div className="text-right flex items-center gap-2">
+                    <div>
+                      <span className="text-2xl font-black text-emerald-400">{Number(profile1.average_score || 0).toFixed(0)}%</span>
+                      <p className="text-[10px] text-slate-500 uppercase">Média Geral</p>
+                    </div>
+                    <div className="group/tooltip relative">
+                      <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                        ?
+                      </div>
+                      <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-64 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                        <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Média do Aluno:
+                        </strong>
+                        Média ponderada das notas obtidas nas submissões enviadas pelo discente em relação ao valor total das atividades.
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
-                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
-                    <span className="text-[10px] text-slate-400 uppercase block">Atividades Concluídas</span>
-                    <span className="text-sm font-bold text-white">{profile1.completed_activities || 0} / {profile1.total_activities || 0}</span>
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40 relative">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase block">Atividades Concluídas</span>
+                        <span className="text-sm font-bold text-white">{profile1.completed_activities || 0} / {profile1.total_activities || 0}</span>
+                      </div>
+                      <div className="group/tooltip relative">
+                        <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                          ?
+                        </div>
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-60 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                          <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Conclusão:
+                          </strong>
+                          Número de entregas validadas com sucesso em relação ao total de atividades propostas no plano de ensino.
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
-                    <span className="text-[10px] text-slate-400 uppercase block">Taxa de Evolução</span>
-                    <span className="text-sm font-bold text-emerald-400">+{profile1.evolution_rate || 12}%</span>
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40 relative">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase block">Taxa de Evolução</span>
+                        <span className="text-sm font-bold text-emerald-400">+{profile1.evolution_rate || 12}%</span>
+                      </div>
+                      <div className="group/tooltip relative">
+                        <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                          ?
+                        </div>
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-60 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                          <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Evolução:
+                          </strong>
+                          Variação percentual entre a nota das primeiras atividades do semestre e as submissões mais recentes.
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -495,20 +540,63 @@ export default function EducationalAnalyticsView() {
                     <span className="text-[10px] font-mono uppercase text-indigo-400 font-bold tracking-wider">Discente B</span>
                     <h4 className="text-lg font-bold text-white mt-0.5">{student2}</h4>
                   </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-black text-indigo-400">{Number(profile2.average_score || 0).toFixed(0)}%</span>
-                    <p className="text-[10px] text-slate-500 uppercase">Média Geral</p>
+                  <div className="text-right flex items-center gap-2">
+                    <div>
+                      <span className="text-2xl font-black text-indigo-400">{Number(profile2.average_score || 0).toFixed(0)}%</span>
+                      <p className="text-[10px] text-slate-500 uppercase">Média Geral</p>
+                    </div>
+                    <div className="group/tooltip relative">
+                      <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                        ?
+                      </div>
+                      <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-64 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                        <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Média do Aluno:
+                        </strong>
+                        Média ponderada das notas obtidas nas submissões enviadas pelo discente em relação ao valor total das atividades.
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
-                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
-                    <span className="text-[10px] text-slate-400 uppercase block">Atividades Concluídas</span>
-                    <span className="text-sm font-bold text-white">{profile2.completed_activities || 0} / {profile2.total_activities || 0}</span>
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40 relative">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase block">Atividades Concluídas</span>
+                        <span className="text-sm font-bold text-white">{profile2.completed_activities || 0} / {profile2.total_activities || 0}</span>
+                      </div>
+                      <div className="group/tooltip relative">
+                        <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                          ?
+                        </div>
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-60 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                          <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Conclusão:
+                          </strong>
+                          Número de entregas validadas com sucesso em relação ao total de atividades propostas no plano de ensino.
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40">
-                    <span className="text-[10px] text-slate-400 uppercase block">Taxa de Evolução</span>
-                    <span className="text-sm font-bold text-indigo-400">+{profile2.evolution_rate || 10}%</span>
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/40 relative">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase block">Taxa de Evolução</span>
+                        <span className="text-sm font-bold text-indigo-400">+{profile2.evolution_rate || 10}%</span>
+                      </div>
+                      <div className="group/tooltip relative">
+                        <div className="w-4 h-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[9px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                          ?
+                        </div>
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block w-60 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                          <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Evolução:
+                          </strong>
+                          Variação percentual entre a nota das primeiras atividades do semestre e as submissões mais recentes.
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1008,9 +1096,22 @@ export default function EducationalAnalyticsView() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-bold text-white uppercase tracking-wider text-slate-300">
-                  Distribuição de Notas (Aprovados, Recuperação, Reprovados)
-                </h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider text-slate-300">
+                    Distribuição de Notas (Aprovados, Recuperação, Reprovados)
+                  </h4>
+                  <div className="group/tooltip relative">
+                    <div className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                      ?
+                    </div>
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover/tooltip:block w-72 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                      <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Como o cálculo é feito:
+                      </strong>
+                      Calculada categorizando os discentes da turma selecionada com base na média final: Aprovados (≥70), Recuperação (50 a 69) e Reprovados (&lt;50).
+                    </div>
+                  </div>
+                </div>
                 <select
                   value={selectedDistClass}
                   onChange={(e) => setSelectedDistClass(e.target.value)}
@@ -1061,10 +1162,81 @@ export default function EducationalAnalyticsView() {
               </div>
             </div>
 
+            {/* New Trimester Progression Chart */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
-              <h4 className="text-sm font-bold text-white mb-6 uppercase tracking-wider text-slate-500">
-                Evolução Média Mensal
-              </h4>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider text-slate-300">
+                    Evolução do Desempenho por Trimestre Letivo
+                  </h4>
+                  <div className="group/tooltip relative">
+                    <div className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                      ?
+                    </div>
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover/tooltip:block w-80 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                      <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Origem e Cálculo dos Trimestres:
+                      </strong>
+                      Média consolidada das notas finais e taxa de aprovação agrupadas por ciclos letivos (1º Tri: Jan-Abr, 2º Tri: Mai-Ago, 3º Tri: Set-Dez). Facilita a visualização da progressão de aprendizado ao longo do ano letivo.
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span> Média (0-100)</span>
+                  <span className="flex items-center gap-1 ml-3"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Aprovação (%)</span>
+                </div>
+              </div>
+
+              <div className="h-[240px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={[
+                      { trimestre: "1º Trimestre (Jan-Abr)", media: 68.5, aprovacao: 72 },
+                      { trimestre: "2º Trimestre (Mai-Ago)", media: 76.2, aprovacao: 81 },
+                      { trimestre: "3º Trimestre (Set-Dez - Atual)", media: 83.4, aprovacao: 88 },
+                    ]}
+                    margin={{ top: 10, right: 30, left: -10, bottom: 10 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="trimestre" fontSize={11} stroke="#475569" />
+                    <YAxis fontSize={11} stroke="#475569" domain={[0, 100]} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#020617",
+                        border: "1px solid #1e293b",
+                        borderRadius: "12px",
+                        color: "white",
+                        fontSize: "11px",
+                      }}
+                      formatter={(value: any, name: any) => [
+                        name === "media" ? `${value} pts (Média)` : `${value}% (Aprovação)`,
+                        name === "media" ? "Média de Desempenho" : "Taxa de Aprovação"
+                      ]}
+                    />
+                    <Bar dataKey="media" fill="#6366f1" radius={[8, 8, 0, 0]} name="media" />
+                    <Bar dataKey="aprovacao" fill="#10b981" radius={[8, 8, 0, 0]} name="aprovacao" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
+              <div className="flex items-center gap-2 mb-6">
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider text-slate-500">
+                  Evolução Média Mensal
+                </h4>
+                <div className="group/tooltip relative">
+                  <div className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[10px] font-bold cursor-help hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+                    ?
+                  </div>
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover/tooltip:block w-72 p-3 bg-slate-950 border border-slate-800 rounded-2xl text-[11px] text-slate-300 shadow-2xl z-20 leading-relaxed font-normal normal-case">
+                    <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Como o cálculo é feito:
+                    </strong>
+                    Média aritmética das notas obtidas nas submissões consolidadas de todos os estudantes no último dia útil de cada mês.
+                  </div>
+                </div>
+              </div>
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
@@ -1207,6 +1379,14 @@ export default function EducationalAnalyticsView() {
 
         <div className="mt-8">
           <PredictiveRiskDashboard />
+        </div>
+
+        <div className="mt-8">
+          <AiPredictiveRetentionWidget />
+        </div>
+
+        <div className="mt-8">
+          <SlaBreachHeatmapWidget />
         </div>
       </div>
     </div>

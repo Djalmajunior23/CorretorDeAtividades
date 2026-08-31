@@ -23,6 +23,7 @@ import SmartClassDiaryView from "./components/SmartClassDiaryView";
 import CompetenciesManagerView from "./components/CompetenciesManagerView";
 import DashboardView from "./components/DashboardView";
 import PlanejamentoView from "./components/PlanejamentoView";
+import { LessonLoggerView } from "./components/LessonLoggerView";
 import TurmasView from "./components/TurmasView";
 import { ClassManagerView } from "./components/ClassManagerView";
 import { StudentsManagerView } from "./components/StudentsManagerView";
@@ -41,9 +42,16 @@ import ReportsView from "./components/ReportsView";
 import HelpCenterView from "./components/HelpCenterView";
 import SystemHealthView from "./components/SystemHealthView";
 import MultiAgentReviewView from "./components/MultiAgentReviewView";
+import AIPedagogicalExecutiveDashboard from "./components/AIPedagogicalExecutiveDashboard";
 import PredictiveAnalyticsView from "./components/PredictiveAnalyticsView";
+import AIPredictiveInsightsView from "./components/AIPredictiveInsightsView";
+import PredictivePerformanceView from "./components/PredictivePerformanceView";
+import AiVisionaryTeacherView from "./components/AiVisionaryTeacherView";
+import AiVisionModelAssessmentView from "./components/AiVisionModelAssessmentView";
+import AiCurriculumArchitectView from "./components/AiCurriculumArchitectView";
 import CollaborativeSandboxView from "./components/CollaborativeSandboxView";
 import LmsIntegrationView from "./components/LmsIntegrationView";
+import AdvancedAiHubView from "./components/AdvancedAiHubView";
 import { exportUrgentAttentionInterventionPDF } from "./utils/pdfExport";
 import { 
   Play, 
@@ -67,6 +75,7 @@ import {
   Download,
   Briefcase,
   Bell,
+  Mail,
   Eye,
   EyeOff,
   Sun,
@@ -96,6 +105,7 @@ import { LiveCodeReviewModal } from "./components/LiveCodeReviewModal";
 import { AiPlaygroundModal } from "./components/AiPlaygroundModal";
 import { ConsolidatedPdfReportModal } from "./components/ConsolidatedPdfReportModal";
 import { StudentPortfolioExportModal } from "./components/StudentPortfolioExportModal";
+import { AdvancedVisionAssessmentModal } from "./components/AdvancedVisionAssessmentModal";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -262,6 +272,10 @@ export default function App() {
   const [showAiPlaygroundModal, setShowAiPlaygroundModal] = useState(false);
   const [showConsolidatedPdfModal, setShowConsolidatedPdfModal] = useState(false);
   const [showStudentPortfolioModal, setShowStudentPortfolioModal] = useState(false);
+  const [showAdvancedVisionModal, setShowAdvancedVisionModal] = useState(false);
+  const [refactoringAi, setRefactoringAi] = useState(false);
+  const [showRefactorModal, setShowRefactorModal] = useState(false);
+  const [suggestedRefactoredCode, setSuggestedRefactoredCode] = useState("");
   const [competencyFilter, setCompetencyFilter] = useState<"all" | "configured" | "pending">("all");
   const [newTagName, setNewTagName] = useState("");
   const [newTagSla, setNewTagSla] = useState(30);
@@ -328,7 +342,16 @@ export default function App() {
   const [dbConnected, setDbConnected] = useState<boolean>(false);
 
   // Teacher portal state variables
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('codecheck-cache-questions');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>("");
   const [healthData, setHealthData] = useState<any>(null);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
@@ -358,64 +381,81 @@ export default function App() {
   });
 
   // CodeCheck AI System Evolutionary State Hooks
-  const [featureFlags, setFeatureFlags] = useState({
-    ENABLE_RUBRIC_CORRECTION: true,
-    ENABLE_AI_FEEDBACK: true,
-    ENABLE_CLASS_ERROR_DASHBOARD: true,
-    ENABLE_STUDENT_EVOLUTION: true,
-    ENABLE_ACTIVITY_GENERATOR: true,
-    ENABLE_AI_TEST_CASES: true,
-    ENABLE_ACTIVITY_BANK: true,
-    ENABLE_SANDBOX_EXECUTOR: true,
-    ENABLE_MULTILANGUAGE_GRADING: true,
-    ENABLE_EXECUTION_AUDIT_LOGS: true,
-    ENABLE_QUESTION_BANK: true,
-    ENABLE_COMPETENCY_TAGGING: true,
-    ENABLE_LEARNING_PATHS: true,
-    ENABLE_AI_QUESTION_SUGGESTIONS: true,
-    ENABLE_TEACHER_REPORTS: true,
-    ENABLE_AI_PEDAGOGICAL_OPINION: true,
-    ENABLE_INTERVENTION_PLAN: true,
-    ENABLE_COORDINATOR_DASHBOARD: true,
-    ENABLE_CLASS_ANALYTICS: true,
-    ENABLE_STUDENT_ANALYTICS: true,
-    ENABLE_PDF_EXPORT: true,
-    ENABLE_TEACHER_AI_ASSISTANT: true,
-    ENABLE_AI_LESSON_PLANNER: true,
-    ENABLE_AI_ACTIVITY_BUILDER: true,
-    ENABLE_AI_RECOVERY_PLAN: true,
-    ENABLE_AI_RUBRIC_BUILDER: true,
-    ENABLE_AI_SIMULATED_EXAMS: true,
-    ENABLE_AI_CLASS_DIAGNOSIS: true,
-    ENABLE_AI_STUDENT_RECOMMENDATIONS: true,
-    ENABLE_PEDAGOGICAL_AUTOMATION: true,
-    ENABLE_STUDENT_NOTIFICATIONS: false, // Disabled for teacher productivity focus
-    ENABLE_RECOVERY_AUTOMATION: true,
-    ENABLE_DEADLINE_REMINDERS: true,
-    ENABLE_EMAIL_COMMUNICATION: true,
-    ENABLE_IN_APP_ALERTS: true,
-    ENABLE_TEACHER_ACTION_CENTER: true,
-    ENABLE_TEACHER_COMMAND_CENTER: true,
-    ENABLE_BULK_OPERATIONS: true,
-    ENABLE_TEACHER_TEMPLATES: true,
-    ENABLE_QUICK_FEEDBACK: true,
-    ENABLE_CLASS_COMPARISON: true,
-    ENABLE_WEEKLY_PLANNER: true,
-    ENABLE_RECOVERY_WORKBENCH: true,
-    ENABLE_COORDINATION_REPORTS: true,
-    ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS: true,
-    // FASE 2: Controlled teacher-centric complexity isolation
-    ENABLE_STUDENT_PORTAL: false,
-    ENABLE_STUDENT_DASHBOARD: false,
-    ENABLE_STUDENT_MISSIONS: false,
-    ENABLE_STUDENT_GAMIFICATION: false,
-    ENABLE_STUDENT_RANKING: false,
-    ENABLE_STUDENT_BADGES: false,
-    ENABLE_STUDENT_SOCIAL_FEATURES: false,
-    ENABLE_STUDENT_ACHIEVEMENTS: false
+  const [featureFlags, setFeatureFlags] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('codecheck-cache-feature-flags');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+    return {
+      ENABLE_RUBRIC_CORRECTION: true,
+      ENABLE_AI_FEEDBACK: true,
+      ENABLE_CLASS_ERROR_DASHBOARD: true,
+      ENABLE_STUDENT_EVOLUTION: true,
+      ENABLE_ACTIVITY_GENERATOR: true,
+      ENABLE_AI_TEST_CASES: true,
+      ENABLE_ACTIVITY_BANK: true,
+      ENABLE_SANDBOX_EXECUTOR: true,
+      ENABLE_MULTILANGUAGE_GRADING: true,
+      ENABLE_EXECUTION_AUDIT_LOGS: true,
+      ENABLE_QUESTION_BANK: true,
+      ENABLE_COMPETENCY_TAGGING: true,
+      ENABLE_LEARNING_PATHS: true,
+      ENABLE_AI_QUESTION_SUGGESTIONS: true,
+      ENABLE_TEACHER_REPORTS: true,
+      ENABLE_AI_PEDAGOGICAL_OPINION: true,
+      ENABLE_INTERVENTION_PLAN: true,
+      ENABLE_COORDINATOR_DASHBOARD: true,
+      ENABLE_CLASS_ANALYTICS: true,
+      ENABLE_STUDENT_ANALYTICS: true,
+      ENABLE_PDF_EXPORT: true,
+      ENABLE_TEACHER_AI_ASSISTANT: true,
+      ENABLE_AI_LESSON_PLANNER: true,
+      ENABLE_AI_ACTIVITY_BUILDER: true,
+      ENABLE_AI_RECOVERY_PLAN: true,
+      ENABLE_AI_RUBRIC_BUILDER: true,
+      ENABLE_AI_SIMULATED_EXAMS: true,
+      ENABLE_AI_CLASS_DIAGNOSIS: true,
+      ENABLE_AI_STUDENT_RECOMMENDATIONS: true,
+      ENABLE_PEDAGOGICAL_AUTOMATION: true,
+      ENABLE_STUDENT_NOTIFICATIONS: false, // Disabled for teacher productivity focus
+      ENABLE_RECOVERY_AUTOMATION: true,
+      ENABLE_DEADLINE_REMINDERS: true,
+      ENABLE_EMAIL_COMMUNICATION: true,
+      ENABLE_IN_APP_ALERTS: true,
+      ENABLE_TEACHER_ACTION_CENTER: true,
+      ENABLE_TEACHER_COMMAND_CENTER: true,
+      ENABLE_BULK_OPERATIONS: true,
+      ENABLE_TEACHER_TEMPLATES: true,
+      ENABLE_QUICK_FEEDBACK: true,
+      ENABLE_CLASS_COMPARISON: true,
+      ENABLE_WEEKLY_PLANNER: true,
+      ENABLE_RECOVERY_WORKBENCH: true,
+      ENABLE_COORDINATION_REPORTS: true,
+      ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS: true,
+      // FASE 2: Controlled teacher-centric complexity isolation
+      ENABLE_STUDENT_PORTAL: false,
+      ENABLE_STUDENT_DASHBOARD: false,
+      ENABLE_STUDENT_MISSIONS: false,
+      ENABLE_STUDENT_GAMIFICATION: false,
+      ENABLE_STUDENT_RANKING: false,
+      ENABLE_STUDENT_BADGES: false,
+      ENABLE_STUDENT_SOCIAL_FEATURES: false,
+      ENABLE_STUDENT_ACHIEVEMENTS: false
+    };
   });
 
   const [lintSettings, setLintSettings] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('codecheck-cache-lint-settings');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+
     const saved = localStorage.getItem("lintSettings");
     return saved ? JSON.parse(saved) : {
       requireComments: true,
@@ -472,6 +512,17 @@ export default function App() {
   });
   const [savingBackup, setSavingBackup] = useState(false);
 
+  const [pedagogicalSummarySettings, setPedagogicalSummarySettings] = useState(() => {
+    const saved = localStorage.getItem("pedagogicalSummarySettings");
+    return saved ? JSON.parse(saved) : {
+      enabled: true,
+      days: ["1", "2", "3", "4", "5"],
+      sendTime: "07:00",
+      emailRecipient: "professor.docente@senai.br"
+    };
+  });
+  const [savingPedagogicalSettings, setSavingPedagogicalSettings] = useState(false);
+
   const handleSaveBackupSettings = () => {
     setSavingBackup(true);
     setTimeout(() => {
@@ -481,7 +532,265 @@ export default function App() {
     }, 800);
   };
 
+  const handleSavePedagogicalSummarySettings = () => {
+    setSavingPedagogicalSettings(true);
+    setTimeout(() => {
+      localStorage.setItem("pedagogicalSummarySettings", JSON.stringify(pedagogicalSummarySettings));
+      setSavingPedagogicalSettings(false);
+      toast.success("Configurações do Resumo Executivo (AI_PEDAGOGICAL_MODEL) salvas com sucesso!");
+    }, 700);
+  };
+
   const [analyticsSubTab, setAnalyticsSubTab] = useState<"general" | "errors" | "student" | "competencies" | "comparison" | "pedagogical">("general");
+  const [errorCategoryFilter, setErrorCategoryFilter] = useState("all");
+  const [errorCompetencyFilter, setErrorCompetencyFilter] = useState("all");
+
+  const handleExportInterventionPlan = (student: any) => {
+    const reportHtml = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Plano de Intervenção Pedagógica - ${student.student_name}</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; margin: 30px; line-height: 1.6; background: #ffffff; }
+          header { border-bottom: 3px solid #dc2626; padding-bottom: 20px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: flex-start; }
+          h1 { color: #991b1b; font-size: 20px; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+          .subtitle { font-size: 13px; color: #64748b; font-weight: 500; }
+          .meta { font-size: 12px; color: #334155; text-align: right; }
+          .summary-box { background: #fef2f2; border: 1px solid #fecaca; padding: 15px 20px; border-radius: 8px; margin-bottom: 25px; }
+          .grid-stats { display: flex; gap: 15px; margin-bottom: 25px; }
+          .stat-card { flex: 1; background: #fff5f5; border: 1px solid #f87171; padding: 12px 15px; border-radius: 6px; text-align: center; }
+          .stat-card h4 { margin: 0; font-size: 18px; color: #991b1b; }
+          .stat-card p { margin: 5px 0 0 0; font-size: 11px; color: #7f1d1d; text-transform: uppercase; font-weight: bold; }
+          h3 { color: #1e3a8a; font-size: 15px; margin-top: 25px; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+          th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; }
+          th { background: #1e3a8a; color: white; font-weight: 600; }
+          tr:nth-child(even) { background: #f8fafc; }
+          .tag { display: inline-block; padding: 2px 6px; font-size: 10px; border-radius: 4px; font-weight: bold; }
+          .tag-high { background: #fee2e2; color: #991b1b; }
+          ul { margin: 10px 0; padding-left: 20px; }
+          li { margin-bottom: 6px; font-size: 12px; }
+          footer { margin-top: 40px; font-size: 10px; color: #64748b; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+        </style>
+      </head>
+      <body>
+        <header>
+          <div>
+            <h1>SENAI • CodeCheck AI • Intervenção Pedagógica</h1>
+            <div class="subtitle">Plano Individualizado de Recuperação e Suporte Técnico</div>
+          </div>
+          <div class="meta">
+            <strong>Estudante:</strong> ${student.student_name}<br>
+            <strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">Atenção Urgente / Crítica</span><br>
+            <strong>Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}
+          </div>
+        </header>
+
+        <div class="summary-box">
+          <strong style="color: #991b1b; font-size: 13px;">Diagnóstico Acadêmico Prioritário:</strong>
+          <p style="margin: 8px 0 0 0; font-size: 12px; color: #7f1d1d;">
+            O discente ${student.student_name} apresenta média atual de <strong>${parseInt(student.average_grade)}%</strong> com ${student.submissions_count} submissões registradas. O mapeamento automatizado de erros indica incidência recorrente de falhas sintáticas e lacunas conceituais em estruturas de controle e escopo.
+          </p>
+        </div>
+
+        <div class="grid-stats">
+          <div class="stat-card">
+            <h4>${student.submissions_count}</h4>
+            <p>Total de Submissões</p>
+          </div>
+          <div class="stat-card">
+            <h4>${parseInt(student.average_grade)}%</h4>
+            <p>Média Geral de Notas</p>
+          </div>
+          <div class="stat-card">
+            <h4><span class="tag tag-high">Prioridade Alta</span></h4>
+            <p>Classificação de Risco</p>
+          </div>
+        </div>
+
+        <h3>1. Erros Frequentes Identificados no Histórico</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Tipo de Falha / Sintoma Recorrente</th>
+              <th>Categoria</th>
+              <th>Impacto no Desempenho</th>
+              <th>Orientação de Correção</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Missing Semicolon & Unclosed Brackets</strong></td>
+              <td>Sintaxe Básica</td>
+              <td>Alto (Erro de Compilação)</td>
+              <td>Incentivar uso de formatação automática (Prettier) antes do commit.</td>
+            </tr>
+            <tr>
+              <td><strong>Type Mismatch em Atribuições</strong></td>
+              <td>Tipagem / Lógica</td>
+              <td>Alto (Falha em Testes)</td>
+              <td>Revisar tipagem estática e conversão explícita de variáveis.</td>
+            </tr>
+            <tr>
+              <td><strong>Loop Infinito em Condicionais de Repetição</strong></td>
+              <td>Lógica de Programação</td>
+              <td>Crítico (Timeout)</td>
+              <td>Exercitar testes de mesa e depuração passo a passo com monitoria.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>2. Recomendações e Metodologia de Intervenção</h3>
+        <ul>
+          <li><strong>Sessões de Monitoria Individualizada:</strong> Encaminhar o estudante para 3 encontros semanais de reforço prático com foco em depuração de erros de sintaxe.</li>
+          <li><strong>Ajuste de Prazos (SLA Personalizado):</strong> Conceder extensão de 48h nas próximas entregas práticas para aliviar a sobrecarga de ritmo.</li>
+          <li><strong>Trilha de Exercícios Guiados:</strong> Atribuir trilha complementar com foco em estruturação de blocos e lógica condicional básica.</li>
+        </ul>
+
+        <h3>3. Cronograma de Acompanhamento Docente</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Etapa</th>
+              <th>Meta / Ação</th>
+              <th>Prazo Limite</th>
+              <th>Responsável</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1. Alinhamento Inicial</td>
+              <td>Reunião breve de acolhimento e diagnóstico de dificuldades</td>
+              <td>Em até 3 dias</td>
+              <td>Professor Responsável</td>
+            </tr>
+            <tr>
+              <td>2. Monitoria de Sintaxe</td>
+              <td>Conclusão dos módulos de depuração guiada</td>
+              <td>Em até 10 dias</td>
+              <td>Monitor de Laboratório</td>
+            </tr>
+            <tr>
+              <td>3. Reavaliação de Desempenho</td>
+              <td>Verificação de evolução na média de acurácia</td>
+              <td>Fim do Ciclo</td>
+              <td>Coordenação Pedagógica</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <footer>
+          Documento gerado automaticamente pelo Sistema CodeCheck AI • SENAI • Válido para o Plano de Intervenção Pedagógica Individual.
+        </footer>
+      </body>
+      </html>
+    `;
+    const blob = new Blob([reportHtml], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      win.onload = () => win.print();
+    }
+    toast.success(`Plano de intervenção pedagógica de ${student.student_name} gerado para PDF!`);
+  };
+
+  const handleExportCorrectiveLessonPlan = () => {
+    const reportHtml = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Plano de Aula Corretivo - Erros da Turma</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111; margin: 30px; line-height: 1.5; }
+          h1 { color: #1e3a8a; font-size: 20px; }
+          .box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+          th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+          th { background: #1e3a8a; color: white; }
+        </style>
+      </head>
+      <body>
+        <h1>SENAI • CodeCheck AI • Plano de Aula Corretivo</h1>
+        <p><strong>Filtro de Categoria:</strong> ${errorCategoryFilter.toUpperCase()}</p>
+        <p><strong>Filtro de Competência:</strong> ${errorCompetencyFilter.toUpperCase()}</p>
+        <div class="box">
+          <h3>Diretrizes Metodológicas Baseadas na Telemetria:</h3>
+          <p>Este plano foi gerado automaticamente para embasar a revisão de tópicos com alta incidência de erros sintáticos, de lógica e de indentação na turma.</p>
+        </div>
+        <h3>Erros e Alertas Registrados</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Ocorrência / Sintoma</th>
+              <th>Categoria</th>
+              <th>Volume</th>
+              <th>Recomendação Didática</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(classErrorData?.top_compilation_errors || []).map((e: any) => `
+              <tr>
+                <td>${e.error_message || "Erro de Sintaxe / Compilação"}</td>
+                <td>${errorCategoryFilter.toUpperCase()}</td>
+                <td>${e.count}</td>
+                <td>Revisar conceito em aula prática de laboratório com exemplos guiados.</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <footer style="margin-top: 40px; font-size: 10px; color: #64748b; text-align: center;">
+          Gerado pelo CodeCheck AI • SENAI • Uso Exclusivo Docente
+        </footer>
+      </body>
+      </html>
+    `;
+    const blob = new Blob([reportHtml], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      win.onload = () => win.print();
+    }
+    toast.success("Plano de aula corretivo exportado com sucesso!");
+  };
+
+  const handleExportFilteredLogsCsv = () => {
+    const logs = classErrorData?.syntaxLogs || [];
+    const filtered = logs.filter((log: any) => {
+      const matchCat = errorCategoryFilter === "all" || log.category === errorCategoryFilter;
+      const matchComp = errorCompetencyFilter === "all" || log.competency === errorCompetencyFilter;
+      return matchCat && matchComp;
+    });
+
+    if (filtered.length === 0) {
+      toast.warning("Nenhum log encontrado com os filtros selecionados.");
+      return;
+    }
+
+    const headers = ["ID", "Estudante", "Linguagem", "Categoria", "Competencia", "Mensagem de Erro", "Nota", "Data"];
+    const rows = filtered.map((l: any) => [
+      l.id,
+      `"${l.student_name}"`,
+      l.language,
+      l.category,
+      l.competency,
+      `"${l.error_message.replace(/"/g, '""')}"`,
+      l.score,
+      l.created_at
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e: any[]) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `logs_erros_turma_${errorCategoryFilter}_${errorCompetencyFilter}_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exportados ${filtered.length} logs filtrados para CSV com sucesso!`);
+  };
   const [savingSettings, setSavingSettings] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState("Vinícius Souza");
   const [studentSearch, setStudentSearch] = useState("");
@@ -586,29 +895,54 @@ export default function App() {
         }
 
         if (settings.checkCyclomaticComplexity) {
-          let complexity = 1;
-          lines.forEach((l, idx) => {
-            const trimmed = l.trim();
-            if (/\b(if|else\s+if|for|while|catch|case|default)\b/.test(trimmed)) complexity++;
-            if (trimmed.includes('?') && trimmed.includes(':')) complexity++;
+          const maxLimit = settings.maxComplexity || 10;
+          let currentFuncStart = 1;
+          let currentFuncName = "bloco principal";
+          let funcComplexity = 1;
+
+          const getLineComplexity = (trimmed) => {
+            let c = 0;
+            if (/\b(if|else\s+if|for|while|catch|case|default)\b/.test(trimmed)) c++;
+            if (trimmed.includes('?') && trimmed.includes(':')) c++;
             if (trimmed.includes('&&') || trimmed.includes('||') || trimmed.includes('??')) {
-              let count = 0;
               for (let i = 0; i < trimmed.length - 1; i++) {
                 const pair = trimmed[i] + trimmed[i+1];
-                if (pair === '&&' || pair === '||' || pair === '??') count++;
+                if (pair === '&&' || pair === '||' || pair === '??') c++;
               }
-              complexity += count;
             }
+            return c;
+          };
+
+          lines.forEach((l, idx) => {
+            const lineNum = idx + 1;
+            const trimmed = l.trim();
+
+            if (trimmed.includes('function ') || (trimmed.includes('const ') && trimmed.includes('=>')) || trimmed.startsWith('def ')) {
+              if (funcComplexity > maxLimit && currentFuncStart > 0) {
+                diagnostics.push({
+                  startLineNumber: currentFuncStart,
+                  startColumn: 1,
+                  endLineNumber: lineNum,
+                  endColumn: l.length + 1,
+                  message: '⚠️ Alerta Pedagógico (Complexidade Ciclomática): A função "' + currentFuncName + '" atingiu complexidade ' + funcComplexity + ' (limite pedagógico: ' + maxLimit + '). Considere refatorar em funções menores.',
+                  severity: 4
+                });
+              }
+              currentFuncStart = lineNum;
+              currentFuncName = trimmed.slice(0, 35);
+              funcComplexity = 1;
+            }
+
+            funcComplexity += getLineComplexity(trimmed);
           });
 
-          const maxLimit = settings.maxComplexity || 10;
-          if (complexity > maxLimit) {
+          if (funcComplexity > maxLimit) {
             diagnostics.push({
-              startLineNumber: 1,
+              startLineNumber: currentFuncStart,
               startColumn: 1,
-              endLineNumber: Math.min(lines.length, 10),
+              endLineNumber: lines.length,
               endColumn: 1,
-              message: 'Regra de Lint (Complexidade Ciclomática): Valor estimado (' + complexity + ') excede o limite pedagógico (' + maxLimit + '). Considere refatorar em funções menores.',
+              message: '⚠️ Alerta Pedagógico (Complexidade Ciclomática): Complexidade estimada (' + funcComplexity + ') excede o limite configurado (' + maxLimit + ').',
               severity: 4
             });
           }
@@ -687,6 +1021,34 @@ export default function App() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     toast.success("Relatório de erros exportado com sucesso (.txt)!");
+  };
+
+  const handleRefactorWithAi = async () => {
+    if (!code || !code.trim()) {
+      toast.error("O editor está vazio. Digite algum código antes de refatorar.");
+      return;
+    }
+    setRefactoringAi(true);
+    try {
+      const res = await fetch(apiUrl("/api/ai/refactor-code"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, lintSettings })
+      });
+      const data = await res.json();
+      if (data.success && data.refactoredCode) {
+        setSuggestedRefactoredCode(data.refactoredCode);
+        setShowRefactorModal(true);
+        toast.success("Refatoração gerada com IA com base nas diretrizes de legibilidade!");
+      } else {
+        toast.error(data.error || "Erro ao refatorar código.");
+      }
+    } catch (err: any) {
+      console.error("Refactor AI error:", err);
+      toast.error("Falha na comunicação com o servidor de IA.");
+    } finally {
+      setRefactoringAi(false);
+    }
   };
 
   useEffect(() => {
@@ -802,15 +1164,6 @@ export default function App() {
     }
     
     doc.save(`relatorio_comparativo_${classA}_vs_${classB}.pdf`);
-  };
-
-  const handleExportInterventionPlan = (student: any) => {
-    exportUrgentAttentionInterventionPDF(student, [
-      "Dificuldade persistente na estrutura de repetição e lógica booleana.",
-      "Erros recorrentes de tipagem e nulidade (NullPointerException / undefined access).",
-      "Alta complexidade ciclomática na resolução de algoritmos propostos.",
-      "Ausência de tratamento robusto de exceções em rotinas assíncronas."
-    ]);
   };
 
   const isInitialMount = useRef(true);
@@ -1136,10 +1489,7 @@ export default function App() {
     if ((currentTab === "analytics" && featureFlags.ENABLE_STUDENT_EVOLUTION) && selectedStudent) {
       setLoadingCorrectionVault(true);
       fetch(apiUrl(`/api/correction-vault/student/${encodeURIComponent(selectedStudent)}`))
-        .then(res => {
-          if (!res.ok) throw new Error("Não foi possível carregar o histórico de correções.");
-          return res.json();
-        })
+        .then(res => safeJsonResponse(res))
         .then(data => {
           const items = normalizeCorrectionVault(data);
           setCorrectionVaultItems(items);
@@ -2102,6 +2452,10 @@ export default function App() {
             <PlanejamentoView />
           )}
 
+          {currentTab === "aulas" && (
+            <LessonLoggerView />
+          )}
+
           {currentTab === "turmas" && (
             <ClassManagerView />
           )}
@@ -2158,12 +2512,36 @@ export default function App() {
              <PredictiveAnalyticsView />
            )}
 
+           {currentTab === "ai_executive_dashboard" && (
+             <AIPedagogicalExecutiveDashboard />
+           )}
+
+            {currentTab === "ai_predictive_insights" && (
+              <AIPredictiveInsightsView />
+           )}
+
+           {currentTab === "predictive_performance" && (
+             <PredictivePerformanceView />
+           )}
+
+           {currentTab === "ai_visionary_teacher" && (
+             <AiVisionaryTeacherView />
+           )}
+
+           {currentTab === "ai_vision_model" && (
+             <AiVisionModelAssessmentView />
+           )}
+
            {currentTab === "collab_sandbox" && (
              <CollaborativeSandboxView />
            )}
 
            {currentTab === "lms_integration" && (
              <LmsIntegrationView />
+           )}
+
+           {currentTab === "advanced_ai" && (
+             <AdvancedAiHubView />
            )}
 
           {currentTab === "avaliacoes" && (
@@ -2501,6 +2879,25 @@ export default function App() {
                           Pair Programming
                         </button>
 
+                        <button
+                          onClick={handleRefactorWithAi}
+                          disabled={refactoringAi}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold font-mono tracking-wide text-emerald-300 hover:text-white bg-[#070a1a] hover:bg-emerald-500/20 border border-emerald-500/30 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+                          title="Refatorar código usando IA com base nas diretrizes de lintSettings"
+                        >
+                          {refactoringAi ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                              Refatorando...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                              Refatorar com IA
+                            </>
+                          )}
+                        </button>
+
                         <div className="flex items-center gap-1 bg-[#070a1a] p-1 rounded-xl border border-[#1e295b]/30">
                           <button
                             onClick={() => setEditorInputMode("text")}
@@ -2521,6 +2918,13 @@ export default function App() {
                             }`}
                           >
                             📸 Corrigir por Imagem
+                          </button>
+                          <button
+                            onClick={() => setShowAdvancedVisionModal(true)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold font-mono tracking-wide transition-all flex items-center gap-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 cursor-pointer"
+                            title="Visão Computacional Avançada com AI_VISION_MODEL"
+                          >
+                            👁️ Visão AI (Provas)
                           </button>
                         </div>
                       </div>
@@ -3924,6 +4328,139 @@ export default function App() {
               {/* Class Error Dashboard subtab */}
               {analyticsSubTab === "errors" && featureFlags.ENABLE_CLASS_ERROR_DASHBOARD && (
                 <div className="flex flex-col gap-6 animate-fade-in text-slate-100">
+                  {/* Filter & Export Bar */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-mono text-slate-400 uppercase">Categoria de Erro</span>
+                        <select
+                          value={errorCategoryFilter}
+                          onChange={(e) => setErrorCategoryFilter(e.target.value)}
+                          className="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-xl px-3 py-2 outline-none font-mono"
+                        >
+                          <option value="all">Todas as Categorias</option>
+                          <option value="sintaxe">Sintaxe (Chaves / Pontuação)</option>
+                          <option value="logica">Lógica & Execução</option>
+                          <option value="indentation">Indentação & Formatação</option>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-mono text-slate-400 uppercase">Competência Pedagógica</span>
+                        <select
+                          value={errorCompetencyFilter}
+                          onChange={(e) => setErrorCompetencyFilter(e.target.value)}
+                          className="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-xl px-3 py-2 outline-none font-mono"
+                        >
+                          <option value="all">Todas as Competências</option>
+                          <option value="ponteiros">Ponteiros & Memória</option>
+                          <option value="estruturas">Estruturas Condicionais & Loops</option>
+                          <option value="modularidade">Modularidade & Funções</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 self-end sm:self-auto">
+                      <button
+                        onClick={handleExportFilteredLogsCsv}
+                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-mono text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        <Download className="w-4 h-4" />
+                        Exportar Filtro CSV
+                      </button>
+                      <button
+                        onClick={handleExportCorrectiveLessonPlan}
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Exportar Plano Corretivo (PDF)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Interactive Filtered Syntax Logs Table */}
+                  <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div>
+                        <h3 className="font-bold text-white text-sm uppercase tracking-wider font-mono flex items-center gap-2 text-indigo-400">
+                          <Layers className="w-4 h-4 text-indigo-400" />
+                          Logs de Sintaxe & Erros Filtrados
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Mostrando submissões correspondentes à Categoria: <span className="text-emerald-400 font-mono font-bold uppercase">{errorCategoryFilter}</span> e Competência: <span className="text-emerald-400 font-mono font-bold uppercase">{errorCompetencyFilter}</span>.
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-xs font-mono font-bold">
+                        {(classErrorData?.syntaxLogs || []).filter((l: any) => {
+                          const matchCat = errorCategoryFilter === "all" || l.category === errorCategoryFilter;
+                          const matchComp = errorCompetencyFilter === "all" || l.competency === errorCompetencyFilter;
+                          return matchCat && matchComp;
+                        }).length} registros encontrados
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[300px] scrollbar-thin">
+                      <table className="w-full text-left text-xs font-mono">
+                        <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] sticky top-0">
+                          <tr>
+                            <th className="p-3">Estudante</th>
+                            <th className="p-3">Linguagem</th>
+                            <th className="p-3">Categoria</th>
+                            <th className="p-3">Competência</th>
+                            <th className="p-3">Mensagem / Sintoma</th>
+                            <th className="p-3 text-right">Nota</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {(() => {
+                            const filteredLogs = (classErrorData?.syntaxLogs || []).filter((l: any) => {
+                              const matchCat = errorCategoryFilter === "all" || l.category === errorCategoryFilter;
+                              const matchComp = errorCompetencyFilter === "all" || l.competency === errorCompetencyFilter;
+                              return matchCat && matchComp;
+                            });
+
+                            if (filteredLogs.length === 0) {
+                              return (
+                                <tr>
+                                  <td colSpan={6} className="p-8 text-center text-slate-500 italic">
+                                    Nenhum log encontrado para os filtros selecionados.
+                                  </td>
+                                </tr>
+                              );
+                            }
+
+                            return filteredLogs.map((log: any, i: number) => (
+                              <tr key={i} className="hover:bg-slate-900/40 transition-colors">
+                                <td className="p-3 font-bold text-white">{log.student_name}</td>
+                                <td className="p-3 uppercase text-emerald-400">{log.language}</td>
+                                <td className="p-3">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                    log.category === 'sintaxe' ? 'bg-rose-500/10 text-rose-300 border border-rose-500/30' :
+                                    log.category === 'indentation' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30' :
+                                    'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+                                  }`}>
+                                    {log.category}
+                                  </span>
+                                </td>
+                                <td className="p-3">
+                                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
+                                    {log.competency}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-slate-300 max-w-xs truncate" title={log.error_message}>
+                                  {log.error_message}
+                                </td>
+                                <td className="p-3 text-right font-bold text-slate-200">
+                                  {log.score} pts
+                                </td>
+                              </tr>
+                            ));
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
                   {loadingClassErrors ? (
                     <div className="py-12 text-center animate-pulse">
                       <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mx-auto mb-3" />
@@ -5202,6 +5739,7 @@ export default function App() {
                               <option value="immediately">Imediatamente ao estourar</option>
                               <option value="hourly">A cada 1 hora</option>
                               <option value="daily">Diariamente (Resumo às 09:00)</option>
+                              <option value="weekly">Semanalmente (Segundas às 08:00)</option>
                               <option value="twice_daily">Duas vezes ao dia (Manhã e Noite)</option>
                             </select>
                           </div>
@@ -5219,6 +5757,34 @@ export default function App() {
                             </select>
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(apiUrl("/api/sla/trigger-automated-reminders"), {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  frequency: slaSettings.studentReminderFrequency || "daily",
+                                  method: slaSettings.studentReminderMethod || "both",
+                                  classId: slaSettings.selectedClass
+                                })
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                alert(data.message);
+                              } else {
+                                alert("Erro ao disparar lembretes: " + (data.error || "Erro desconhecido"));
+                              }
+                            } catch (err: any) {
+                              alert("Falha de conexão: " + err.message);
+                            }
+                          }}
+                          className="mt-2 py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          Testar & Disparar Lembretes Automáticos Agora
+                        </button>
                       </div>
 
                       {/* Webhook integration button */}
@@ -5581,6 +6147,99 @@ export default function App() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Card: Pedagogical Executive Summary & AI_PEDAGOGICAL_MODEL Settings */}
+                    <div className="rounded-2xl border border-indigo-500/35 bg-gradient-to-br from-indigo-950/20 via-[#0f172a] to-[#0f172a] p-6 flex flex-col gap-5 mb-6">
+                      <div className="border-b border-indigo-500/20 pb-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-indigo-400 font-mono uppercase tracking-wider flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-indigo-400" /> Resumo Executivo Diário & AI_PEDAGOGICAL_MODEL
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-1">Configure os dias da semana e o horário para o modelo processar e enviar o resumo executivo das turmas por e-mail.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={pedagogicalSummarySettings.enabled}
+                            onChange={(e) => setPedagogicalSummarySettings({ ...pedagogicalSummarySettings, enabled: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      <div className="flex flex-col gap-4">
+                        {/* Days of week selection */}
+                        <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2">
+                          <label className="text-xs font-bold text-slate-300">Dias da Semana para Processamento e Envio</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                            {[
+                              { id: "1", label: "Segunda" },
+                              { id: "2", label: "Terça" },
+                              { id: "3", label: "Quarta" },
+                              { id: "4", label: "Quinta" },
+                              { id: "5", label: "Sexta" },
+                              { id: "6", label: "Sábado" },
+                              { id: "0", label: "Domingo" },
+                            ].map((day) => {
+                              const isSelected = pedagogicalSummarySettings.days.includes(day.id);
+                              return (
+                                <button
+                                  key={day.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const newDays = isSelected
+                                      ? pedagogicalSummarySettings.days.filter((d: string) => d !== day.id)
+                                      : [...pedagogicalSummarySettings.days, day.id];
+                                    setPedagogicalSummarySettings({ ...pedagogicalSummarySettings, days: newDays });
+                                  }}
+                                  className={`py-2 px-2.5 rounded-lg border text-xs font-mono font-bold transition-all text-center ${isSelected ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-sm" : "bg-[#030712] border-slate-800 text-slate-500 hover:border-slate-700"}`}
+                                >
+                                  {day.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Send Time */}
+                          <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-slate-300">Horário de Envio (E-mail Docente)</label>
+                            <input 
+                              type="time"
+                              value={pedagogicalSummarySettings.sendTime}
+                              onChange={(e) => setPedagogicalSummarySettings({ ...pedagogicalSummarySettings, sendTime: e.target.value })}
+                              className="bg-[#030712] border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono w-full"
+                            />
+                          </div>
+
+                          {/* Recipient / Model info */}
+                          <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-slate-300">Modelo IA Ativo</label>
+                            <div className="bg-[#030712] border border-slate-800 rounded-lg px-3 py-2 text-xs text-indigo-400 font-mono flex items-center justify-between">
+                              <span>gemma3:4b / Gemini</span>
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handleSavePedagogicalSummarySettings}
+                          disabled={savingPedagogicalSettings}
+                          className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+                        >
+                          {savingPedagogicalSettings ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Salvando Configurações do Resumo Pedagógico...
+                            </>
+                          ) : (
+                            "Salvar Configurações do Resumo Executivo"
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="bg-[#0f172a] p-6 rounded-xl border border-[#1e295b]/40">
@@ -5931,6 +6590,69 @@ export default function App() {
 
           {showStudentPortfolioModal && (
             <StudentPortfolioExportModal submissions={submissions} onClose={() => setShowStudentPortfolioModal(false)} />
+          )}
+
+          {showAdvancedVisionModal && (
+            <AdvancedVisionAssessmentModal 
+              onClose={() => setShowAdvancedVisionModal(false)}
+              onApplyAnalysis={(res) => {
+                setCode(res.extractedText);
+                setStudentName(res.studentName);
+                setVisualOcrNotes(`Tipo detectado: ${res.exerciseType} | Prompt Otimizado: ${res.optimizedPrompt}`);
+                setEditorInputMode("text");
+                setOcrLoadedBanner(true);
+                setTimeout(() => setOcrLoadedBanner(false), 8000);
+              }}
+            />
+          )}
+
+          {showRefactorModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl p-6 shadow-2xl space-y-6 max-h-[90vh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Revisão de Refatoração por IA (Clean Code & Lint)</h3>
+                      <p className="text-xs text-slate-400">Sugestões geradas com base nas diretrizes de legibilidade definidas em lintSettings.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowRefactorModal(false)} className="text-slate-400 hover:text-white font-mono text-sm cursor-pointer">✕</button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden min-h-[300px]">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-mono font-bold text-slate-400">Código Original</span>
+                    <pre className="flex-1 bg-slate-950 p-4 rounded-2xl border border-slate-800/80 text-xs font-mono text-slate-300 overflow-auto whitespace-pre-wrap">{code}</pre>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-mono font-bold text-emerald-400">Código Refatorado (Sugerido)</span>
+                    <pre className="flex-1 bg-slate-950 p-4 rounded-2xl border border-emerald-500/30 text-xs font-mono text-emerald-200 overflow-auto whitespace-pre-wrap">{suggestedRefactoredCode}</pre>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                  <button
+                    onClick={() => setShowRefactorModal(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Descartar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCode(suggestedRefactoredCode);
+                      setShowRefactorModal(false);
+                      toast.success("Mudanças de refatoração aplicadas com sucesso no editor!");
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" /> Aplicar Alterações no Editor
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </main>

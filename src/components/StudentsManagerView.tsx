@@ -34,6 +34,49 @@ export function StudentsManagerView() {
   const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState<string>("");
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [sourceClassCopy, setSourceClassCopy] = useState("");
+  const [targetClassCopy, setTargetClassCopy] = useState("");
+
+  const handleExportTemplate = () => {
+    const csvContent = "nome,matricula,email,observacoes\nJoão da Silva,2026001,joao@example.com,Participação ativa\nMaria Souza,2026002,maria@example.com,Dificuldade em loops";
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "template_cadastro_alunos.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCopyClassStudents = async () => {
+    if (!sourceClassCopy || !targetClassCopy) {
+      return alert("Selecione a turma de origem e a turma de destino.");
+    }
+    if (sourceClassCopy === targetClassCopy) {
+      return alert("A turma de origem e destino devem ser diferentes.");
+    }
+    try {
+      const res = await fetch(apiUrl("/api/students/copy-class"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_class_id: sourceClassCopy, target_class_id: targetClassCopy })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Cópia concluída com sucesso!");
+        setShowCopyModal(false);
+        setSourceClassCopy("");
+        setTargetClassCopy("");
+        fetchData();
+      } else {
+        alert(`Erro ao copiar alunos: ${data.error || "Erro desconhecido"}`);
+      }
+    } catch (e: any) {
+      alert(`Erro de conexão: ${e.message}`);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -121,11 +164,17 @@ export function StudentsManagerView() {
             Cadastre alunos, importe listas via automação CSV e acompanhe o histórico.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowImport(true)} className="bg-slate-800 hover:bg-slate-700 text-white py-2 px-4 rounded-xl flex items-center gap-2 transition-all">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={handleExportTemplate} className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer" title="Baixar Planilha Modelo CSV">
+            <Download className="w-4 h-4" /> Template CSV
+          </button>
+          <button onClick={() => setShowCopyModal(true)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer" title="Copiar alunos para outra turma">
+            <Users className="w-4 h-4" /> Copiar para Turma
+          </button>
+          <button onClick={() => setShowImport(true)} className="bg-slate-800 hover:bg-slate-700 text-white py-2 px-4 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-xs font-medium">
             <Upload className="w-4 h-4" /> Importar CSV
           </button>
-          <button onClick={() => { setEditId(null); setShowModal(true); }} className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20">
+          <button onClick={() => { setEditId(null); setShowModal(true); }} className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer text-xs">
             <Plus className="w-4 h-4" /> Novo Aluno
           </button>
         </div>
@@ -316,6 +365,37 @@ export function StudentsManagerView() {
               >
                 Excluir
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCopyModal && (
+        <div className="fixed inset-0 z-50 bg-[#030712]/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] rounded-2xl w-full max-w-md border border-slate-800 shadow-2xl p-6 flex flex-col gap-4">
+            <h3 className="text-lg font-bold text-white font-display">Copiar Dados de Alunos para Outra Turma</h3>
+            <p className="text-xs text-slate-400">
+              Selecione a turma de origem (onde os alunos estão cadastrados) e a turma de destino para duplicar rapidamente o cadastro dos alunos.
+            </p>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs text-slate-400 font-medium mb-1 block">Turma de Origem</label>
+                <select value={sourceClassCopy} onChange={e => setSourceClassCopy(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+                  <option value="">Selecione a origem...</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 font-medium mb-1 block">Turma de Destino</label>
+                <select value={targetClassCopy} onChange={e => setTargetClassCopy(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+                  <option value="">Selecione o destino...</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">
+              <button type="button" onClick={() => setShowCopyModal(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer">Cancelar</button>
+              <button type="button" onClick={handleCopyClassStudents} className="px-5 py-2 text-sm font-bold bg-emerald-500 text-slate-900 rounded-lg hover:bg-emerald-600 cursor-pointer">Copiar Alunos</button>
             </div>
           </div>
         </div>

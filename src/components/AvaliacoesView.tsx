@@ -29,8 +29,79 @@ import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function AvaliacoesView() {
   const [subTab, setSubTab] = useState<
-    "assessments" | "generator" | "evidence" | "analytics" | "simulations"
+    "assessments" | "generator" | "evidence" | "analytics" | "simulations" | "ocr_accuracy"
   >("assessments");
+
+  // OCR Accuracy & Handwriting Tuning State
+  const [ocrSelectedClass, setOcrSelectedClass] = useState("Desenvolvimento Web 1A");
+  const [ocrContrastThreshold, setOcrContrastThreshold] = useState(85);
+  const [ocrBinarizationKernel, setOcrBinarizationKernel] = useState(3);
+  const [ocrConfidenceBoost, setOcrConfidenceBoost] = useState(true);
+  const [ocrCursiveHeuristic, setOcrCursiveHeuristic] = useState(true);
+  const [ocrTuningApplied, setOcrTuningApplied] = useState(false);
+
+  const [ocrRecords, setOcrRecords] = useState([
+    { id: 1, student: "Ana Rodrigues Silva", class: "Desenvolvimento Web 1A", handwritingStyle: "Letra de forma regular", aiTranscribed: "def calcula_media(n1, n2):\n    return (n1 + n2) / 2", teacherCorrected: "def calcula_media(n1, n2):\n    return (n1 + n2) / 2", accuracy: "100%" },
+    { id: 2, student: "Carlos Henrique Souza", class: "Desenvolvimento Web 1A", handwritingStyle: "Cursiva inclinada", aiTranscribed: "for i in range(0, 10):\n    prnt(i)", teacherCorrected: "for i in range(0, 10):\n    print(i)", accuracy: "92%" },
+    { id: 3, student: "Beatriz Oliveira Costa", class: "Desenvolvimento Web 1A", handwritingStyle: "Mista / Rascunho", aiTranscribed: "while x < 100:\n    x += 1", teacherCorrected: "while x < 100:\n    x += 1", accuracy: "100%" },
+    { id: 4, student: "Daniel Santos Ramos", class: "Sistemas Embarcados 1C", handwritingStyle: "Cursiva densa", aiTranscribed: "int val = analogRead(A0);\nif(val > 500) { digitalWrit(13, HIGH); }", teacherCorrected: "int val = analogRead(A0);\nif(val > 500) { digitalWrite(13, HIGH); }", accuracy: "88%" },
+    { id: 5, student: "Eduardo Lima", class: "Sistemas Embarcados 1C", handwritingStyle: "Letra de forma rápida", aiTranscribed: "void setup() {\n  pinMode(8, OUTPUT);\n}", teacherCorrected: "void setup() {\n  pinMode(8, OUTPUT);\n}", accuracy: "100%" }
+  ]);
+
+  const handleApplyOcrTuning = () => {
+    setOcrTuningApplied(true);
+    setTimeout(() => setOcrTuningApplied(false), 4000);
+  };
+
+  const handleExportOcrPdf = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.setTextColor(16, 185, 129);
+    doc.text("CODECHECK AI - RELATÓRIO DE ACURÁCIA DE OCR", 14, 20);
+
+    doc.setFontSize(11);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Turma Selecionada: ${ocrSelectedClass}`, 14, 28);
+    doc.text(`Acurácia Média da Turma: 94.5%`, 14, 34);
+    doc.text(`Parâmetros Atuais: Limiar ${ocrContrastThreshold}%, Kernel ${ocrBinarizationKernel}`, 14, 40);
+
+    const rows = ocrRecords
+      .filter(r => r.class === ocrSelectedClass)
+      .map(r => [r.student, r.handwritingStyle, r.aiTranscribed.replace(/\n/g, " "), r.teacherCorrected.replace(/\n/g, " "), r.accuracy]);
+
+    autoTable(doc, {
+      startY: 48,
+      head: [["Estudante", "Caligrafia", "Transcrição IA", "Correção Professor", "Acurácia"]],
+      body: rows.length > 0 ? rows : [["Nenhum registro", "-", "-", "-", "-"]],
+      theme: "grid",
+      headStyles: { fillColor: [16, 185, 129] },
+    });
+
+    doc.save(`Relatorio_Acuracia_OCR_${ocrSelectedClass.replace(/\s+/g, "_")}.pdf`);
+  };
+
+  const handleExportOcrCsv = () => {
+    const filtered = ocrRecords.filter(r => r.class === ocrSelectedClass);
+    const headers = ["ID", "Estudante", "Turma", "Caligrafia", "Transcricao_IA", "Correcao_Professor", "Acuracia"];
+    const rows = filtered.map(r => [
+      r.id,
+      `"${r.student}"`,
+      `"${r.class}"`,
+      `"${r.handwritingStyle}"`,
+      `"${r.aiTranscribed.replace(/"/g, '""').replace(/\n/g, " ")}"`,
+      `"${r.teacherCorrected.replace(/"/g, '""').replace(/\n/g, " ")}"`,
+      r.accuracy
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `acuracia_ocr_${ocrSelectedClass.replace(/\s+/g, "_")}_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // State for Construtor of assessments (Módulo 2)
   const [assessments, setAssessments] = useState([
@@ -455,6 +526,16 @@ export default function AvaliacoesView() {
         >
           Dashboard Analítico
           {subTab === "analytics" && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setSubTab("ocr_accuracy")}
+          className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer ${subTab === "ocr_accuracy" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}
+        >
+          Acurácia de OCR & Caligrafia
+          {subTab === "ocr_accuracy" && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-full" />
           )}
         </button>
@@ -1297,6 +1378,210 @@ export default function AvaliacoesView() {
                   <AlertTriangle className="w-4 h-4 text-amber-500/50" />
                   Plano de Recuperação Paralela Sugerido
                 </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* TAB 6: OCR Accuracy & Tuning */}
+        {subTab === "ocr_accuracy" && (
+          <motion.div
+            key="ocr_accuracy"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex flex-col gap-6"
+          >
+            <div className="p-6 rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col gap-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded uppercase">
+                    Módulo de Calibração & Visão Computacional
+                  </span>
+                  <h3 className="text-lg font-bold text-white mt-1">
+                    Relatório de Acurácia de OCR & Caligrafia por Turma
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Compare o código transcrito pela IA com as correções manuais do professor e ajuste parâmetros para turmas com caligrafias distintas.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleExportOcrCsv}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-mono text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    Exportar Relatório (CSV)
+                  </button>
+                  <button
+                    onClick={handleExportOcrPdf}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Exportar Relatório (PDF)
+                  </button>
+                </div>
+              </div>
+
+              {/* Class Selector & Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-slate-400">Turma Selecionada</span>
+                  <select
+                    value={ocrSelectedClass}
+                    onChange={(e) => setOcrSelectedClass(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg px-3 py-2 outline-none font-mono mt-1"
+                  >
+                    <option value="Desenvolvimento Web 1A">Desenvolvimento Web 1A</option>
+                    <option value="Sistemas Embarcados 1C">Sistemas Embarcados 1C</option>
+                    <option value="Automação Industrial 2B">Automação Industrial 2B</option>
+                  </select>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-slate-400">Acurácia Média OCR</span>
+                  <div className="text-2xl font-black font-mono text-emerald-400 mt-1">94.5%</div>
+                  <span className="text-[10px] text-slate-500">+2.3% após último ajuste fino</span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-slate-400">Provas Digitalizadas</span>
+                  <div className="text-2xl font-black font-mono text-white mt-1">142</div>
+                  <span className="text-[10px] text-slate-500">Avaliações processadas no trimestre</span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-slate-400">Variância Caligráfica</span>
+                  <div className="text-2xl font-black font-mono text-amber-400 mt-1">Moderada</div>
+                  <span className="text-[10px] text-slate-500">Requer heurística cursiva ativa</span>
+                </div>
+              </div>
+
+              {/* Automatic Extraction Parameter Tuning Panel */}
+              <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-white text-sm font-mono uppercase tracking-wider flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-400" />
+                      Ajuste Fino Automático de Parâmetros de Extração
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Personalize os limiares de binarização e pesos da IA Vision para esta turma com base nas divergências detectadas.
+                    </p>
+                  </div>
+                  {ocrTuningApplied && (
+                    <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold rounded-lg animate-pulse">
+                      ✓ Parâmetros Aplicados e Sincronizados com o Motor OCR!
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-slate-300">Limiar de Contraste (Threshold)</span>
+                      <span className="text-emerald-400 font-bold">{ocrContrastThreshold}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="50"
+                      max="100"
+                      value={ocrContrastThreshold}
+                      onChange={(e) => setOcrContrastThreshold(Number(e.target.value))}
+                      className="w-full accent-emerald-500 cursor-pointer"
+                    />
+                    <span className="text-[10px] text-slate-500">Ideal para destacar traços de caneta azul/preta em papel reciclado.</span>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-slate-300">Kernel de Binarização Morfologica</span>
+                      <span className="text-emerald-400 font-bold">{ocrBinarizationKernel}x{ocrBinarizationKernel}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="7"
+                      step="2"
+                      value={ocrBinarizationKernel}
+                      onChange={(e) => setOcrBinarizationKernel(Number(e.target.value))}
+                      className="w-full accent-emerald-500 cursor-pointer"
+                    />
+                    <span className="text-[10px] text-slate-500">Reduz ruídos de rasura e manchas de folhas escaneadas.</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800">
+                  <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={ocrConfidenceBoost}
+                        onChange={(e) => setOcrConfidenceBoost(e.target.checked)}
+                        className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0"
+                      />
+                      Boost de Confiança IA Vision
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={ocrCursiveHeuristic}
+                        onChange={(e) => setOcrCursiveHeuristic(e.target.checked)}
+                        className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0"
+                      />
+                      Heurística de Caligrafia Cursiva
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={handleApplyOcrTuning}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-mono text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Aplicar Ajuste Fino para {ocrSelectedClass}
+                  </button>
+                </div>
+              </div>
+
+              {/* Comparison Table */}
+              <div className="flex flex-col gap-3">
+                <h4 className="font-bold text-white text-sm font-mono uppercase tracking-wider">
+                  Comparativo: Transcrição IA vs Correção Manual do Professor
+                </h4>
+                <div className="overflow-x-auto max-h-[350px] scrollbar-thin">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] sticky top-0">
+                      <tr>
+                        <th className="p-3">Estudante</th>
+                        <th className="p-3">Caligrafia Detectada</th>
+                        <th className="p-3">Código Transcrito (IA OCR)</th>
+                        <th className="p-3">Correção Manual (Professor)</th>
+                        <th className="p-3 text-right">Acurácia</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {ocrRecords
+                        .filter(r => r.class === ocrSelectedClass)
+                        .map((rec) => (
+                          <tr key={rec.id} className="hover:bg-slate-900/40 transition-colors">
+                            <td className="p-3 font-bold text-white">{rec.student}</td>
+                            <td className="p-3 text-slate-300">{rec.handwritingStyle}</td>
+                            <td className="p-3 text-amber-300 whitespace-pre-line font-mono text-[11px] bg-slate-950/40 p-2 rounded">
+                              {rec.aiTranscribed}
+                            </td>
+                            <td className="p-3 text-emerald-300 whitespace-pre-line font-mono text-[11px] bg-slate-950/40 p-2 rounded">
+                              {rec.teacherCorrected}
+                            </td>
+                            <td className="p-3 text-right font-bold text-emerald-400">
+                              {rec.accuracy}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </motion.div>

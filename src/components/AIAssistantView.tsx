@@ -426,28 +426,36 @@ export default function AIAssistantView({ featureFlags }: any) {
                                 </span>
 
                                 {Array.isArray(value) ? (
-                                  <ul className="space-y-1.5 ml-1">
-                                    {value.map((item: any, idx: number) => (
-                                      <li
-                                        key={idx}
-                                        className="text-xs text-slate-300 leading-relaxed flex items-start gap-1.5"
-                                      >
-                                        <span className="text-emerald-500 font-bold mt-0.5">
-                                          •
-                                        </span>
-                                        <span>
-                                          {typeof item === "object"
-                                            ? JSON.stringify(item)
-                                            : item}
-                                        </span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : (
-                                  <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                    {value as string}
-                                  </div>
-                                )}
+                                   <ul className="space-y-1.5 ml-1">
+                                     {value.map((item: any, idx: number) => (
+                                       <li
+                                         key={idx}
+                                         className="text-xs text-slate-300 leading-relaxed flex items-start gap-1.5"
+                                       >
+                                         <span className="text-emerald-500 font-bold mt-0.5">
+                                           •
+                                         </span>
+                                         <span>
+                                           {typeof item === "object" && item !== null
+                                             ? JSON.stringify(item, null, 2)
+                                             : item}
+                                         </span>
+                                       </li>
+                                     ))}
+                                   </ul>
+                                 ) : typeof value === "object" && value !== null ? (
+                                   <div className="text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed bg-[#020512] p-3 rounded-xl border border-slate-800">
+                                     {JSON.stringify(value, null, 2)}
+                                   </div>
+                                 ) : (
+                                   <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                     {value as string}
+                                   </div>
+                                 )} : (
+      <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
+        {value as string}
+      </div>
+    )
                               </div>
                             ))}
                           </div>

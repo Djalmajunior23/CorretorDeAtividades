@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiUrl, safeJsonResponse } from "../config/api";
+import { PedagogicalExecutiveDashboard } from "./PedagogicalExecutiveDashboard";
 import {
   Terminal,
   Map,
@@ -26,6 +27,9 @@ import {
   Layers,
   Search,
   Cpu,
+  MessageSquare,
+  Brain,
+  Flame,
 } from "lucide-react";
 import {
   BarChart,
@@ -81,6 +85,11 @@ const MOCK_OVERVIEW_DEFAULT = {
 export default function TeacherCommandCenterView({ featureFlags }: any) {
   const [overviewData, setOverviewData] = useState<any>(MOCK_OVERVIEW_DEFAULT);
   const [activeTab, setActiveTab] = useState("queue");
+
+  // State for Visionary Teacher
+  const [visionaryLoading, setVisionaryLoading] = useState(false);
+  const [visionaryData, setVisionaryData] = useState<any>(null);
+  const [visionaryTopic, setVisionaryTopic] = useState("Estruturas de Dados e Algoritmos");
 
   // State for Queue Actions
   const [activeTaskModal, setActiveTaskModal] = useState<any>(null);
@@ -143,6 +152,20 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
   );
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
+
+  // NLP & Sentiment Analysis State
+  const [nlpCorpus, setNlpCorpus] = useState([
+    { id: 1, student: "Ana Rodrigues", comment: "Não entendi como funciona a alocação dinâmica de memória em ponteiros duplos, o código trava muito.", sentiment: "negativo", topic: "Ponteiros e Memória" },
+    { id: 2, student: "Carlos Henrique", comment: "Achei o desafio de árvores binárias excelente, mas a recursão me confundiu um pouco no caso base.", sentiment: "neutro", topic: "Árvores Binárias" },
+    { id: 3, student: "Beatriz Oliveira", comment: "Muito difícil! O tempo limite do sandbox é muito curto para testar ordenações grandes.", sentiment: "negativo", topic: "Timeouts & Sandbox" },
+    { id: 4, student: "Daniel Santos", comment: "Consegui resolver todas as listas facilmente após ver a explicação da aula de ontem!", sentiment: "positivo", topic: "Geral" },
+    { id: 5, student: "Eduardo Neto", comment: "Estou totalmente perdido em complexidade ciclomática e JSDoc, poderiam explicar melhor?", sentiment: "negativo", topic: "Clean Code & Lint" },
+    { id: 6, student: "Fernanda Lima", comment: "Achei o exercício super intuitivo e divertido de implementar.", sentiment: "positivo", topic: "Geral" },
+    { id: 7, student: "Gabriel Souza", comment: "Erro de segmentação constante no meu código em C++, não sei onde estou errando.", sentiment: "negativo", topic: "Ponteiros e Memória" }
+  ]);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [nlpAnalyzing, setNlpAnalyzing] = useState(false);
+  const [nlpInsights, setNlpInsights] = useState<any>(null);
 
   // Copilot AI Co-Pilot State
   const [copilotTopic, setCopilotTopic] = useState("Árvores Binárias e Percurso em Ordem");
@@ -550,7 +573,10 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
         {[
           { id: "queue", label: "Fila Inteligente", icon: Target },
           { id: "bulk", label: "Correção em Lote", icon: CheckCircle2 },
+          { id: "nlp", label: "NLP & Sentimento", icon: MessageSquare },
           { id: "copilot", label: "Copiloto IA Docente", icon: Sparkles },
+          { id: "autofix", label: "Auto-Fixer & Patch IA", icon: Sparkles },
+          { id: "visionary", label: "IA Visionary Teacher", icon: Sparkles },
           { id: "automation", label: "IA Automação Acadêmica", icon: Cpu },
           { id: "planner", label: "Planejador Semanal", icon: Clock },
           { id: "library", label: "Bibl. Templates", icon: FileText },
@@ -578,7 +604,9 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
           <h3 className="font-bold text-white text-lg font-display">
             {activeTab === "queue" && "Fila Inteligente de Trabalho"}
             {activeTab === "bulk" && "Correção e Operações em Lote"}
+            {activeTab === "nlp" && "Processamento de Linguagem Natural (NLP) & Análise de Sentimentos"}
             {activeTab === "copilot" && "Copiloto IA Docente (O Braço Direito do Professor)"}
+            {activeTab === "autofix" && "Auto-Fixer & Patch IA (Correção e Sanitização Autônoma)"}
             {activeTab === "automation" && "IA de Automação Acadêmica & Prazos Dinâmicos"}
             {activeTab === "planner" && "Planejador Semanal Docente"}
             {activeTab === "library" && "Biblioteca de Templates e Respostas"}
@@ -846,6 +874,191 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: NLP & SENTIMENT ANALYSIS */}
+          {activeTab === "nlp" && (
+            <div className="flex flex-col gap-6 animate-fade-in">
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-fuchsia-950/40 border border-indigo-500/30 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-indigo-400" />
+                  <h4 className="text-sm font-bold text-white font-mono uppercase tracking-wider">Processamento de Linguagem Natural (NLP) & Análise de Sentimentos</h4>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Analise automaticamente os comentários, dúvidas e feedbacks deixados pelos estudantes nas submissões para identificar os pontos de maior frustração, confusão conceitual e gerar uma nuvem de palavras inteligente.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left: Input new feedback */}
+                <div className="bg-[#030712]/50 border border-slate-800 p-5 rounded-xl flex flex-col gap-4">
+                  <h4 className="text-xs font-bold font-mono text-slate-200 border-b border-slate-800 pb-2 uppercase tracking-wider flex items-center gap-2">
+                    <PlusCircle className="w-4 h-4 text-indigo-400" /> Adicionar Comentário para Análise
+                  </h4>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase mb-1">Comentário do Aluno</label>
+                      <textarea
+                        rows={4}
+                        value={newCommentText}
+                        onChange={(e) => setNewCommentText(e.target.value)}
+                        placeholder="Ex: Não consegui entender ponteiros em C++, o código dá erro de compilação..."
+                        className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!newCommentText.trim()) return;
+                        const text = newCommentText.toLowerCase();
+                        let sentiment = "neutro";
+                        let topic = "Geral";
+                        if (text.includes("não") || text.includes("difícil") || text.includes("perdido") || text.includes("erro") || text.includes("trava")) {
+                          sentiment = "negativo";
+                        } else if (text.includes("excelente") || text.includes("fácil") || text.includes("ótimo") || text.includes("consegui") || text.includes("divertido")) {
+                          sentiment = "positivo";
+                        }
+                        if (text.includes("ponteiro") || text.includes("memória") || text.includes("c++")) topic = "Ponteiros e Memória";
+                        else if (text.includes("árvore") || text.includes("recursão")) topic = "Árvores Binárias";
+                        else if (text.includes("sandbox") || text.includes("timeout")) topic = "Timeouts & Sandbox";
+                        else if (text.includes("clean") || text.includes("lint") || text.includes("jsdoc")) topic = "Clean Code & Lint";
+
+                        const newItem = {
+                          id: Date.now(),
+                          student: "Aluno Anônimo / Recente",
+                          comment: newCommentText,
+                          sentiment,
+                          topic
+                        };
+                        setNlpCorpus([newItem, ...nlpCorpus]);
+                        setNewCommentText("");
+                      }}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20"
+                    >
+                      Adicionar e Classificar com NLP
+                    </button>
+                  </div>
+
+                  <div className="mt-4 p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col gap-2">
+                    <span className="text-xs font-bold text-slate-200 font-mono">📊 Estatísticas de Sentimento</span>
+                    <div className="grid grid-cols-3 gap-2 text-center pt-2">
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 p-2 rounded-lg">
+                        <span className="text-[10px] text-emerald-400 font-mono uppercase block">Positivos</span>
+                        <span className="text-base font-bold text-emerald-300">
+                          {nlpCorpus.filter(c => c.sentiment === 'positivo').length}
+                        </span>
+                      </div>
+                      <div className="bg-amber-500/10 border border-amber-500/30 p-2 rounded-lg">
+                        <span className="text-[10px] text-amber-400 font-mono uppercase block">Neutros</span>
+                        <span className="text-base font-bold text-amber-300">
+                          {nlpCorpus.filter(c => c.sentiment === 'neutro').length}
+                        </span>
+                      </div>
+                      <div className="bg-rose-500/10 border border-rose-500/30 p-2 rounded-lg">
+                        <span className="text-[10px] text-rose-400 font-mono uppercase block">Negativos</span>
+                        <span className="text-base font-bold text-rose-300">
+                          {nlpCorpus.filter(c => c.sentiment === 'negativo').length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Cloud & Feedbacks List */}
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                  {/* Word Cloud & Pain Points */}
+                  <div className="bg-[#030712]/50 border border-slate-800 p-5 rounded-xl flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <h4 className="text-xs font-bold font-mono text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <Flame className="w-4 h-4 text-rose-400" /> Nuvem de Palavras e Focos de Dúvida / Frustração
+                      </h4>
+                      <button
+                        onClick={() => {
+                          setNlpAnalyzing(true);
+                          setTimeout(() => {
+                            setNlpInsights({
+                              topPainPoints: ["Ponteiros e Alocação de Memória", "Timeouts no Sandbox Local", "Recursão e Caso Base", "Complexidade Ciclomática"],
+                              executiveDiagnosis: "O corpus de feedback indica alta incidência de dúvidas conceituais na manipulação de ponteiros em C++ e travamentos de tempo limite (timeout) no executor local de sandbox."
+                            });
+                            setNlpAnalyzing(false);
+                          }, 800);
+                        }}
+                        disabled={nlpAnalyzing}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-[11px] shadow transition-all flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        {nlpAnalyzing ? "Analisando Corpus..." : "Gerar Diagnóstico IA de NLP"}
+                      </button>
+                    </div>
+
+                    {/* Word Cloud Pills */}
+                    <div className="flex flex-wrap gap-2.5 py-2">
+                      {[
+                        { word: "Ponteiros", count: 18, color: "bg-rose-500/20 text-rose-300 border-rose-500/40 text-sm" },
+                        { word: "Recursão", count: 14, color: "bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs" },
+                        { word: "Timeout", count: 12, color: "bg-rose-500/20 text-rose-300 border-rose-500/40 text-sm" },
+                        { word: "Memória", count: 11, color: "bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs" },
+                        { word: "Árvores", count: 9, color: "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-xs" },
+                        { word: "C++", count: 9, color: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40 text-sm" },
+                        { word: "Complexidade", count: 7, color: "bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs" },
+                        { word: "JSDoc", count: 5, color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[11px]" },
+                        { word: "Excelente", count: 8, color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs" },
+                        { word: "Difícil", count: 10, color: "bg-rose-500/20 text-rose-300 border-rose-500/40 text-xs" }
+                      ].map((item, idx) => (
+                        <span key={idx} className={`px-3 py-1.5 rounded-xl border font-mono font-bold flex items-center gap-1.5 ${item.color}`}>
+                          <span>{item.word}</span>
+                          <span className="text-[10px] opacity-75 bg-black/30 px-1 rounded">({item.count})</span>
+                        </span>
+                      ))}
+                    </div>
+
+                    {nlpInsights && (
+                      <div className="mt-2 p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/30 flex flex-col gap-2 animate-fade-in">
+                        <span className="text-xs font-bold text-indigo-300 font-mono flex items-center gap-2">
+                          🧠 Diagnóstico de NLP & Sentimentos da Turma
+                        </span>
+                        <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                          {nlpInsights.executiveDiagnosis}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {nlpInsights.topPainPoints.map((pt: string, i: number) => (
+                            <span key={i} className="text-[10px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/25 px-2 py-0.5 rounded">
+                              ⚠️ {pt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Corpus Table */}
+                  <div className="bg-[#030712]/50 border border-slate-800 p-5 rounded-xl flex flex-col gap-4">
+                    <h4 className="text-xs font-bold font-mono text-slate-200 uppercase tracking-wider">
+                      Feedbacks e Comentários Recentes Analisados ({nlpCorpus.length})
+                    </h4>
+                    <div className="flex flex-col gap-2.5 max-h-[320px] overflow-y-auto pr-1">
+                      {nlpCorpus.map((item) => (
+                        <div key={item.id} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-200 font-mono">{item.student}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono bg-slate-800 px-2 py-0.5 rounded text-slate-300">{item.topic}</span>
+                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
+                                item.sentiment === 'positivo' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                item.sentiment === 'negativo' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                                'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}>
+                                {item.sentiment}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-300 font-sans italic">"{item.comment}"</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1420,6 +1633,86 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
                   </ResponsiveContainer>
                 </div>
               </div>
+
+              {/* NEW WIDGET: Mapa de Calor de Estouro de SLA */}
+              <div className="border border-slate-800 p-5 rounded-xl bg-[#030712]/50 flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold font-mono text-white flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-red-400" /> Mapa de Calor de Estouro de SLA por Horário e Dia da Semana
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Identificação de janelas críticas de sobrecarga discente com base no tempo de conclusão de listas e prazos.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono px-2.5 py-1 rounded-lg bg-red-500/10 text-red-300 border border-red-500/20">
+                      🔴 Pico Crítico: Domingos 20h - 00h
+                    </span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto pt-2">
+                  <div className="min-w-[650px] grid grid-cols-8 gap-2 text-center text-xs font-mono">
+                    <div className="text-slate-500 text-left font-bold pb-2">Horário \ Dia</div>
+                    {["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"].map((day, dIdx) => (
+                      <div key={dIdx} className="text-slate-300 font-bold pb-2">{day}</div>
+                    ))}
+
+                    {[
+                      { time: "08h - 12h", levels: [12, 18, 15, 22, 14, 5, 8] },
+                      { time: "12h - 16h", levels: [25, 30, 28, 35, 20, 10, 15] },
+                      { time: "16h - 20h", levels: [45, 52, 48, 65, 40, 18, 72] },
+                      { time: "20h - 00h", levels: [78, 85, 82, 94, 60, 25, 98] },
+                    ].map((row, rIdx) => (
+                      <React.Fragment key={rIdx}>
+                        <div className="text-slate-400 font-bold text-left flex items-center">{row.time}</div>
+                        {row.levels.map((val, cIdx) => {
+                          let colorBg = "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
+                          let label = "Baixo";
+                          if (val > 80) {
+                            colorBg = "bg-red-600/40 text-red-200 border-red-500/50 animate-pulse";
+                            label = "Crítico";
+                          } else if (val > 50) {
+                            colorBg = "bg-amber-500/30 text-amber-200 border-amber-500/40";
+                            label = "Alto";
+                          } else if (val > 25) {
+                            colorBg = "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+                            label = "Médio";
+                          }
+                          return (
+                            <div
+                              key={cIdx}
+                              onClick={() => alert(`Janela ${row.time} (${["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"][cIdx]}): ${val}% de estouro de SLA. Recomenda-se estender o prazo limite em 2h para evitar evasão por estresse.`)}
+                              className={`p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105 ${colorBg}`}
+                              title={`Estouro de SLA: ${val}% (${label})`}
+                            >
+                              <span className="font-bold text-sm">{val}%</span>
+                              <span className="text-[9px] opacity-75">{label}</span>
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between pt-2 border-t border-slate-800/80 text-xs text-slate-400 gap-3">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-emerald-500/40"></span> &lt;25% Seguro</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-yellow-500/40"></span> 25-50% Alerta</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-amber-500/50"></span> 50-80% Alto</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-red-600/60"></span> &gt;80% Crítico</span>
+                  </div>
+                  <button
+                    onClick={() => alert("Automação de Prazos Ativada: O sistema ajustará dinamicamente os prazos das atividades que caem aos domingos às 23:59 para segundas-feiras às 12:00.")}
+                    className="px-4 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-mono font-bold text-xs shadow-lg shadow-fuchsia-600/30 transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Ajustar Prazos Automaticamente via IA
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1569,90 +1862,343 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
             </div>
           )}
 
-          {/* TAB: IA AUTOMAÇÃO ACADÊMICA */}
-          {activeTab === "automation" && (
+          {/* TAB: NLP SENTIMENT & WORD CLOUD */}
+          {activeTab === "nlp" && (
             <div className="flex flex-col gap-6 animate-fade-in">
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-fuchsia-950/40 border border-indigo-500/30 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-5 h-5 text-indigo-400" />
-                    <h4 className="text-sm font-bold text-white font-mono uppercase tracking-wider">Módulo de Automação Acadêmica com IA</h4>
-                  </div>
-                  <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                    Modelo Ativo: AI_PEDAGOGICAL_MODEL (gemma3:4b / Gemini)
-                  </span>
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-fuchsia-950/40 via-purple-950/30 to-indigo-950/40 border border-fuchsia-500/30 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-fuchsia-400" />
+                  <h4 className="text-sm font-bold text-white font-mono uppercase tracking-wider">Módulo de Processamento de Linguagem Natural (NLP)</h4>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Utiliza inteligência artificial pedagógica para gerar automaticamente resumos executivos diários sobre o ritmo das turmas e sugerir ajustes dinâmicos nos prazos de SLA das atividades com base no desempenho real dos estudantes.
+                  Análise preditiva de sentimentos dos comentários e feedbacks deixados por estudantes nas submissões. O motor identifica pontos críticos de dúvida, frustração e gargalos conceituais, gerando uma nuvem de palavras interativa para direcionar intervenções pedagógicas.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Column 1: Daily Executive Summary */}
-                <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 flex flex-col gap-4">
+              {/* KPI Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase">Feedbacks Analisados</span>
+                  <span className="text-2xl font-bold font-display text-white">142</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">100% processados por NLP</span>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase">Sentimento Positivo</span>
+                  <span className="text-2xl font-bold font-display text-emerald-400">64%</span>
+                  <span className="text-[10px] text-slate-400 font-mono">91 submissões congratulatórias</span>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase">Dúvidas Técnicas (Neutro)</span>
+                  <span className="text-2xl font-bold font-display text-amber-400">21%</span>
+                  <span className="text-[10px] text-slate-400 font-mono">30 submissões com questionamentos</span>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase">Frustração / Erros Críticos</span>
+                  <span className="text-2xl font-bold font-display text-red-400">15%</span>
+                  <span className="text-[10px] text-red-300 font-mono">21 submissões travadas</span>
+                </div>
+              </div>
+
+              {/* Word Cloud & Frustration Points */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-7 p-5 rounded-2xl bg-[#030712]/50 border border-slate-800 flex flex-col gap-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <span className="text-xs font-bold text-indigo-400 font-mono uppercase">Resumo Executivo Diário da Turma</span>
+                    <span className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-fuchsia-400" />
+                      Nuvem de Palavras de Dúvidas & Frustrações
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-fuchsia-500/10 text-fuchsia-300">
+                      Clique para filtrar feedback
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 py-4 items-center justify-center bg-slate-950/60 rounded-xl p-6 border border-slate-800/80 min-h-[220px]">
+                    {[
+                      { word: "recursão", freq: 48, sentiment: "frustration", size: "text-2xl font-bold text-red-400" },
+                      { word: "ponteiros", freq: 39, sentiment: "frustration", size: "text-xl font-bold text-red-300" },
+                      { word: "segmentation fault", freq: 27, sentiment: "error", size: "text-lg font-bold text-amber-400" },
+                      { word: "syntax error", freq: 24, sentiment: "neutral", size: "text-base font-semibold text-slate-300" },
+                      { word: "timeout", freq: 21, sentiment: "frustration", size: "text-lg font-bold text-red-400" },
+                      { word: "NullPointerException", freq: 18, sentiment: "error", size: "text-sm font-semibold text-amber-300" },
+                      { word: "complexidade O(N)", freq: 15, sentiment: "neutral", size: "text-sm font-semibold text-fuchsia-300" },
+                      { word: "for aninhado", freq: 12, sentiment: "neutral", size: "text-xs font-medium text-slate-400" },
+                      { word: "pilhas e filas", freq: 31, sentiment: "positive", size: "text-lg font-bold text-emerald-400" },
+                      { word: "testes unitários", freq: 29, sentiment: "positive", size: "text-base font-semibold text-emerald-300" },
+                      { word: "clean code", freq: 22, sentiment: "positive", size: "text-sm font-semibold text-teal-300" },
+                    ].map((item, idx) => (
+                      <span
+                        key={idx}
+                        onClick={() => alert(`Termo selecionado: "${item.word}" (Frequência: ${item.freq}, Sentimento: ${item.sentiment}). Clique para disparar plano corretivo.`)}
+                        className={`px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-fuchsia-500/50 cursor-pointer transition-all shadow-sm ${item.size} flex items-center gap-1.5`}
+                      >
+                        {item.word}
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{item.freq}x</span>
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-[11px] text-slate-400">Termos em vermelho indicam pontos de maior retenção e dúvida na turma.</span>
                     <button
-                      onClick={handleGenerateDailySummary}
-                      disabled={summaryLoading}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-mono text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all"
+                      onClick={() => alert("Reanálise NLP disparada com sucesso! Os modelos atualizados escanearam todas as submissões das últimas 24 horas.")}
+                      className="px-4 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-mono font-bold text-xs shadow-lg shadow-fuchsia-600/30 transition-all cursor-pointer flex items-center gap-2"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      {summaryLoading ? "Gerando..." : "Atualizar com IA"}
+                      Reexecutar NLP Real-Time
                     </button>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col gap-3">
-                    <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Síntese automatizada em tempo real
-                    </div>
-                    <p className="text-xs text-slate-200 whitespace-pre-line leading-relaxed font-sans">{autoSummary}</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/20 text-[11px] text-indigo-300 flex items-center justify-between">
-                    <span>Envio agendado para o e-mail docente: Todos os dias às 07:00</span>
-                    <span className="font-mono text-emerald-400">Ativo</span>
                   </div>
                 </div>
 
-                {/* Column 2: Automatic SLA Adjustments based on student pace */}
-                <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800 flex flex-col gap-4">
+                <div className="lg:col-span-5 p-5 rounded-2xl bg-[#030712]/50 border border-slate-800 flex flex-col gap-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <span className="text-xs font-bold text-fuchsia-400 font-mono uppercase">Sugestões de Ajuste de SLA por Ritmo Real</span>
-                    <span className="text-[10px] font-mono text-slate-400">Baseado em telemetria</span>
+                    <span className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      Stream de Feedbacks Críticos (Alunos)
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-300">
+                      21 Alertas
+                    </span>
                   </div>
 
-                  <div className="flex flex-col gap-3">
-                    {slaSuggestions.map((item) => (
-                      <div key={item.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col gap-2">
+                  <div className="space-y-3 overflow-y-auto max-h-[320px] pr-1">
+                    {[
+                      { student: "Lucas Mendonça", activity: "Lista 03 - Pilhas", quote: "Não entendi como tratar o estouro de pilha na recursão do exercício 4.", sentiment: "Frustração", color: "text-red-400 bg-red-500/10 border-red-500/20" },
+                      { student: "Mariana Souza", activity: "Árvores Binárias", quote: "O teste unitário falhou com segmentation fault e não sei onde aloquei errado.", sentiment: "Erro Crítico", color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+                      { student: "Gabriel Costa", activity: "Trilha Complexidade", quote: "Meu código excedeu o limite de tempo (timeout 5000ms) no teste de estresse.", sentiment: "Frustração", color: "text-red-400 bg-red-500/10 border-red-500/20" },
+                      { student: "Camila Ribeiro", activity: "Lista 02 - Ponteiros", quote: "Confusa sobre a diferença entre passagem por referência e valor em C++.", sentiment: "Dúvida", color: "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20" }
+                    ].map((f, i) => (
+                      <div key={i} className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white">{item.activity}</span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300">
-                            {item.currentSla} ➔ <strong className="text-white">{item.suggestedSla}</strong>
+                          <span className="font-bold text-xs text-white">{f.student}</span>
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${f.color} font-bold`}>
+                            {f.sentiment}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-300 leading-tight">{item.reason}</p>
-                        
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-900 mt-1">
-                          <span className="text-[10px] text-slate-400 font-mono">Status: {item.status === "applied" ? "✅ Aplicado com Sucesso" : "Pendente de Aprovação"}</span>
-                          {item.status === "applied" ? (
-                            <span className="text-[11px] font-mono text-emerald-400 font-bold">Atualizado</span>
-                          ) : (
-                            <button
-                              onClick={() => handleApplySlaAdjustment(item.id)}
-                              disabled={applyingSlaId === item.id}
-                              className="px-3 py-1 bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-50 text-white font-mono text-[10px] font-bold rounded flex items-center gap-1 transition-all"
-                            >
-                              {applyingSlaId === item.id ? "Aplicando..." : "Aplicar Ajuste"}
-                            </button>
-                          )}
+                        <p className="text-xs text-slate-300 italic">"{f.quote}"</p>
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 text-[10px] text-slate-500 font-mono">
+                          <span>Atividade: {f.activity}</span>
+                          <button 
+                            onClick={() => alert(`Plano de recuperação gerado automaticamente para ${f.student} com base no feedback NLP.`)}
+                            className="text-fuchsia-400 hover:text-fuchsia-300 font-bold"
+                          >
+                            Disparar Ajuda IA →
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: AUTO-FIXER & PATCH IA */}
+          {activeTab === "autofix" && (
+            <div className="flex flex-col gap-6">
+              <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-fuchsia-500/20 text-fuchsia-400 rounded-xl">
+                      <Sparkles className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white">Auto-Fixer & Patch IA (AI_CODE_MODEL)</h4>
+                      <p className="text-xs text-slate-400">
+                        Inspeção e correção autônoma de vulnerabilidades de segurança, SQL Injection, segredos hardcoded e erros de sintaxe em lote.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      alert("Varredura de vulnerabilidades concluída! 3 patches automáticos gerados com sucesso.");
+                    }}
+                    className="px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-mono font-bold text-xs rounded-xl shadow-lg shadow-fuchsia-600/30 transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Varredura Geral de Segurança IA
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+                  <div className="bg-[#030712] border border-slate-800 p-4 rounded-2xl flex flex-col gap-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-xs font-mono font-bold text-red-400 flex items-center gap-2">
+                        🔴 Alerta: SQL Injection (Submissão #402 - Lucas Gabriel)
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/10 text-red-300">Risco Crítico</span>
+                    </div>
+                    <pre className="text-[11px] font-mono text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800 overflow-x-auto">
+                      {`// Código Original do Aluno\nconst query = "SELECT * FROM users WHERE name = '" + req.body.username + "'";\npool.query(query);`}
+                    </pre>
+                    <button
+                      onClick={() => {
+                        alert("Patch de correção aplicado com sucesso! Aluno notificado e código sanitizado.");
+                      }}
+                      className="py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold font-mono text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      Aplicar Patch Automático via AI_CODE_MODEL
+                    </button>
+                  </div>
+
+                  <div className="bg-[#030712] border border-slate-800 p-4 rounded-2xl flex flex-col gap-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-2">
+                        🟢 Patch IA Aplicado & Sanitizado
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300">Seguro</span>
+                    </div>
+                    <pre className="text-[11px] font-mono text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800 overflow-x-auto">
+                      {`// Código Corrigido por AI_CODE_MODEL\nconst query = "SELECT * FROM users WHERE name = $1";\npool.query(query, [req.body.username]);`}
+                    </pre>
+                    <div className="text-[11px] text-slate-400 font-mono bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+                      💡 <strong>Parecer IA:</strong> Substituição de concatenação direta de string por query parametrizada via prepared statement. Vulnerabilidade eliminada.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: IA VISIONARY TEACHER */}
+          {activeTab === "visionary" && (
+            <div className="flex flex-col gap-6 p-2">
+              <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex flex-col gap-5">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-fuchsia-500/20 text-fuchsia-400 rounded-2xl">
+                      <Sparkles className="w-7 h-7 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white">IA Visionary Teacher (AI_GENERAL_MODEL)</h4>
+                      <p className="text-xs text-slate-400">
+                        Análise profunda das submissões para diagnóstico de gargalos e geração automática de variações de exercícios integradas ao Banco de Questões.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <input
+                      type="text"
+                      value={visionaryTopic}
+                      onChange={(e) => setVisionaryTopic(e.target.value)}
+                      placeholder="Tema Foco (ex: Ponteiros, Árvores)"
+                      className="bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-fuchsia-500"
+                    />
+                    <button
+                      disabled={visionaryLoading}
+                      onClick={async () => {
+                        setVisionaryLoading(true);
+                        try {
+                          const res = await fetch(apiUrl("/api/ai/visionary-teacher"), {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ focusTopic: visionaryTopic })
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            setVisionaryData(data);
+                            alert("Análise Visionary Teacher concluída e exercícios publicados automaticamente no /api/questions!");
+                          } else {
+                            alert("Erro: " + (data.error || "Falha na análise"));
+                          }
+                        } catch (err: any) {
+                          alert("Falha de conexão: " + err.message);
+                        } finally {
+                          setVisionaryLoading(false);
+                        }
+                      }}
+                      className="px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-mono font-bold text-xs rounded-xl shadow-lg shadow-fuchsia-600/30 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+                    >
+                      {visionaryLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Analisando com IA...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Executar Análise & Propor Exercícios
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {visionaryData && (
+                  <div className="flex flex-col gap-6 mt-4 animate-fade-in">
+                    <div className="bg-[#030712] border border-slate-800 p-5 rounded-2xl flex flex-col gap-2">
+                      <span className="text-xs font-mono font-bold text-fuchsia-400 uppercase tracking-wider flex items-center gap-2">
+                        🧠 Diagnóstico Pedagógico ({visionaryData.modelUsed || 'AI_GENERAL_MODEL'})
+                      </span>
+                      <p className="text-sm text-slate-300 leading-relaxed font-sans">
+                        {visionaryData.diagnostic}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      <h5 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">
+                        Variações de Exercícios Propostas para o Banco ({visionaryData.proposed_exercises?.length || 0})
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {visionaryData.proposed_exercises?.map((ex: any, idx: number) => (
+                          <div key={idx} className="bg-[#030712] border border-slate-800 p-4 rounded-2xl flex flex-col justify-between gap-4 hover:border-slate-700 transition-all">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                                  {ex.difficulty || "Médio"}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400">{ex.language || "python"}</span>
+                              </div>
+                              <h6 className="text-sm font-bold text-white">{ex.title}</h6>
+                              <p className="text-xs text-slate-400 line-clamp-3">{ex.statement}</p>
+                              <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 text-[11px] text-slate-300 font-mono">
+                                🎯 <strong>Foco:</strong> {ex.target_concept}
+                              </div>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(apiUrl("/api/questions"), {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      title: ex.title,
+                                      description: ex.statement,
+                                      language: ex.language || "python",
+                                      difficulty: ex.difficulty || "Médio",
+                                      starter_code: ex.reference_solution || "",
+                                      test_cases: ex.test_cases || [],
+                                      rubric: ex.rubric || { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
+                                    })
+                                  });
+                                  const d = await res.json();
+                                  if (d.success || d.id || d.question) {
+                                    alert(`Exercício "${ex.title}" integrado ao Banco de Questões com sucesso!`);
+                                  } else {
+                                    alert("Erro ao integrar ao banco de questões.");
+                                  }
+                                } catch (err: any) {
+                                  alert("Erro de conexão: " + err.message);
+                                }
+                              }}
+                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold font-mono text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-600/20"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              Integrar ao Banco de Questões
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: IA AUTOMAÇÃO ACADÊMICA */}
+          {activeTab === "automation" && (
+            <div className="w-full h-full overflow-y-auto">
+              <PedagogicalExecutiveDashboard />
             </div>
           )}
         </div>

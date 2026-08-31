@@ -11,6 +11,7 @@ import {
   Activity,
   BookOpen,
   BarChart3,
+  BarChart2,
   Sparkles,
   Briefcase,
   Search,
@@ -28,7 +29,10 @@ import {
   FileCheck,
   HelpCircle,
   Cpu,
-  TrendingUp
+  TrendingUp,
+  Brain,
+  Eye,
+  Network
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -61,6 +65,7 @@ export default function Sidebar({
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: Briefcase, desc: "Central de Comando Docente", visible: true },
     { id: "planejamento", label: "Planejamento", icon: Layers, desc: "Ecosistema Semestral F12", visible: true },
+    { id: "aulas", label: "Aulas", icon: FileText, desc: "Registro e Histórico de Aulas", visible: true },
     { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Diário de Aula Inteligente", visible: featureFlags.ENABLE_SMART_CLASS_DIARY !== false },
     { id: "turmas", label: "Turmas", icon: Users, desc: "Gestão Corporativa de Turmas", visible: true },
     { id: "students", label: "Alunos", icon: Users, desc: "Gestão e Importação CSV", visible: true },
@@ -84,8 +89,15 @@ export default function Sidebar({
     { id: "system_health", label: "Saúde do Sistema", icon: Activity, desc: "Status e Auditoria", visible: true },
     { id: "multi_agent", label: "Multi-Agent IA", icon: Cpu, desc: "Agentes Especializados RAG", visible: true },
     { id: "predictive_analytics", label: "Analytics Preditivo", icon: TrendingUp, desc: "Previsão de Evasão & Risco", visible: true },
+    { id: "ai_predictive_insights", label: "Insights Preditivos IA", icon: TrendingUp, desc: "Previsão de Evasão (AI_PEDAGOGICAL_MODEL)", visible: true },
+    { id: "ai_executive_dashboard", label: "Dashboard Executivo IA", icon: BarChart2, desc: "AI_PEDAGOGICAL_MODEL • Prazos & SLAs", visible: true },
+    { id: "ai_visionary_teacher", label: "IA Visionary Teacher", icon: Sparkles, desc: "AI_GENERAL_MODEL • Variações de Exercícios", visible: true },
+    { id: "ai_vision_model", label: "Visão IA (LLaVA)", icon: Eye, desc: "AI_VISION_MODEL • OCR & Rubrica", visible: true },
+    { id: "ai_curriculum_architect", label: "Arquiteto Curricular", icon: BookOpen, desc: "AI_GENERAL_MODEL • Ementas & Planos", visible: true },
+    { id: "predictive_performance", label: "Desempenho Preditivo", icon: TrendingUp, desc: "AI_PEDAGOGICAL_MODEL • Retenção e Bloqueio", visible: true },
     { id: "collab_sandbox", label: "Sandbox Live", icon: Users, desc: "Programação Colaborativa", visible: true },
     { id: "lms_integration", label: "Integração LMS", icon: BookOpen, desc: "Moodle & Google Classroom", visible: true },
+    { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];
 
