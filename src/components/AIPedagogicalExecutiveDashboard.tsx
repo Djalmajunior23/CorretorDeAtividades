@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Cpu, Sparkles, TrendingUp, Clock, AlertTriangle, CheckCircle2, ShieldCheck, ArrowRight, RefreshCw, BarChart2, BookOpen, FileText, Zap } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
+import { safeAutoTable } from "../utils/pdfExport";
 
 interface SlaSuggestion {
   id: string;
@@ -146,7 +147,7 @@ export function AIPedagogicalExecutiveDashboard() {
       s.status === "applied" ? "Aplicado" : "Pendente"
     ]);
 
-    (doc as any).autoTable({
+    safeAutoTable(doc, {
       startY: 85,
       head: [["Atividade / Laboratório", "SLA Atual", "SLA Sugerido (IA)", "Justificativa da Cadência", "Status"]],
       body: rows,

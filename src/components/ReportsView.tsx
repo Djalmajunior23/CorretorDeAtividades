@@ -21,12 +21,14 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { GeneratedReport } from "../types";
 import { apiUrl, safeJsonResponse } from "../config/api";
+import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
 
 export default function ReportsView() {
   const [reports, setReports] = useState<GeneratedReport[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showConsolidatedModal, setShowConsolidatedModal] = useState(false);
   
   const [activeTab, setActiveTab] = useState<"reports" | "generator">("reports");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -155,17 +157,17 @@ export default function ReportsView() {
 
   const exportPDF = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`/api/reports/${id}/export/pdf`, "_blank");
+    window.open(apiUrl(`/api/reports/${id}/export/pdf`), "_blank");
   };
 
   const exportDOCX = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`/api/reports/${id}/export/docx`, "_blank");
+    window.open(apiUrl(`/api/reports/${id}/export/docx`), "_blank");
   };
 
   const exportXLSX = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`/api/reports/${id}/export/xlsx`, "_blank");
+    window.open(apiUrl(`/api/reports/${id}/export/xlsx`), "_blank");
   };
 
   const openReportDetails = (report: GeneratedReport) => {
@@ -199,7 +201,14 @@ export default function ReportsView() {
             Emita análises individuais ou coletivas detalhadas com download multiplataforma (PDF, Word, Excel).
           </p>
         </div>
-        <div className="flex gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+        <div className="flex flex-wrap gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+          <button
+            onClick={() => setShowConsolidatedModal(true)}
+            className="px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-2 cursor-pointer bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 shadow-sm"
+          >
+            <FileText className="w-4 h-4 text-emerald-400" />
+            Relatório Consolidado de Turma (PDF)
+          </button>
           <button
             onClick={() => setActiveTab("reports")}
             className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
@@ -637,6 +646,10 @@ export default function ReportsView() {
           );
         })()}
       </AnimatePresence>
+
+      {showConsolidatedModal && (
+        <ConsolidatedPdfReportModal onClose={() => setShowConsolidatedModal(false)} />
+      )}
     </div>
   );
 }

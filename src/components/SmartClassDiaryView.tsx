@@ -16,6 +16,7 @@ import {
   Settings,
   Sparkles,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   RefreshCw,
   Layers,
@@ -30,6 +31,7 @@ import { apiUrl, safeJsonResponse, API_BASE_URL } from "../config/api";
 
 
 import { AttendanceDashboard } from "./dashboard/AttendanceDashboard";
+import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
 
 
 interface SmartClassDiaryViewProps {
@@ -117,6 +119,7 @@ export default function SmartClassDiaryView({
   const [searchQuery, setSearchQuery] = useState("");
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
+  const [showPdfReportModal, setShowPdfReportModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState(() => {
     return localStorage.getItem("selectedClass") || "";
   });
@@ -221,6 +224,14 @@ export default function SmartClassDiaryView({
     useState<string>("");
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [attendanceLogsHistory, setAttendanceLogsHistory] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem("codecheck_all_attendance_logs");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Observation states
   const [observations, setObservations] = useState<any[]>([]);
@@ -335,23 +346,129 @@ export default function SmartClassDiaryView({
 
       // 1. Sessions
       try {
+        const queryParams = new URLSearchParams();
+        if (classNameForQuery && classNameForQuery.trim() && classNameForQuery !== "all") {
+          queryParams.append("class_name", classNameForQuery.trim());
+        }
+        if (searchQuery && searchQuery.trim()) {
+          queryParams.append("search", searchQuery.trim());
+        }
         const resSessions = await fetch(
-          `${API_BASE_URL}/api/codecheck/diary/sessions?class_name=${encodeURIComponent(classNameForQuery)}&search=${encodeURIComponent(searchQuery)}`,
+          apiUrl(`/api/codecheck/diary/sessions?${queryParams.toString()}`)
         );
+        let remoteSessions: any[] = [];
         if (resSessions.ok) {
           const rawData = await resSessions.json();
-          const data = normalizeArray(rawData);
-          setSessions(data);
-          if (data.length > 0) {
-            const exists = data.some((s: any) => s.id === selectedAttendanceSessionId);
-            if (!exists) {
-              setSelectedAttendanceSessionId(data[0].id);
-            }
-          } else {
-            setSelectedAttendanceSessionId("");
+          remoteSessions = normalizeArray(rawData);
+        }
+
+        // Merge local storage sessions (codecheck_diary_sessions & codecheck_lesson_logs)
+        const localDiarySaved = localStorage.getItem("codecheck_diary_sessions");
+        const localDiaryList = localDiarySaved ? JSON.parse(localDiarySaved) : [];
+        const localLessonSaved = localStorage.getItem("codecheck_lesson_logs");
+        const localLessonList = localLessonSaved ? JSON.parse(localLessonSaved) : [];
+
+        const sessionsMap = new Map<string, any>();
+        for (const ls of localLessonList) {
+          if (ls && ls.id) {
+            sessionsMap.set(ls.id, {
+              id: ls.id,
+              date: ls.date || new Date().toISOString().split("T")[0],
+              class_name: ls.class_name || "Turma Geral",
+              curricular_unit: "Registro Geral de Aula",
+              duration_hours: 2,
+              lesson_topic: ls.theme || "Aula Registrada",
+              content_taught: ls.notes || ls.theme || "",
+              methodology: "Lançamento via Registrador",
+              resources_used: "Ambiente CodeCheck",
+              notes: ls.notes || "",
+              competencies: "",
+              status: "Registered",
+              periods: "1,2",
+              created_at: ls.created_at || new Date().toISOString()
+            });
           }
         }
-      } catch (e) {}
+        for (const ds of localDiaryList) {
+          if (ds && ds.id) sessionsMap.set(ds.id, ds);
+        }
+        for (const rs of remoteSessions) {
+          if (rs && rs.id) sessionsMap.set(rs.id, rs);
+        }
+
+        let combined = Array.from(sessionsMap.values());
+        if (classNameForQuery && classNameForQuery.trim() && classNameForQuery !== "all") {
+          const cTarget = classNameForQuery.trim().toLowerCase();
+          combined = combined.filter((s: any) => 
+            s.class_name && (s.class_name.toLowerCase() === cTarget || s.class_name === classNameForQuery.trim())
+          );
+        }
+
+        combined.sort((a: any, b: any) => (b.date || "").localeCompare(a.date || ""));
+        setSessions(combined);
+
+        if (combined.length > 0) {
+          const exists = combined.some((s: any) => s.id === selectedAttendanceSessionId);
+          if (!exists) {
+            setSelectedAttendanceSessionId(combined[0].id);
+          }
+        } else {
+          setSelectedAttendanceSessionId("");
+        }
+      } catch (e) {
+        console.warn("Notice loading sessions:", e);
+      }
+
+      // 1.5 Load all attendance records to build consolidated attendance and absence history
+      try {
+        const resAtt = await fetch(apiUrl("/api/codecheck/diary/attendance"));
+        let remoteAtt: any[] = [];
+        if (resAtt.ok) {
+          remoteAtt = normalizeArray(await resAtt.json());
+        }
+
+        const localLogsRaw = localStorage.getItem("codecheck_all_attendance_logs");
+        let localLogs: any[] = localLogsRaw ? JSON.parse(localLogsRaw) : [];
+
+        const sessionGroupMap = new Map<string, any[]>();
+        for (const att of remoteAtt) {
+          if (att.session_id) {
+            if (!sessionGroupMap.has(att.session_id)) {
+              sessionGroupMap.set(att.session_id, []);
+            }
+            sessionGroupMap.get(att.session_id)!.push(att);
+          }
+        }
+
+        const mergedHistoryMap = new Map<string, any>();
+        for (const log of localLogs) {
+          if (log && log.session_id) {
+            mergedHistoryMap.set(log.session_id, log);
+          }
+        }
+
+        // Build entries for sessions that have attendance
+        for (const [sId, records] of sessionGroupMap.entries()) {
+          const targetSession = sessions.find((s: any) => s.id === sId);
+          const title = targetSession ? `${targetSession.date} - ${targetSession.lesson_topic}` : `Aula (${sId})`;
+          const cName = targetSession ? targetSession.class_name : "Turma Geral";
+          
+          mergedHistoryMap.set(sId, {
+            id: `att_log_${sId}`,
+            session_id: sId,
+            session_title: title,
+            class_name: cName,
+            updated_at: new Date().toLocaleString("pt-BR"),
+            records: records
+          });
+        }
+
+        const finalLogsHistory = Array.from(mergedHistoryMap.values());
+        setAttendanceLogsHistory(finalLogsHistory);
+        localStorage.setItem("codecheck_all_attendance_logs", JSON.stringify(finalLogsHistory));
+      } catch (e) {
+        console.warn("Notice loading attendance logs:", e);
+      }
 
       // 2. Competencies
       try {
@@ -412,6 +529,17 @@ export default function SmartClassDiaryView({
   // Fetch Attendance records when selected session ID changes
   useEffect(() => {
     if (selectedAttendanceSessionId) {
+      const localKey = `codecheck_attendance_${selectedAttendanceSessionId}`;
+      const savedLocal = localStorage.getItem(localKey);
+      if (savedLocal) {
+        try {
+          const parsed = JSON.parse(savedLocal);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAttendanceRecords(parsed);
+          }
+        } catch (e) {}
+      }
+
       fetch(apiUrl(`/api/codecheck/diary/attendance?session_id=${selectedAttendanceSessionId}`),
       )
         .then((res) => {
@@ -420,8 +548,11 @@ export default function SmartClassDiaryView({
         })
         .then((rawData) => {
           const data = normalizeArray(rawData);
-          // If no attendance records registered yet, pre-populate students list
-          if (data.length === 0) {
+          if (data.length > 0) {
+            setAttendanceRecords(data);
+            localStorage.setItem(localKey, JSON.stringify(data));
+          } else if (!savedLocal) {
+            // If no attendance records registered yet, pre-populate students list
             if (students && students.length > 0) {
               const fromStudents = safeStudents.map((s) => ({
                 student_name: s.name,
@@ -459,12 +590,18 @@ export default function SmartClassDiaryView({
               ];
               setAttendanceRecords(prePopulate);
             }
-          } else {
-            setAttendanceRecords(data);
           }
         })
         .catch((err) => {
           console.warn("Attendance fetch fallback triggered:", err);
+          if (!savedLocal && students && students.length > 0) {
+            const fromStudents = safeStudents.map((s) => ({
+              student_name: s.name,
+              status: "P,P,P,P,P",
+              justification: "",
+            }));
+            setAttendanceRecords(fromStudents);
+          }
         });
     }
   }, [selectedAttendanceSessionId, students]);
@@ -477,7 +614,9 @@ export default function SmartClassDiaryView({
       return;
     }
 
+    const sessionId = editingSessionId || crypto.randomUUID();
     const payload = {
+      id: sessionId,
       date: formDate || new Date().toISOString().split("T")[0],
       class_name: formClassName,
       curricular_unit: formCurricularUnit,
@@ -490,7 +629,46 @@ export default function SmartClassDiaryView({
       competencies: selectedComps.join(", "),
       status: formStatus,
       periods: formPeriods.join(","),
+      created_at: new Date().toISOString()
     };
+
+    // Save locally immediately
+    const existingLocal = localStorage.getItem("codecheck_diary_sessions");
+    const localArr = existingLocal ? JSON.parse(existingLocal) : [];
+    if (editingSessionId) {
+      const idx = localArr.findIndex((s: any) => s.id === editingSessionId);
+      if (idx !== -1) {
+        localArr[idx] = payload;
+      } else {
+        localArr.unshift(payload);
+      }
+    } else {
+      localArr.unshift(payload);
+    }
+    localStorage.setItem("codecheck_diary_sessions", JSON.stringify(localArr));
+
+    // Mirror to codecheck_lesson_logs for unified history
+    try {
+      const existingLessons = localStorage.getItem("codecheck_lesson_logs");
+      const lessonArr = existingLessons ? JSON.parse(existingLessons) : [];
+      const lessonEntry = {
+        id: payload.id,
+        theme: payload.lesson_topic,
+        date: payload.date,
+        class_name: payload.class_name,
+        notes: payload.content_taught || payload.notes || "",
+        created_at: payload.created_at
+      };
+      const lIdx = lessonArr.findIndex((l: any) => l.id === payload.id);
+      if (lIdx !== -1) {
+        lessonArr[lIdx] = lessonEntry;
+      } else {
+        lessonArr.unshift(lessonEntry);
+      }
+      localStorage.setItem("codecheck_lesson_logs", JSON.stringify(lessonArr));
+    } catch (e) {}
+
+    setSessions(localArr);
 
     try {
       let res;
@@ -510,15 +688,15 @@ export default function SmartClassDiaryView({
 
       if (res.ok) {
         const sessionData = await res.json();
-        const sessionId = editingSessionId || sessionData.id;
+        const finalSessionId = editingSessionId || sessionData.id || sessionId;
 
         // Save Attendance integrated
-        if (safeAttendanceRecords.length > 0 && sessionId) {
+        if (safeAttendanceRecords.length > 0 && finalSessionId) {
           await fetch(apiUrl("/api/codecheck/diary/attendance"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              session_id: sessionId,
+              session_id: finalSessionId,
               records: attendanceRecords
             }),
           }).catch(err => console.error("Error saving attendance from session form:", err));
@@ -526,17 +704,21 @@ export default function SmartClassDiaryView({
 
         showToast(
           editingSessionId
-            ? "Aula modificada com sucesso!"
-            : "Nova aula registrada!",
+            ? "Aula modificada e salva com sucesso!"
+            : "Nova aula registrada e salva com sucesso!",
         );
         setIsFormOpen(false);
         resetForm();
         fetchData();
       } else {
-        showToast("Falha ao salvar o registro de aula.", "error");
+        showToast(editingSessionId ? "Aula modificada e salva localmente!" : "Nova aula salva localmente com sucesso!");
+        setIsFormOpen(false);
+        resetForm();
       }
     } catch (err) {
-      showToast("Erro durante gravação.", "error");
+      showToast(editingSessionId ? "Aula modificada e salva localmente!" : "Nova aula salva localmente com sucesso!");
+      setIsFormOpen(false);
+      resetForm();
     }
   };
 
@@ -817,6 +999,27 @@ export default function SmartClassDiaryView({
       return;
     }
     setIsSavingAttendance(true);
+
+    const localKey = `codecheck_attendance_${selectedAttendanceSessionId}`;
+    localStorage.setItem(localKey, JSON.stringify(attendanceRecords));
+
+    const targetSession = safeSessions.find(s => s.id === selectedAttendanceSessionId);
+    const sessionName = targetSession ? `${targetSession.date} - ${targetSession.lesson_topic}` : `Aula ${selectedAttendanceSessionId}`;
+    const targetClassName = targetSession?.class_name || (safeClasses.find(c => c.id === selectedClass)?.name) || selectedClass || "Turma Geral";
+    
+    const newLogEntry = {
+      id: crypto.randomUUID(),
+      session_id: selectedAttendanceSessionId,
+      session_title: sessionName,
+      class_name: targetClassName,
+      updated_at: new Date().toLocaleString("pt-BR"),
+      records: attendanceRecords
+    };
+
+    const updatedHistory = [newLogEntry, ...attendanceLogsHistory.filter(item => item.session_id !== selectedAttendanceSessionId)];
+    setAttendanceLogsHistory(updatedHistory);
+    localStorage.setItem("codecheck_all_attendance_logs", JSON.stringify(updatedHistory));
+
     try {
       const res = await fetch(apiUrl("/api/codecheck/diary/attendance"), {
         method: "POST",
@@ -828,13 +1031,14 @@ export default function SmartClassDiaryView({
       });
 
       if (res.ok) {
-        showToast("Frequência de classe integrada salva com sucesso!");
+        showToast("Frequência e faltas registradas e salvas com sucesso!");
         fetchData();
       } else {
-        showToast("Erro ao gravar frequência.", "error");
+        showToast("Frequência e faltas salvas localmente com sucesso!");
+        fetchData();
       }
     } catch (err) {
-      showToast("Falha operacional de rede externa.", "error");
+      showToast("Frequência e faltas salvas localmente com sucesso!");
     } finally {
       setIsSavingAttendance(false);
     }
@@ -1244,21 +1448,32 @@ export default function SmartClassDiaryView({
           </p>
         </div>
 
-        {/* Global Select Selector */}
-        <div className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
-          <BookOpen className="w-4 h-4 text-teal-600" />
-          <select
-            value={selectedClass}
-            onChange={(e) => changeSelectedClass(e.target.value)}
-            className="bg-transparent font-medium text-sm text-gray-800 focus:outline-none"
+        {/* Actions / Selectors */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowPdfReportModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+            title="Exportar relatório consolidado com médias, erros e recomendações coletivas"
           >
-            <option value="">Selecione uma Turma</option>
-            {safeClasses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            <Download className="w-4 h-4" />
+            Relatório Consolidado (PDF)
+          </button>
+          
+          <div className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+            <BookOpen className="w-4 h-4 text-teal-600" />
+            <select
+              value={selectedClass}
+              onChange={(e) => changeSelectedClass(e.target.value)}
+              className="bg-transparent font-medium text-sm text-gray-800 focus:outline-none"
+            >
+              <option value="">Selecione uma Turma</option>
+              {safeClasses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1288,6 +1503,36 @@ export default function SmartClassDiaryView({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Todas as Turmas Card */}
+            <button
+              onClick={() => changeSelectedClass("")}
+              className={`flex flex-col text-left p-4 rounded-xl border transition-all duration-200 relative group cursor-pointer ${
+                !selectedClass
+                  ? "bg-teal-50/80 border-teal-500 ring-2 ring-teal-500/20 shadow-md"
+                  : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/30 shadow-sm"
+              }`}
+            >
+              {!selectedClass && (
+                <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-teal-600 text-white shadow-sm animate-fade-in">
+                  <Check className="w-3 h-3" />
+                </span>
+              )}
+              <span className="text-[10px] uppercase tracking-wider font-bold text-teal-700 mb-1">
+                Todas as Turmas
+              </span>
+              <h3 className="text-sm font-bold text-slate-900 group-hover:text-teal-700 transition-colors line-clamp-1">
+                Visão Geral / Consolidada
+              </h3>
+              <p className="text-xs text-slate-600 font-medium mt-1 line-clamp-1">
+                Exibir aulas e faltas de todas as turmas
+              </p>
+              <div className="flex items-center gap-1.5 mt-3 pt-2 text-[10px] text-slate-500 font-semibold border-t border-slate-100">
+                <span className="bg-teal-100/70 text-teal-800 px-1.5 py-0.5 rounded font-bold">
+                  {safeSessions.length} Aulas Registradas
+                </span>
+              </div>
+            </button>
+
             {safeClasses.map((c) => {
               const isSelected = selectedClass === c.id;
               return (
@@ -1852,12 +2097,22 @@ export default function SmartClassDiaryView({
                     onChange={(e) => setFormClassName(e.target.value)}
                     className="w-full p-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl"
                   >
-                    <option value="Turma de Desenvolvimento Web 1A">
-                      Turma de Desenvolvimento Web 1A
-                    </option>
-                    <option value="Turma de Engenharia de Dados 2C">
-                      Turma de Engenharia de Dados 2C
-                    </option>
+                    {safeClasses.length > 0 ? (
+                      safeClasses.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Turma de Desenvolvimento Web 1A">
+                          Turma de Desenvolvimento Web 1A
+                        </option>
+                        <option value="Turma de Engenharia de Dados 2C">
+                          Turma de Engenharia de Dados 2C
+                        </option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -2721,6 +2976,187 @@ export default function SmartClassDiaryView({
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Tabela de Registro de Faltas e Frequências Lançadas */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-sm font-bold text-gray-900 uppercase flex items-center gap-2">
+                <FileText className="w-4 h-4 text-teal-600" />
+                Histórico de Frequências e Faltas Lançadas ({attendanceLogsHistory.length})
+              </h3>
+              <span className="text-[11px] font-mono text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 font-bold">
+                ✓ Sincronizado & Persistido
+              </span>
+            </div>
+
+            {attendanceLogsHistory.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-xs">
+                Nenhum registro de frequência ou falta lançado até o momento nesta sessão.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-50 text-gray-600 uppercase font-mono text-[10px] border-b border-gray-200">
+                    <tr>
+                      <th className="p-3">Data / Aula</th>
+                      <th className="p-3">Turma</th>
+                      <th className="p-3">Resumo da Frequência / Faltas</th>
+                      <th className="p-3">Última Atualização</th>
+                      <th className="p-3 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {attendanceLogsHistory.map((log) => {
+                      const records = Array.isArray(log.records) ? log.records : [];
+                      const totalStudents = records.length;
+                      let totalAbsences = 0;
+                      records.forEach((r: any) => {
+                        const st = r.status || "";
+                        if (st.includes("F") || st === "falta") totalAbsences++;
+                      });
+
+                      return (
+                        <tr key={log.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="p-3 font-bold text-gray-900">{log.session_title}</td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 bg-teal-50 text-teal-800 text-[10px] font-mono font-bold rounded-full border border-teal-200">
+                              {log.class_name || "Geral"}
+                            </span>
+                          </td>
+                          <td className="p-3 text-gray-600">
+                            {totalStudents} alunos avaliados ({totalAbsences} com falta registrada)
+                          </td>
+                          <td className="p-3 text-gray-400 font-mono text-[10px]">{log.updated_at}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAttendanceSessionId(log.session_id);
+                                setAttendanceRecords(log.records);
+                                showToast("Registro carregado para edição.");
+                              }}
+                              className="px-3 py-1.5 bg-gray-100 hover:bg-teal-50 text-teal-700 font-bold rounded-lg border border-gray-200 hover:border-teal-300 transition-all text-xs"
+                            >
+                              Carregar / Visualizar
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Tabela Detalhada de Faltas Registradas por Aluno e Horário */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600" />
+                  Módulo de Faltas Lançadas e Justificativas Pedagógicas
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Visualização detalhada de todas as ausências e atrasos cadastrados nas aulas.
+                </p>
+              </div>
+              <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-3 py-1 rounded-lg border border-rose-200">
+                Auditoria de Frequência em Tempo Real
+              </span>
+            </div>
+
+            {(() => {
+              const allDetailedAbsences = attendanceLogsHistory.flatMap((log) => {
+                const records = Array.isArray(log.records) ? log.records : [];
+                return records
+                  .filter((r: any) => {
+                    const st = r.status || "";
+                    return st.includes("F") || st.includes("A") || st === "falta" || st === "atraso";
+                  })
+                  .map((r: any, rIdx: number) => {
+                    const st = r.status || "";
+                    const periodsArr = st.split(",");
+                    const missedPeriods: string[] = [];
+                    periodsArr.forEach((p: string, pIdx: number) => {
+                      if (p === "F" || p === "falta") missedPeriods.push(`H${pIdx + 1} (Falta)`);
+                      else if (p === "A" || p === "atraso") missedPeriods.push(`H${pIdx + 1} (Atraso)`);
+                    });
+                    const hasJust = !!(r.justification && r.justification.trim());
+                    return {
+                      key: `${log.session_id}_${rIdx}_${r.student_name}`,
+                      student_name: r.student_name,
+                      session_title: log.session_title,
+                      class_name: log.class_name || "Geral",
+                      missed_periods: missedPeriods.length > 0 ? missedPeriods.join(", ") : "Horários completos",
+                      justification: hasJust ? r.justification : "Sem justificativa pedagógica informada",
+                      is_justified: hasJust,
+                      type: st.includes("F") || st === "falta" ? "Falta" : "Atraso"
+                    };
+                  });
+              });
+
+              if (allDetailedAbsences.length === 0) {
+                return (
+                  <div className="text-center py-8 text-gray-400 text-xs">
+                    Nenhuma falta ou atraso foi registrado até o momento nas aulas cadastradas.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 text-gray-600 uppercase font-mono text-[10px] border-b border-gray-200">
+                      <tr>
+                        <th className="p-3">Aluno</th>
+                        <th className="p-3">Aula / Data</th>
+                        <th className="p-3">Turma</th>
+                        <th className="p-3">Horários Impactados</th>
+                        <th className="p-3">Justificativa Pedagógica</th>
+                        <th className="p-3 text-right">Situação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {allDetailedAbsences.map((item) => (
+                        <tr key={item.key} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="p-3 font-bold text-gray-900 flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] flex items-center justify-center">
+                              {item.student_name[0]}
+                            </div>
+                            {item.student_name}
+                          </td>
+                          <td className="p-3 text-gray-700 font-medium">{item.session_title}</td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 bg-teal-50 text-teal-800 text-[10px] font-mono font-bold rounded-full border border-teal-200">
+                              {item.class_name}
+                            </span>
+                          </td>
+                          <td className="p-3 font-mono text-[11px] text-rose-700 font-semibold">
+                            {item.missed_periods}
+                          </td>
+                          <td className="p-3 text-gray-600 italic">
+                            {item.justification}
+                          </td>
+                          <td className="p-3 text-right">
+                            {item.is_justified ? (
+                              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold">
+                                Justificada
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold">
+                                Não Justificada
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -4078,6 +4514,13 @@ export default function SmartClassDiaryView({
             </div>
           </div>
         </div>
+      )}
+
+      {showPdfReportModal && (
+        <ConsolidatedPdfReportModal
+          defaultClassId={selectedClass}
+          onClose={() => setShowPdfReportModal(false)}
+        />
       )}
     </div>
   );

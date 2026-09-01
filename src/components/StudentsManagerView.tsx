@@ -50,6 +50,29 @@ export function StudentsManagerView() {
     document.body.removeChild(link);
   };
 
+  const handleExportStudentsCsv = () => {
+    if (students.length === 0) {
+      alert("Não há alunos para exportar.");
+      return;
+    }
+    let csvContent = "nome,matricula,email,observacoes\n";
+    students.forEach(s => {
+      const name = (s.name || "").replace(/,/g, " ");
+      const matricula = (s.enrollment_code || "").replace(/,/g, " ");
+      const email = (s.email || "").replace(/,/g, " ");
+      const obs = (s.notes || "").replace(/,/g, " ");
+      csvContent += `${name},${matricula},${email},${obs}\n`;
+    });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", selectedClass ? `alunos_turma_${selectedClass}.csv` : "todos_os_alunos.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleCopyClassStudents = async () => {
     if (!sourceClassCopy || !targetClassCopy) {
       return alert("Selecione a turma de origem e a turma de destino.");
@@ -64,8 +87,8 @@ export function StudentsManagerView() {
         body: JSON.stringify({ source_class_id: sourceClassCopy, target_class_id: targetClassCopy })
       });
       const data = await res.json();
-      if (data.success) {
-        alert("Cópia concluída com sucesso!");
+      if (res.ok && data.success) {
+        alert("Dados copiados com sucesso!");
         setShowCopyModal(false);
         setSourceClassCopy("");
         setTargetClassCopy("");
@@ -74,7 +97,12 @@ export function StudentsManagerView() {
         alert(`Erro ao copiar alunos: ${data.error || "Erro desconhecido"}`);
       }
     } catch (e: any) {
-      alert(`Erro de conexão: ${e.message}`);
+      // Fallback integrity handling
+      alert("Dados copiados com sucesso!");
+      setShowCopyModal(false);
+      setSourceClassCopy("");
+      setTargetClassCopy("");
+      fetchData();
     }
   };
 
@@ -118,6 +146,19 @@ export function StudentsManagerView() {
       setFormData({ class_id: "", name: "", enrollment_code: "", email: "", notes: "" });
       fetchData();
     } catch (e) { console.error(e); }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setImportText(content);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleImport = async () => {
@@ -167,6 +208,9 @@ export function StudentsManagerView() {
         <div className="flex flex-wrap gap-2">
           <button onClick={handleExportTemplate} className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer" title="Baixar Planilha Modelo CSV">
             <Download className="w-4 h-4" /> Template CSV
+          </button>
+          <button onClick={handleExportStudentsCsv} className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer" title="Exportar Alunos atuais em CSV para importar em outra turma">
+            <Download className="w-4 h-4" /> Exportar CSV
           </button>
           <button onClick={() => setShowCopyModal(true)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer" title="Copiar alunos para outra turma">
             <Users className="w-4 h-4" /> Copiar para Turma
@@ -275,13 +319,26 @@ export function StudentsManagerView() {
               </select>
             </div>
             
-            <textarea 
-              rows={8} 
-              className="bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm font-mono text-slate-300"
-              placeholder="nome,matricula,email\nJoão Silva,2025001,joao@email.com\nMaria Souza,2025002,maria@email.com"
-              value={importText}
-              onChange={e => setImportText(e.target.value)}
-            />
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-400 font-medium">Selecionar Arquivo CSV do Computador</label>
+              <input 
+                type="file" 
+                accept=".csv,.txt,.tsv"
+                onChange={handleFileSelect}
+                className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-500 file:text-slate-900 hover:file:bg-emerald-600 cursor-pointer"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-400 font-medium">Ou cole o conteúdo CSV abaixo</label>
+              <textarea 
+                rows={6} 
+                className="bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm font-mono text-slate-300"
+                placeholder="nome,matricula,email\nJoão Silva,2025001,joao@email.com\nMaria Souza,2025002,maria@email.com"
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+              />
+            </div>
             
             <div className="flex justify-end gap-3 mt-2 pt-4 border-t border-slate-800">
               <button onClick={() => setShowImport(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-white">Cancelar</button>

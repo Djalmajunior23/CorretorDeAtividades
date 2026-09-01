@@ -1,19 +1,16 @@
-const envApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const envApiUrl = typeof import.meta !== "undefined" ? import.meta.env?.VITE_API_BASE_URL?.trim() : "";
 
 export const API_BASE_URL =
   envApiUrl && envApiUrl.length > 0
     ? envApiUrl.replace(/\/$/, "")
-    : (typeof window !== "undefined" ? window.location.origin : "");
+    : "";
 
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const finalUrl = `${API_BASE_URL}${normalizedPath}`;
-
-  if (import.meta.env.DEV) {
-    console.log("[CodeCheck API Request]", finalUrl);
+  if (API_BASE_URL) {
+    return `${API_BASE_URL}${normalizedPath}`;
   }
-
-  return finalUrl;
+  return normalizedPath;
 };
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
@@ -24,7 +21,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         "Content-Type": "application/json",
         ...(options.headers || {})
       },
-      credentials: options.credentials || "include"
+      credentials: options.credentials || "same-origin"
     });
 
     const contentType = response.headers.get("content-type") || "";
@@ -55,7 +52,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       throw new Error("Erro externo do navegador ou ambiente de preview.");
     }
 
-    throw new Error("Não foi possível conectar ao servidor do CodeCheck. Verifique a conexão e tente novamente.");
+    throw error;
   }
 }
 

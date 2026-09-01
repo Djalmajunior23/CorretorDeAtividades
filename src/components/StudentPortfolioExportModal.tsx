@@ -29,24 +29,64 @@ export function StudentPortfolioExportModal({ submissions, onClose }: StudentPor
         <meta charset="UTF-8">
         <title>Portfólio Acadêmico & Matriz de Competências - SENAI CodeCheck</title>
         <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 40px; line-height: 1.6; background: #fff; }
-          .page { border: 2px solid #0f172a; padding: 40px; border-radius: 12px; margin-bottom: 40px; page-break-after: always; }
-          header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
-          .logo-area h1 { font-size: 24px; color: #1e3a8a; margin: 0; font-weight: 900; }
-          .logo-area p { font-size: 13px; color: #64748b; margin: 4px 0 0 0; }
-          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-bottom: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-          .meta-item { font-size: 13px; }
+          @page {
+            size: A4 portrait;
+            margin: 12mm 14mm;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            box-sizing: border-box;
+          }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            color: #1e293b; 
+            margin: 0; 
+            padding: 10px;
+            line-height: 1.5; 
+            background: #fff; 
+            font-size: 11px;
+          }
+          .page { 
+            border: 1.5px solid #0f172a; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+            page-break-after: always; 
+            page-break-inside: avoid;
+          }
+          .page:last-child {
+            page-break-after: auto;
+          }
+          header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 2.5px solid #2563eb; 
+            padding-bottom: 12px; 
+            margin-bottom: 18px; 
+          }
+          .logo-area h1 { font-size: 18px; color: #1e3a8a; margin: 0; font-weight: 900; }
+          .logo-area p { font-size: 11px; color: #64748b; margin: 3px 0 0 0; }
+          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+          .meta-item { font-size: 11px; }
           .meta-item strong { color: #334155; }
-          h3 { color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-top: 25px; font-size: 16px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-          th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+          h3 { color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 16px; font-size: 13px; font-weight: 700; page-break-after: avoid; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10.5px; }
+          thead { display: table-header-group; }
+          tr { page-break-inside: avoid; }
+          th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; }
           th { background: #1e3a8a; color: white; font-weight: 600; }
           tr:nth-child(even) { background: #f8fafc; }
-          .badge-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-          .badge-tag { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
-          .signature-section { margin-top: 60px; display: flex; justify-content: space-between; text-align: center; }
-          .sig-line { width: 250px; border-top: 1px solid #334155; padding-top: 8px; font-size: 12px; color: #475569; }
-          footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+          .badge-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+          .badge-tag { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 3px 8px; border-radius: 12px; font-size: 9.5px; font-weight: bold; }
+          .signature-section { margin-top: 35px; display: flex; justify-content: space-between; text-align: center; page-break-inside: avoid; }
+          .sig-line { width: 200px; border-top: 1px solid #334155; padding-top: 6px; font-size: 10px; color: #475569; }
+          footer { text-align: center; font-size: 9px; color: #94a3b8; margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 10px; page-break-inside: avoid; }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
         </style>
       </head>
       <body>
@@ -148,7 +188,27 @@ export function StudentPortfolioExportModal({ submissions, onClose }: StudentPor
       const printWindow = window.open(url, '_blank');
       if (printWindow) {
         printWindow.onload = () => {
+          printWindow.focus();
           printWindow.print();
+        };
+      } else {
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+        iframe.src = url;
+        iframe.onload = () => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 1500);
         };
       }
 

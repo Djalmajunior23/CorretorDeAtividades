@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search, Edit2, Archive, Trash, MoreVertical } from "lucide-react";
+import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search, Edit2, Archive, Trash, MoreVertical, Download } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
+import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
 
 const emptyClassForm = () => ({
   name: "",
@@ -26,6 +27,8 @@ export function ClassManagerView() {
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [selectedClassForReport, setSelectedClassForReport] = useState<string | undefined>(undefined);
   const [formData, setFormData] = useState(emptyClassForm());
   const [editId, setEditId] = useState<string | null>(null);
 
@@ -96,16 +99,28 @@ export function ClassManagerView() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white font-display">Gestão de Turmas</h2>
           <p className="text-sm text-slate-400 mt-1">
-            Organize e gerencie suas turmas, alunos e módulos para melhor rastreamento pedagógico.
+            Organize suas turmas, alunos e exporte relatórios pedagógicos consolidados em PDF com análise de erros e recomendações coletivas.
           </p>
         </div>
-        <button
-          onClick={() => { setEditId(null); setFormData(emptyClassForm()); setShowModal(true); }}
-          className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Nova Turma
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setSelectedClassForReport(undefined);
+              setShowPdfModal(true);
+            }}
+            className="bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-md cursor-pointer text-sm"
+          >
+            <FileText className="w-4 h-4 text-emerald-400" />
+            Relatório Consolidado (PDF)
+          </button>
+          <button
+            onClick={() => { setEditId(null); setFormData(emptyClassForm()); setShowModal(true); }}
+            className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nova Turma
+          </button>
+        </div>
       </div>
 
       <div className="bg-[#0f172a] rounded-xl border border-slate-800 p-6 flex flex-col gap-4">
@@ -125,13 +140,16 @@ export function ClassManagerView() {
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       <div className="absolute right-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 py-1">
-                        <button onClick={() => { setEditId(cls.id); setFormData(normalizeClassForm(cls)); setShowModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <button onClick={() => { setEditId(cls.id); setFormData(normalizeClassForm(cls)); setShowModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 cursor-pointer">
                           <Edit2 className="w-3 h-3" /> Editar
                         </button>
-                        <button onClick={() => handleArchive(cls.id, cls)} className="w-full text-left px-3 py-1.5 text-xs text-amber-400 hover:bg-slate-700 flex items-center gap-2">
+                        <button onClick={() => { setSelectedClassForReport(cls.name); setShowPdfModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-emerald-400 hover:bg-slate-700 flex items-center gap-2 cursor-pointer">
+                          <FileText className="w-3 h-3" /> Relatório PDF
+                        </button>
+                        <button onClick={() => handleArchive(cls.id, cls)} className="w-full text-left px-3 py-1.5 text-xs text-amber-400 hover:bg-slate-700 flex items-center gap-2 cursor-pointer">
                           <Archive className="w-3 h-3" /> Arquivar
                         </button>
-                        <button onClick={() => handleDelete(cls.id)} className="w-full text-left px-3 py-1.5 text-xs text-rose-400 hover:bg-slate-700 flex items-center gap-2">
+                        <button onClick={() => handleDelete(cls.id)} className="w-full text-left px-3 py-1.5 text-xs text-rose-400 hover:bg-slate-700 flex items-center gap-2 cursor-pointer">
                           <Trash className="w-3 h-3" /> Excluir
                         </button>
                       </div>
@@ -161,12 +179,29 @@ export function ClassManagerView() {
                   <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded ${cls.status === 'archived' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-400'}`}>
                     {cls.status === 'archived' ? 'Arquivada' : 'Ativa'}
                   </span>
+
+                  <button
+                    onClick={() => {
+                      setSelectedClassForReport(cls.name);
+                      setShowPdfModal(true);
+                    }}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 font-medium px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all cursor-pointer"
+                  >
+                    <Download className="w-3 h-3" /> Relatório PDF
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {showPdfModal && (
+        <ConsolidatedPdfReportModal
+          onClose={() => setShowPdfModal(false)}
+          defaultClassName={selectedClassForReport}
+        />
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 bg-[#030712]/80 backdrop-blur-sm flex items-center justify-center p-4">

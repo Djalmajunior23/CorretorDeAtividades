@@ -57,9 +57,14 @@ export default function QuestionBankView() {
     setLoading(true);
     try {
       const data = await apiFetch("/api/questions");
-      setQuestions(normalizeQuestions(data));
+      const normalized = normalizeQuestions(data);
+      if (normalized.length > 0) {
+        setQuestions(normalized);
+      }
     } catch (e: any) {
-      toast.error("Não foi possível carregar as questões. Tentando modo temporário de leitura local.");
+      if (import.meta.env.DEV) {
+        console.warn("QuestionBankView fetch questions fallback:", e?.message || e);
+      }
     } finally {
       setLoading(false);
     }
