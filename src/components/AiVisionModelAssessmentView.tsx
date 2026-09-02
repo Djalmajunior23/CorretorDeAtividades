@@ -17,11 +17,16 @@ import {
   Cpu,
   Database,
   BookOpen,
-  Filter
+  Filter,
+  Split,
+  Columns2,
+  Maximize2,
+  ArrowRightLeft
 } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
+import { VisionSideBySideComparison } from "./VisionSideBySideComparison";
 
 export function AiVisionModelAssessmentView() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -38,8 +43,9 @@ export function AiVisionModelAssessmentView() {
   const [fineTuneStatus, setFineTuneStatus] = useState<any>(null);
   const [loadingFineTune, setLoadingFineTune] = useState(false);
   const [fineTunedSuccess, setFineTunedSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<"workspace" | "dataset">("workspace");
+  const [activeTab, setActiveTab] = useState<"workspace" | "side-by-side" | "dataset">("workspace");
   const [classFilter, setClassFilter] = useState<string>("Todas");
+  const [showFullscreenComparison, setShowFullscreenComparison] = useState(false);
 
   useEffect(() => {
     fetchFineTuneStatus();
@@ -68,6 +74,47 @@ export function AiVisionModelAssessmentView() {
       setApplied(false);
       setFineTunedSuccess(false);
     }
+  };
+
+  const handleLoadSample = (sampleType: "c_binary" | "python_tree" | "java_oop") => {
+    let mockText = "";
+    let studentName = "";
+    let exercise = "";
+
+    if (sampleType === "c_binary") {
+      mockText = `Questão 01 (Busca Binária O(log n) em C):\n\nint busca_binaria(int arr[], int tam, int val) {\n    int ini = 0, fim = tam - 1;\n    while (ini <= fim) {\n        int meio = ini + (fim - ini) / 2;\n        if (arr[meio] == val) return meio;\n        if (arr[meio] < val) ini = meio + 1;\n        else fim = meio - 1;\n    }\n    return -1;\n}`;
+      studentName = "Lucas Mendonça Silva (Matrícula: 20260489)";
+      exercise = "Prova Manuscrita";
+    } else if (sampleType === "python_tree") {
+      mockText = `class Node:\n    def __init__(self, key):\n        self.left = None\n        self.right = None\n        self.val = key\n\ndef insert(root, key):\n    if root is None:\n        return Node(key)\n    if key < root.val:\n        root.left = insert(root.left, key)\n    else:\n        root.right = insert(root.right, key)\n    return root`;
+      studentName = "Beatriz Souza Oliveira (Matrícula: 20260112)";
+      exercise = "Simulado Prático";
+    } else {
+      mockText = `public class ContaBancaria {\n    private String titular;\n    private double saldo;\n\n    public ContaBancaria(String titular, double saldoInicial) {\n        this.titular = titular;\n        this.saldo = saldoInicial;\n    }\n\n    public boolean sacar(double valor) {\n        if (valor > 0 && valor <= this.saldo) {\n            this.saldo -= valor;\n            return true;\n        }\n        return false;\n    }\n}`;
+      studentName = "Matheus Henrique Santos (Matrícula: 20260744)";
+      exercise = "Exercício Manuscrito";
+    }
+
+    const mockResult = {
+      success: true,
+      aiModel: "llava:7b (Multimodal Fine-Tuned)",
+      exerciseType: exercise,
+      confidence: "99.4%",
+      studentName: studentName,
+      extractedText: mockText,
+      optimizedPrompt: `Prompt OCR Otimizado para [${exercise}] com caligrafia personalizada da Turma [${selectedClassName}].`,
+      rubric: [
+        { criterion: "Corretude Algorítmica e Estrutural", weight: "40%", description: "A lógica atende a todos os requisitos do problema proposto." },
+        { criterion: "Tratamento de Limites e Condições de Parada", weight: "30%", description: "Trata adequadamente valores extremos e ponteiros/índices." },
+        { criterion: "Clareza e Padrão de Codificação", weight: "30%", description: "Indentação e nomenclatura de variáveis padronizadas." }
+      ]
+    };
+
+    setAnalysisResult(mockResult);
+    setEditableExtractedText(mockText);
+    setSelectedExerciseType(exercise);
+    setApplied(false);
+    setFineTunedSuccess(false);
   };
 
   const handleRunAiVisionAnalysis = async () => {
@@ -107,23 +154,7 @@ export function AiVisionModelAssessmentView() {
     } catch (err: any) {
       // Fallback simulation
       setTimeout(() => {
-        const mockText = `Questão 01 (${selectedExerciseType}): Implementar função de busca binária otimizada em C.\n\nCódigo submetido:\nint busca_binaria(int arr[], int tam, int val) {\n    int ini = 0, fim = tam - 1;\n    while (ini <= fim) {\n        int meio = ini + (fim - ini) / 2;\n        if (arr[meio] == val) return meio;\n        if (arr[meio] < val) ini = meio + 1;\n        else fim = meio - 1;\n    }\n    return -1;\n}`;
-        const mockResult = {
-          success: true,
-          aiModel: "llava:7b (Multimodal Fine-Tuned)",
-          exerciseType: selectedExerciseType,
-          confidence: "99.4%",
-          studentName: "Lucas Mendonça Silva (Matrícula: 20260489)",
-          extractedText: mockText,
-          optimizedPrompt: `Prompt OCR Otimizado para [${selectedExerciseType}] com caligrafia personalizada da Turma [${selectedClassName}].`,
-          rubric: [
-            { criterion: "Corretude Algorítmica e Complexidade O(log n)", weight: "40%", description: "O algoritmo implementa busca binária correta e eficiente." },
-            { criterion: "Tratamento de Limites e Overflow de Inteiros", weight: "30%", description: "Cálculo seguro do ponto médio (ini + (fim - ini)/2)." },
-            { criterion: "Estilo de Codificação e Clareza", weight: "30%", description: "Indentação e nomes de variáveis padronizados." }
-          ]
-        };
-        setAnalysisResult(mockResult);
-        setEditableExtractedText(mockText);
+        handleLoadSample("c_binary");
       }, 1000);
     } finally {
       setAnalyzing(false);
@@ -166,7 +197,7 @@ export function AiVisionModelAssessmentView() {
   const handleApplyAssessment = () => {
     if (!analysisResult) return;
     setApplied(true);
-    alert("Avaliação processada com sucesso! O OCR otimizado e a rubrica ajustada foram aplicados ao motor de correção do CodeCheck AI.");
+    alert("Avaliação processada com sucesso! A transcrição validada e a rubrica ajustada foram aplicadas ao motor de correção do CodeCheck AI.");
   };
 
   const handleExportPdf = () => {
@@ -193,7 +224,7 @@ export function AiVisionModelAssessmentView() {
       r.description
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 95,
       head: [["Critério da Rubrica", "Peso", "Descrição Ajustada pela IA"]],
       body: rows,
@@ -223,45 +254,109 @@ export function AiVisionModelAssessmentView() {
             Módulo de Visão Computacional (LLaVA) • Fine-Tuning & Caligrafia por Turma
           </h2>
           <p className="text-sm text-slate-400 mt-1 max-w-3xl">
-            Valide e corrija as detecções de OCR manuscrito. O sistema armazena as validações por turma e executa o fine-tuning local do LLaVA para aprender os estilos de caligrafia recorrentes de cada grupo de alunos.
+            Valide e corrija as detecções de OCR manuscrito com comparação lado a lado (Side-by-Side). O sistema armazena as validações por turma e executa o fine-tuning local do LLaVA para aprender os estilos de caligrafia de cada aluno.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setActiveTab("workspace")}
-            className={`py-2 px-4 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === "workspace"
                 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
                 : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
             }`}
           >
-            Workspace OCR & Validação
+            <Columns2 className="w-3.5 h-3.5" />
+            Workspace OCR
           </button>
+
+          <button
+            onClick={() => setActiveTab("side-by-side")}
+            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "side-by-side"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+            }`}
+          >
+            <Split className="w-3.5 h-3.5 text-indigo-400" />
+            Side-by-Side
+          </button>
+
           <button
             onClick={() => setActiveTab("dataset")}
-            className={`py-2 px-4 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === "dataset"
                 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
                 : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
             }`}
           >
-            Dataset & Caligrafias Aprendidas ({fineTuneStatus?.totalSamples || 2})
+            <Database className="w-3.5 h-3.5" />
+            Dataset ({fineTuneStatus?.totalSamples || 2})
           </button>
 
-          {analysisResult && activeTab === "workspace" && (
+          {analysisResult && (
             <button
               onClick={handleExportPdf}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold py-2.5 px-4 rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer ml-2"
+              className="bg-indigo-600/80 hover:bg-indigo-600 text-white font-mono text-xs font-bold py-2 px-3 rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer border border-indigo-500/40"
+              title="Baixar Relatório em PDF"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5" />
               Laudo PDF
             </button>
           )}
         </div>
       </div>
 
-      {activeTab === "dataset" ? (
+      {/* TABS CONTENT */}
+      {activeTab === "side-by-side" ? (
+        <div className="flex flex-col gap-4 animate-fade-in">
+          {/* Quick Banner & Instructions */}
+          <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center flex-shrink-0">
+                <ArrowRightLeft className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold text-white block">Comparador Lado a Lado (Side-by-Side Comparison)</span>
+                <span className="text-slate-300">
+                  Visualize a imagem original manuscrita com zoom/filtros à esquerda e faça edições rápidas no código à direita antes de salvar.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFullscreenComparison(true)}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+              >
+                <Maximize2 className="w-3.5 h-3.5" /> Tela Cheia
+              </button>
+            </div>
+          </div>
+
+          <VisionSideBySideComparison
+            imageUrl={previewUrl}
+            originalText={analysisResult?.extractedText || editableExtractedText || "int busca_binaria(int arr[], int tam, int val) {\n    int ini = 0, fim = tam - 1;\n    while (ini <= fim) {\n        int meio = ini + (fim - ini) / 2;\n        if (arr[meio] == val) return meio;\n        if (arr[meio] < val) ini = meio + 1;\n        else fim = meio - 1;\n    }\n    return -1;\n}"}
+            currentText={editableExtractedText || analysisResult?.extractedText || ""}
+            onTextChange={setEditableExtractedText}
+            studentName={analysisResult?.studentName || "Lucas Mendonça Silva (Matrícula: 20260489)"}
+            className={selectedClassName}
+            exerciseType={selectedExerciseType}
+            confidence={analysisResult?.confidence || "99.4%"}
+            modelName={modelName}
+            onConfirmAndApply={handleApplyAssessment}
+            onFineTune={handleFineTuneSubmit}
+            onExportPdf={handleExportPdf}
+            isFineTuning={loadingFineTune}
+            fineTunedSuccess={fineTunedSuccess}
+            applied={applied}
+            onLoadSample={handleLoadSample}
+            isFullscreen={false}
+            onToggleFullscreen={() => setShowFullscreenComparison(true)}
+          />
+        </div>
+      ) : activeTab === "dataset" ? (
         <div className="bg-[#0f172a] rounded-2xl border border-slate-800 p-6 flex flex-col gap-6 animate-fade-in">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
@@ -387,7 +482,17 @@ export function AiVisionModelAssessmentView() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-mono text-slate-400 uppercase tracking-wider font-bold">Imagem da Avaliação / Manuscrito:</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono text-slate-400 uppercase tracking-wider font-bold">Imagem da Avaliação / Manuscrito:</label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleLoadSample("c_binary")}
+                      className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                    >
+                      Usar Exemplo
+                    </button>
+                  </div>
+                </div>
                 <div className="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-6 text-center flex flex-col items-center justify-center gap-3 cursor-pointer bg-slate-900/50 transition-all relative overflow-hidden">
                   {previewUrl ? (
                     <div className="w-full h-48 relative rounded-xl overflow-hidden bg-black/50">
@@ -462,9 +567,19 @@ export function AiVisionModelAssessmentView() {
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   Validação de OCR & Fine-Tuning LLaVA
                 </span>
-                <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-bold">
-                  {analysisResult ? `Confiança: ${analysisResult.confidence}` : "Aguardando envio"}
-                </span>
+                <div className="flex items-center gap-2">
+                  {analysisResult && (
+                    <button
+                      onClick={() => setActiveTab("side-by-side")}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <Split className="w-3.5 h-3.5" /> Comparação Lado a Lado
+                    </button>
+                  )}
+                  <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-bold">
+                    {analysisResult ? `Confiança: ${analysisResult.confidence}` : "Aguardando envio"}
+                  </span>
+                </div>
               </div>
 
               {analysisResult ? (
@@ -480,6 +595,22 @@ export function AiVisionModelAssessmentView() {
                     </div>
                   </div>
 
+                  {/* Side-by-Side Quick Switch Banner */}
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/70 to-slate-900 border border-indigo-500/30 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs">
+                      <Split className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                      <span className="text-slate-300">
+                        Prefere conferir a imagem e o texto ao mesmo tempo com zoom?
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab("side-by-side")}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer whitespace-nowrap"
+                    >
+                      <Split className="w-3.5 h-3.5" /> Abrir Side-by-Side
+                    </button>
+                  </div>
+
                   <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-2">
                     <span className="text-[10px] text-indigo-400 font-mono uppercase font-bold">Prompt de OCR Otimizado:</span>
                     <p className="text-xs text-slate-300 font-mono bg-slate-950 p-3 rounded-lg border border-slate-800">{analysisResult.optimizedPrompt}</p>
@@ -489,7 +620,7 @@ export function AiVisionModelAssessmentView() {
                   <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-emerald-400 font-mono uppercase font-bold">
-                        Texto Extraído via OCR (Valide e Corrija para o Fine-Tuning):
+                        Texto Extraído via OCR (Edição Rápida para o Fine-Tuning):
                       </span>
                       <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
                         Aprendizado de Caligrafia
@@ -503,7 +634,7 @@ export function AiVisionModelAssessmentView() {
                       placeholder="Edite o texto aqui se houver erros de OCR na caligrafia do aluno..."
                     />
                     
-                    <div className="flex items-center justify-between pt-1">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-1 gap-2">
                       <span className="text-[11px] text-slate-400">
                         O modelo LLaVA aprenderá este estilo de escrita para a turma {selectedClassName}.
                       </span>
@@ -570,10 +701,38 @@ export function AiVisionModelAssessmentView() {
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center py-20 text-center text-slate-500 font-mono text-xs">
                   <Camera className="w-12 h-12 mb-3 opacity-30 text-indigo-400" />
-                  Carregue uma imagem e execute a visão computacional para iniciar a validação de OCR e o fine-tuning.
+                  Carregue uma imagem ou clique em &quot;Usar Exemplo&quot; para iniciar a validação de OCR e a comparação Side-by-Side.
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN SIDE-BY-SIDE MODAL */}
+      {showFullscreenComparison && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md p-4 sm:p-6 flex flex-col items-center justify-center">
+          <div className="w-full h-full max-w-7xl flex flex-col">
+            <VisionSideBySideComparison
+              imageUrl={previewUrl}
+              originalText={analysisResult?.extractedText || editableExtractedText || "int busca_binaria(int arr[], int tam, int val) {\n    int ini = 0, fim = tam - 1;\n    while (ini <= fim) {\n        int meio = ini + (fim - ini) / 2;\n        if (arr[meio] == val) return meio;\n        if (arr[meio] < val) ini = meio + 1;\n        else fim = meio - 1;\n    }\n    return -1;\n}"}
+              currentText={editableExtractedText || analysisResult?.extractedText || ""}
+              onTextChange={setEditableExtractedText}
+              studentName={analysisResult?.studentName || "Lucas Mendonça Silva (Matrícula: 20260489)"}
+              className={selectedClassName}
+              exerciseType={selectedExerciseType}
+              confidence={analysisResult?.confidence || "99.4%"}
+              modelName={modelName}
+              onConfirmAndApply={handleApplyAssessment}
+              onFineTune={handleFineTuneSubmit}
+              onExportPdf={handleExportPdf}
+              isFineTuning={loadingFineTune}
+              fineTunedSuccess={fineTunedSuccess}
+              applied={applied}
+              onLoadSample={handleLoadSample}
+              isFullscreen={true}
+              onToggleFullscreen={() => setShowFullscreenComparison(false)}
+            />
           </div>
         </div>
       )}
@@ -582,3 +741,4 @@ export function AiVisionModelAssessmentView() {
 }
 
 export default AiVisionModelAssessmentView;
+

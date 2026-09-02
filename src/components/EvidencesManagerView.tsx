@@ -1,4 +1,4 @@
-import { apiUrl, API_BASE_URL } from "../config/api";
+import { apiUrl, safeJsonResponse } from "../config/api";
 import React, { useState, useEffect } from "react";
 import { FileCheck, Search, Filter, Download, ArrowUpRight } from "lucide-react";
 
@@ -12,13 +12,19 @@ export function EvidencesManagerView() {
     setLoading(true);
     try {
       const clsResp = await fetch(apiUrl("/api/classes"));
-      setClasses(await clsResp.json() || []);
+      if (clsResp.ok) {
+        const clsData = await safeJsonResponse(clsResp);
+        setClasses(clsData || []);
+      }
       
-      const q = filterClass ? `${API_BASE_URL}/api/evidences/class/${filterClass}` : `${API_BASE_URL}/api/evidences`;
+      const q = filterClass ? apiUrl(`/api/evidences/class/${filterClass}`) : apiUrl("/api/evidences");
       const evResp = await fetch(q);
-      setEvidences(await evResp.json() || []);
+      if (evResp.ok) {
+        const evData = await safeJsonResponse(evResp);
+        setEvidences(evData || []);
+      }
     } catch (e) {
-      console.error(e);
+      console.warn("Error fetching evidences:", e);
     }
     setLoading(false);
   };

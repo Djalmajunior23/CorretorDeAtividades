@@ -1,4 +1,4 @@
-import { apiUrl, API_BASE_URL } from "../../config/api";
+import { apiUrl, safeJsonResponse } from "../../config/api";
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, FileText, CheckCircle2, XCircle, Clock, Search, ExternalLink, Download, FileArchive } from 'lucide-react';
@@ -48,28 +48,26 @@ export default function TeacherBatchCorrectionPage() {
   // Fetch Jobs
   const fetchJobs = async () => {
     try {
-      const baseUrl = API_BASE_URL;
-      const res = await fetch(`${baseUrl}/api/batch`);
+      const res = await fetch(apiUrl("/api/batch"));
       if (res.ok) {
-        const data = await res.json();
-        setJobs(data);
+        const data = await safeJsonResponse(res);
+        setJobs(data || []);
       }
     } catch (e) {
-      console.error("Failed to fetch jobs:", e);
+      console.warn("Failed to fetch jobs:", e);
     }
   };
 
   // Fetch Job details
   const fetchJobDetails = async (jobId: number) => {
     try {
-      const baseUrl = API_BASE_URL;
-      const res = await fetch(`${baseUrl}/api/batch/${jobId}`);
+      const res = await fetch(apiUrl(`/api/batch/${jobId}`));
       if (res.ok) {
-        const data = await res.json();
-        setItems(data.items || []);
+        const data = await safeJsonResponse(res);
+        setItems(data?.items || []);
       }
     } catch (e) {
-      console.error("Failed to fetch job items:", e);
+      console.warn("Failed to fetch job items:", e);
     }
   };
 
@@ -92,14 +90,15 @@ export default function TeacherBatchCorrectionPage() {
     }
 
     try {
-      const baseUrl = API_BASE_URL;
-      const res = await fetch(`${baseUrl}/api/batch/upload`, {
+      const res = await fetch(apiUrl("/api/batch/upload"), {
         method: 'POST',
         body: formData,
       });
       if (res.ok) {
-        const data = await res.json();
-        setActiveJob(data.job_id);
+        const data = await safeJsonResponse(res);
+        if (data?.job_id) {
+          setActiveJob(data.job_id);
+        }
         await fetchJobs();
       }
     } catch (error) {

@@ -257,17 +257,17 @@ export default function TeacherCommandCenterView({ featureFlags }: any) {
   const handleGenerateDailySummary = async () => {
     setSummaryLoading(true);
     try {
-      const res = await fetch("/api/academic-automation/generate-summary", {
+      const res = await fetch(apiUrl("/api/academic-automation/generate-summary"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({})
       });
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       if (data && data.summary) {
         setAutoSummary(data.summary);
       }
     } catch (err) {
-      console.error("Error calling AI academic summary API:", err);
+      console.warn("Error calling AI academic summary API:", err);
       setAutoSummary(
         `📊 **Resumo Executivo Diário (Gerado por AI_PEDAGOGICAL_MODEL)**:\n• **Status da Turma**: 91% de participação ativa.\n• **Ritmo**: Aceleração de 12% na velocidade de entrega.\n• **Atenção**: Módulo de Recursão Avançada exigiu suporte adicional.`
       );

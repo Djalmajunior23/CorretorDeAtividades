@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search, Edit2, Archive, Trash, MoreVertical, Download } from "lucide-react";
+import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search, Edit2, Archive, Trash, MoreVertical, Download, FileSpreadsheet } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
+import { ExportClassConsolidatedXlsxModal } from "./ExportClassConsolidatedXlsxModal";
 
 const emptyClassForm = () => ({
   name: "",
@@ -28,7 +29,9 @@ export function ClassManagerView() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [showXlsxModal, setShowXlsxModal] = useState(false);
   const [selectedClassForReport, setSelectedClassForReport] = useState<string | undefined>(undefined);
+  const [selectedClassIdForXlsx, setSelectedClassIdForXlsx] = useState<string | undefined>(undefined);
   const [formData, setFormData] = useState(emptyClassForm());
   const [editId, setEditId] = useState<string | null>(null);
 
@@ -99,10 +102,21 @@ export function ClassManagerView() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white font-display">Gestão de Turmas</h2>
           <p className="text-sm text-slate-400 mt-1">
-            Organize suas turmas, alunos e exporte relatórios pedagógicos consolidados em PDF com análise de erros e recomendações coletivas.
+            Organize suas turmas, alunos e exporte notas e faltas consolidadas em XLSX para sistemas acadêmicos e relatórios em PDF.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              setSelectedClassIdForXlsx(undefined);
+              setSelectedClassForReport(undefined);
+              setShowXlsxModal(true);
+            }}
+            className="bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/40 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-md cursor-pointer text-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            Exportar XLSX (Notas & Faltas)
+          </button>
           <button
             onClick={() => {
               setSelectedClassForReport(undefined);
@@ -139,9 +153,12 @@ export function ClassManagerView() {
                       <button className="text-slate-500 hover:text-white p-1 rounded">
                         <MoreVertical className="w-4 h-4" />
                       </button>
-                      <div className="absolute right-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 py-1">
+                      <div className="absolute right-0 mt-1 w-44 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 py-1">
                         <button onClick={() => { setEditId(cls.id); setFormData(normalizeClassForm(cls)); setShowModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 cursor-pointer">
                           <Edit2 className="w-3 h-3" /> Editar
+                        </button>
+                        <button onClick={() => { setSelectedClassIdForXlsx(cls.id); setSelectedClassForReport(cls.name); setShowXlsxModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-emerald-300 hover:bg-slate-700 flex items-center gap-2 cursor-pointer font-medium">
+                          <FileSpreadsheet className="w-3 h-3 text-emerald-400" /> Exportar XLSX
                         </button>
                         <button onClick={() => { setSelectedClassForReport(cls.name); setShowPdfModal(true); }} className="w-full text-left px-3 py-1.5 text-xs text-emerald-400 hover:bg-slate-700 flex items-center gap-2 cursor-pointer">
                           <FileText className="w-3 h-3" /> Relatório PDF
@@ -175,26 +192,47 @@ export function ClassManagerView() {
                   </div>
                 </div>
                 
-                <div className="mt-5 pt-4 border-t border-slate-800 flex justify-between items-center">
+                <div className="mt-5 pt-4 border-t border-slate-800 flex justify-between items-center gap-2">
                   <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded ${cls.status === 'archived' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-400'}`}>
                     {cls.status === 'archived' ? 'Arquivada' : 'Ativa'}
                   </span>
 
-                  <button
-                    onClick={() => {
-                      setSelectedClassForReport(cls.name);
-                      setShowPdfModal(true);
-                    }}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 font-medium px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all cursor-pointer"
-                  >
-                    <Download className="w-3 h-3" /> Relatório PDF
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedClassIdForXlsx(cls.id);
+                        setSelectedClassForReport(cls.name);
+                        setShowXlsxModal(true);
+                      }}
+                      title="Exportar todas as notas e faltas em XLSX (Excel)"
+                      className="text-xs text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 font-medium px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3 h-3 text-emerald-400" /> XLSX
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedClassForReport(cls.name);
+                        setShowPdfModal(true);
+                      }}
+                      className="text-xs text-slate-300 hover:text-white flex items-center gap-1.5 font-medium px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" /> PDF
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {showXlsxModal && (
+        <ExportClassConsolidatedXlsxModal
+          onClose={() => setShowXlsxModal(false)}
+          defaultClassId={selectedClassIdForXlsx}
+          defaultClassName={selectedClassForReport}
+        />
+      )}
 
       {showPdfModal && (
         <ConsolidatedPdfReportModal

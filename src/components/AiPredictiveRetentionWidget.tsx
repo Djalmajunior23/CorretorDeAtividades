@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { BrainCircuit, RefreshCw, AlertTriangle, ShieldCheck, TrendingDown, Clock, Award, Users, Download, Sparkles } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 export function AiPredictiveRetentionWidget() {
   const [loading, setLoading] = useState(true);
@@ -57,7 +57,7 @@ export function AiPredictiveRetentionWidget() {
       st.primaryFactor
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 42,
       head: [["Estudante", "Turma", "Média", "Atrasos (SLA)", "Risco de Evasão", "Fator Principal"]],
       body: rows.length > 0 ? rows : [["-", "Nenhum estudante", "-", "-", "-", "-"]],

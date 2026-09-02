@@ -33,7 +33,7 @@ export const safeAutoTable = (doc: jsPDF, options: any) => {
   };
 
   if (typeof (doc as any).autoTable === "function") {
-    (doc as any).autoTable(mergedOptions);
+    autoTable(doc, mergedOptions);
   } else if (typeof autoTable === "function") {
     autoTable(doc, mergedOptions);
   }

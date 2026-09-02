@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Download, FileSpreadsheet, FileCode, Filter, X, Calendar, User, Building2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { apiUrl } from "../config/api";
 
 interface ExportSubmissionsModalProps {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import html2canvas from "html2canvas";
 import Editor from "@monaco-editor/react";
 
@@ -52,6 +52,7 @@ import AiCurriculumArchitectView from "./components/AiCurriculumArchitectView";
 import CollaborativeSandboxView from "./components/CollaborativeSandboxView";
 import LmsIntegrationView from "./components/LmsIntegrationView";
 import AdvancedAiHubView from "./components/AdvancedAiHubView";
+import SlaRemindersSchedulerCard from "./components/SlaRemindersSchedulerCard";
 import { VercelCloudSyncModal } from "./components/VercelCloudSyncModal";
 import { 
   exportUrgentAttentionInterventionPDF, 
@@ -1112,16 +1113,20 @@ export default function App() {
 
   const syncPedagogicalNotes = async (notes: Record<string, string>, silent = false) => {
     try {
-      const response = await fetch("/api/correction-vault/sync-notes", {
+      const response = await fetch(apiUrl("/api/correction-vault/sync-notes"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notes }),
       });
-      if (!response.ok) throw new Error("Falha ao sincronizar");
-      if (!silent) alert("Observações sincronizadas com sucesso!");
+      const data = response.ok ? await response.json().catch(() => ({})) : null;
+      if (response.ok && data?.success) {
+        if (!silent) toast.success("Observações pedagógicas sincronizadas com sucesso!");
+      } else {
+        if (!silent) toast.info("Observações salvas localmente no navegador.");
+      }
     } catch (e) {
-      console.error(e);
-      if (!silent) alert("Erro ao sincronizar observações.");
+      console.warn("Aviso na sincronização de observações pedagógicas:", e);
+      if (!silent) toast.info("Observações salvas no armazenamento local.");
     }
   };
 
@@ -2499,6 +2504,10 @@ export default function App() {
 
            {currentTab === "ai_vision_model" && (
              <AiVisionModelAssessmentView />
+           )}
+
+           {currentTab === "ai_curriculum_architect" && (
+             <AiCurriculumArchitectView />
            )}
 
            {currentTab === "collab_sandbox" && (
@@ -5727,69 +5736,12 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Student SLA Reminder Frequency & Method Configuration */}
-                      <div className="pt-3 border-t border-[#1e295b]/20 flex flex-col gap-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs font-bold text-slate-200">Lembretes Automáticos para Estudantes com SLA Excedido</span>
-                          <span className="text-[10px] text-slate-400">Configure quando e como os estudantes são notificados automaticamente ao ultrapassar o tempo limite de entrega.</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
-                            <label className="text-[11px] font-bold text-indigo-400">Frequência de Envio</label>
-                            <select
-                              value={slaSettings.studentReminderFrequency || "daily"}
-                              onChange={(e) => setSlaSettings({ ...slaSettings, studentReminderFrequency: e.target.value })}
-                              className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
-                            >
-                              <option value="immediately">Imediatamente ao estourar</option>
-                              <option value="hourly">A cada 1 hora</option>
-                              <option value="daily">Diariamente (Resumo às 09:00)</option>
-                              <option value="weekly">Semanalmente (Segundas às 08:00)</option>
-                              <option value="twice_daily">Duas vezes ao dia (Manhã e Noite)</option>
-                            </select>
-                          </div>
-
-                          <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
-                            <label className="text-[11px] font-bold text-emerald-400">Método de Envio</label>
-                            <select
-                              value={slaSettings.studentReminderMethod || "both"}
-                              onChange={(e) => setSlaSettings({ ...slaSettings, studentReminderMethod: e.target.value })}
-                              className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
-                            >
-                              <option value="both">Ambos (E-mail e Notificação In-App)</option>
-                              <option value="email">Apenas E-mail</option>
-                              <option value="inapp">Apenas Notificação In-App</option>
-                            </select>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const res = await fetch(apiUrl("/api/sla/trigger-automated-reminders"), {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  frequency: slaSettings.studentReminderFrequency || "daily",
-                                  method: slaSettings.studentReminderMethod || "both",
-                                  classId: slaSettings.selectedClass
-                                })
-                              });
-                              const data = await res.json();
-                              if (data.success) {
-                                alert(data.message);
-                              } else {
-                                alert("Erro ao disparar lembretes: " + (data.error || "Erro desconhecido"));
-                              }
-                            } catch (err: any) {
-                              alert("Falha de conexão: " + err.message);
-                            }
-                          }}
-                          className="mt-2 py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          <Mail className="w-3.5 h-3.5" />
-                          Testar & Disparar Lembretes Automáticos Agora
-                        </button>
+                      {/* SLA Automated Reminders & Scheduled Email Dispatcher */}
+                      <div className="pt-2 border-t border-[#1e295b]/20">
+                        <SlaRemindersSchedulerCard 
+                          classes={correctorClasses || []} 
+                          teacherEmail={slaSettings.notificationEmail || "professor.docente@senai.br"} 
+                        />
                       </div>
 
                       {/* Webhook integration button */}

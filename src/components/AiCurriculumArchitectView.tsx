@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Sparkles, RefreshCw, BookOpen, Layers, CheckCircle2, FileText, Download, Award, Clock } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 export function AiCurriculumArchitectView() {
   const [loading, setLoading] = useState(false);
@@ -54,7 +54,7 @@ export function AiCurriculumArchitectView() {
       m.labChallenge
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 48,
       head: [["Período", "Título do Módulo", "Objetivos Pedagógicos", "Desafio Prático (Lab)"]],
       body: rows.length > 0 ? rows : [["-", "Nenhum módulo", "-", "-"]],

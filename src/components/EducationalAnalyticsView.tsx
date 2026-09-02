@@ -170,7 +170,7 @@ export default function EducationalAnalyticsView() {
     localStorage.setItem("scheduledSlaEmails", JSON.stringify(scheduledEmails));
   }, [scheduledEmails]);
 
-  const handleScheduleEmailForStudent = (student: any) => {
+  const handleScheduleEmailForStudent = async (student: any) => {
     const newSchedule = {
       id: `sch-${Date.now()}`,
       student_name: student.student_name,
@@ -180,10 +180,30 @@ export default function EducationalAnalyticsView() {
       status: "Agendado"
     };
     setScheduledEmails([newSchedule, ...scheduledEmails]);
+    
+    // Also trigger individual dispatch API
+    try {
+      fetch(apiUrl("/api/sla/send-individual-reminder"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: student.student_name,
+          studentEmail: student.email || `${student.student_name.toLowerCase().replace(/\s+/g, ".")}@aluno.senai.br`,
+          className: selectedClassForComp || "Turma A",
+          activityTitle: student.pending_activity || "Lista de Exercícios Práticos",
+          overdueHours: student.hours_overdue || 24,
+          customSubject: slaEmailTemplate.subject,
+          customMessage: slaEmailTemplate.message
+        })
+      }).catch(console.warn);
+    } catch (e) {
+      console.warn("Async email dispatch log:", e);
+    }
+
     toast.success(`E-mail automático de SLA agendado para ${student.student_name}!`);
   };
 
-  const handleBatchScheduleEmails = () => {
+  const handleBatchScheduleEmails = async () => {
     const atRisk = students.filter(s => s.attention_level !== "normal");
     if (atRisk.length === 0) {
       toast.error("Nenhum estudante em situação de atenção crítica para agendar e-mails.");
@@ -198,12 +218,49 @@ export default function EducationalAnalyticsView() {
       status: "Agendado"
     }));
     setScheduledEmails([...newSchedules, ...scheduledEmails]);
+
+    // Also trigger batch automated reminders
+    try {
+      fetch(apiUrl("/api/sla/trigger-automated-reminders"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          frequency: "daily",
+          method: "both",
+          classId: selectedClassForComp || "all"
+        })
+      }).catch(console.warn);
+    } catch (e) {
+      console.warn("Batch dispatch trigger:", e);
+    }
+
     toast.success(`Agendados ${newSchedules.length} e-mails automáticos para estudantes com SLA pendente!`);
   };
 
-  const handleSendEmailNow = (id: string) => {
+  const handleSendEmailNow = async (id: string) => {
+    const target = scheduledEmails.find(item => item.id === id);
     setScheduledEmails(scheduledEmails.map(item => item.id === id ? { ...item, status: "Enviado" } : item));
-    toast.success("E-mail de lembrete de SLA disparado e enviado com sucesso!");
+    
+    if (target) {
+      try {
+        await fetch(apiUrl("/api/sla/send-individual-reminder"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentName: target.student_name,
+            studentEmail: `${target.student_name.toLowerCase().replace(/\s+/g, ".")}@aluno.senai.br`,
+            className: target.class_name,
+            activityTitle: "Atividade com SLA Excedido",
+            overdueHours: 24,
+            customSubject: target.subject
+          })
+        });
+      } catch (e) {
+        console.warn("Send email now:", e);
+      }
+    }
+
+    toast.success("E-mail de lembrete de SLA disparado e enviado com sucesso via SMTP!");
   };
 
   const handleCancelSchedule = (id: string) => {

@@ -3,7 +3,7 @@ import { TrendingUp, AlertTriangle, ShieldAlert, Sparkles, RefreshCw, Download, 
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Cell, BarChart, Bar } from "recharts";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 export function PredictivePerformanceView() {
   const [loading, setLoading] = useState(true);
@@ -50,7 +50,7 @@ export function PredictivePerformanceView() {
       s.recommendedAction
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 42,
       head: [["Estudante", "Turma", "Retenção", "Padrão Digitação", "Ociosidade Média", "Ação Pedagógica"]],
       body: rows.length > 0 ? rows : [["Nenhum estudante", "-", "-", "-", "-", "-"]],

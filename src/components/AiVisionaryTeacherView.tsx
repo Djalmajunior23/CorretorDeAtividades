@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Sparkles, RefreshCw, Send, CheckCircle2, Award, FileText, Code2, Layers, AlertCircle, Check } from "lucide-react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 export function AiVisionaryTeacherView() {
   const [loading, setLoading] = useState(true);
@@ -81,7 +81,7 @@ export function AiVisionaryTeacherView() {
       publishedIds.includes(i) ? "Publicado (/api/questions)" : "Sugerido"
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 42,
       head: [["#", "Título da Variação", "Competência Alvo", "Nível", "Status"]],
       body: rows.length > 0 ? rows : [["-", "Nenhum exercício sugerido", "-", "-", "-"]],

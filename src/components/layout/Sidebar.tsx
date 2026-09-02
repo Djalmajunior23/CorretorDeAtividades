@@ -93,7 +93,7 @@ export default function Sidebar({
     { id: "ai_executive_dashboard", label: "Dashboard Executivo IA", icon: BarChart2, desc: "AI_PEDAGOGICAL_MODEL • Prazos & SLAs", visible: true },
     { id: "ai_visionary_teacher", label: "IA Visionary Teacher", icon: Sparkles, desc: "AI_GENERAL_MODEL • Variações de Exercícios", visible: true },
     { id: "ai_vision_model", label: "Visão IA (LLaVA)", icon: Eye, desc: "AI_VISION_MODEL • OCR & Rubrica", visible: true },
-    { id: "ai_curriculum_architect", label: "Arquiteto Curricular", icon: BookOpen, desc: "AI_GENERAL_MODEL • Ementas & Planos", visible: true },
+    { id: "ai_curriculum_architect", label: "Arquiteto Escolar", icon: BookOpen, desc: "AI_GENERAL_MODEL • Ementas, Matrizes & SLAs", visible: true },
     { id: "predictive_performance", label: "Desempenho Preditivo", icon: TrendingUp, desc: "AI_PEDAGOGICAL_MODEL • Retenção e Bloqueio", visible: true },
     { id: "collab_sandbox", label: "Sandbox Live", icon: Users, desc: "Programação Colaborativa", visible: true },
     { id: "lms_integration", label: "Integração LMS", icon: BookOpen, desc: "Moodle & Google Classroom", visible: true },

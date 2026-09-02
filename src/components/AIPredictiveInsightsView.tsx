@@ -3,7 +3,7 @@ import { TrendingUp, AlertTriangle, ShieldAlert, Sparkles, RefreshCw, Download, 
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, PieChart, Pie } from "recharts";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 export function AIPredictiveInsightsView() {
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,7 @@ export function AIPredictiveInsightsView() {
       p.recommendedAction
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 42,
       head: [["Turma", "Prob. Risco (15d)", "Nível", "Fator Principal", "Ação Recomendada"]],
       body: rows.length > 0 ? rows : [["Nenhum dado", "-", "-", "-", "-"]],

@@ -32,6 +32,7 @@ import { apiUrl, safeJsonResponse, API_BASE_URL } from "../config/api";
 
 import { AttendanceDashboard } from "./dashboard/AttendanceDashboard";
 import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
+import { ExportClassConsolidatedXlsxModal } from "./ExportClassConsolidatedXlsxModal";
 
 
 interface SmartClassDiaryViewProps {
@@ -120,6 +121,7 @@ export default function SmartClassDiaryView({
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [showPdfReportModal, setShowPdfReportModal] = useState(false);
+  const [showXlsxReportModal, setShowXlsxReportModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState(() => {
     return localStorage.getItem("selectedClass") || "";
   });
@@ -1450,6 +1452,15 @@ export default function SmartClassDiaryView({
 
         {/* Actions / Selectors */}
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowXlsxReportModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-emerald-100 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer border border-emerald-600/40"
+            title="Exportar todas as notas e faltas consolidadas em formato Microsoft Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+            Exportar XLSX (Notas & Faltas)
+          </button>
+
           <button
             onClick={() => setShowPdfReportModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
@@ -4514,6 +4525,13 @@ export default function SmartClassDiaryView({
             </div>
           </div>
         </div>
+      )}
+
+      {showXlsxReportModal && (
+        <ExportClassConsolidatedXlsxModal
+          defaultClassId={selectedClass}
+          onClose={() => setShowXlsxReportModal(false)}
+        />
       )}
 
       {showPdfReportModal && (

@@ -9,9 +9,13 @@ import {
   Filter, 
   ArrowUpRight,
   ShieldAlert,
-  Zap
+  Zap,
+  FileSpreadsheet,
+  Download
 } from "lucide-react";
 import { toast } from "sonner";
+import { exportSlaViolationsHistoryXLSX } from "../utils/dataExport";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 interface ClassSlaConfig {
   className: string;
@@ -22,6 +26,7 @@ interface ClassSlaConfig {
 
 export function SlaBreachHeatmapWidget() {
   const [selectedClass, setSelectedClass] = useState<string>("Todas");
+  const [exporting, setExporting] = useState<boolean>(false);
   const [classConfigs, setClassConfigs] = useState<ClassSlaConfig[]>([
     { className: "Turma A - Desenvolvimento Web", defaultSlaHours: 48, breachRate: "12%", riskLevel: "baixo" },
     { className: "Turma B - Algoritmos Avançados", defaultSlaHours: 24, breachRate: "42%", riskLevel: "alto" },
@@ -31,6 +36,37 @@ export function SlaBreachHeatmapWidget() {
   
   const [editingClass, setEditingClass] = useState<ClassSlaConfig | null>(null);
   const [newSlaValue, setNewSlaValue] = useState<number>(24);
+
+  const handleExportXLSX = async () => {
+    setExporting(true);
+    try {
+      // Tentar buscar do backend
+      const res = await fetch(apiUrl("/api/sla/violations-history"));
+      let violations = [];
+      if (res.ok) {
+        const data = await safeJsonResponse(res);
+        if (data?.violations) violations = data.violations;
+      }
+
+      // Filtrar se turma estiver selecionada
+      if (selectedClass !== "Todas" && violations.length > 0) {
+        violations = violations.filter((v: any) => v.class_name.includes(selectedClass) || selectedClass.includes(v.class_name));
+      }
+
+      exportSlaViolationsHistoryXLSX({
+        violations: violations.length > 0 ? violations : undefined,
+        institution: "SENAI - Serviço Nacional de Aprendizagem Industrial",
+        filterClass: selectedClass,
+        fileName: `Relatorio_Violacoes_SLA_${selectedClass.replace(/[^a-zA-Z0-9_-]/g, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      });
+
+      toast.success("📊 Relatório XLSX de violações de SLA exportado com sucesso com campos de Tempo de Resposta, Limite SLA e Status de Alerta!");
+    } catch (e: any) {
+      toast.error(`Erro ao exportar XLSX: ${e.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Days of the week and Time slots for heatmap
   const days = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -118,7 +154,18 @@ export function SlaBreachHeatmapWidget() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExportXLSX}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            title="Exportar histórico consolidado de violações de SLA de todos os alunos em planilha XLSX"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{exporting ? "Gerando..." : "Exportar Violações XLSX"}</span>
+          </button>
+
           <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-2xl border border-slate-800">
             <Filter className="w-4 h-4 text-slate-400" />
             <select
