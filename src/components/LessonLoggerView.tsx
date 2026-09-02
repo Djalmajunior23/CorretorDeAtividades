@@ -210,11 +210,12 @@ export function LessonLoggerView() {
       });
       if (res.ok) {
         toast.success("Registro de aula removido com sucesso.");
+        
       } else {
-        toast.success("Registro removido localmente.");
+        toast.error("Erro ao remover registro do servidor, removido apenas localmente.");
       }
     } catch (err: any) {
-      toast.success("Registro removido localmente.");
+      toast.error("Sem conexão, registro removido apenas localmente.");
     }
   };
 

@@ -881,13 +881,32 @@ export default function SmartClassDiaryView({
       )
     )
       return;
+
+    // Update UI immediately (optimistic update)
+    setSessions(prev => prev.filter(s => s.id !== id));
+
+    // Remove locally
+    try {
+      const localDiary = localStorage.getItem("codecheck_diary_sessions");
+      if (localDiary) {
+        const parsed = JSON.parse(localDiary);
+        const filtered = parsed.filter((s: any) => s.id !== id);
+        localStorage.setItem("codecheck_diary_sessions", JSON.stringify(filtered));
+      }
+      const localLesson = localStorage.getItem("codecheck_lesson_logs");
+      if (localLesson) {
+        const parsed = JSON.parse(localLesson);
+        const filtered = parsed.filter((l: any) => l.id !== id);
+        localStorage.setItem("codecheck_lesson_logs", JSON.stringify(filtered));
+      }
+    } catch (e) {}
+
     try {
       const res = await fetch(apiUrl(`/api/codecheck/diary/sessions/${id}`), {
         method: "DELETE",
       });
       if (res.ok) {
         showToast("Aula excluída com sucesso.");
-        fetchData();
       } else {
         showToast("Falha ao excluir aula.", "error");
       }

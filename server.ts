@@ -11240,6 +11240,8 @@ app.delete("/api/codecheck/diary/sessions/:id", async (req, res) => {
   if (pool) {
     try {
       await pool.query(`DELETE FROM class_sessions WHERE id = $1`, [id]);
+      await pool.query(`DELETE FROM lesson_logger_records WHERE id = $1`, [id]);
+      await pool.query(`DELETE FROM todos_os_registros WHERE id = $1`, [id]);
     } catch (e: any) {
       console.error("[Diary Sessions] DB delete error:", e.message);
     }
@@ -11249,6 +11251,8 @@ app.delete("/api/codecheck/diary/sessions/:id", async (req, res) => {
   if (idx !== -1) {
     inMemoryClassSessions.splice(idx, 1);
   }
+  const llIdx = inMemoryLessonLoggerRecords.findIndex(r => r.id === id);
+  if (llIdx !== -1) { inMemoryLessonLoggerRecords.splice(llIdx, 1); }
 
   logAudit(req.query.userId?.toString() || "teacher", "DELETE_CLASS_SESSION", `Removed class session ID: ${id}`);
   return res.json({ success: true, id });
