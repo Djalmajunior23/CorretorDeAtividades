@@ -69,6 +69,7 @@ export default function Sidebar({
     { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Diário de Aula Inteligente", visible: featureFlags.ENABLE_SMART_CLASS_DIARY !== false },
     { id: "turmas", label: "Turmas", icon: Users, desc: "Gestão Corporativa de Turmas", visible: true },
     { id: "students", label: "Alunos", icon: Users, desc: "Gestão e Importação CSV", visible: true },
+    { id: "notas", label: "Notas", icon: Award, desc: "Gestão de Avaliações e Médias", visible: true },
     { id: "evidences", label: "Evidências", icon: FileCheck, desc: "Histórico Pedagógico", visible: true },
     { id: "activities", label: "Atividades", icon: Zap, desc: "Banco de Questões e IA", visible: true },
     { id: "question_bank", label: "Banco de Questões", icon: Database, desc: "Questões e Desafios IA", visible: true },

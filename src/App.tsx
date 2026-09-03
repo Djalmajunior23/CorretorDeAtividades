@@ -23,6 +23,7 @@ import TeacherCommandCenterView from "./components/TeacherCommandCenterView";
 import SmartClassDiaryView from "./components/SmartClassDiaryView";
 import CompetenciesManagerView from "./components/CompetenciesManagerView";
 import DashboardView from "./components/DashboardView";
+import GradesManagerView from "./components/GradesManagerView";
 import PlanejamentoView from "./components/PlanejamentoView";
 import { LessonLoggerView } from "./components/LessonLoggerView";
 import TurmasView from "./components/TurmasView";
@@ -1764,7 +1765,7 @@ export default function App() {
 
   // Synchronously fetch classes when the user enters the corrector tab
   useEffect(() => {
-    if (currentTab === "corrector") {
+    if (currentTab === "corrector" || currentTab === "notas") {
       fetch(apiUrl("/api/classes"))
         .then(res => safeJsonResponse(res))
         .then(data => {
@@ -2443,6 +2444,14 @@ export default function App() {
 
           {currentTab === "students" && (
             <StudentsManagerView />
+          )}
+          {currentTab === "notas" && (
+            <GradesManagerView 
+              classes={correctorClasses}
+              selectedClass={selectedCorrectorClass}
+              setSelectedClass={setSelectedCorrectorClass}
+              students={correctorStudents}
+            />
           )}
 
           {currentTab === "batch" && (

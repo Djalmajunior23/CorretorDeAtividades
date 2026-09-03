@@ -34,6 +34,20 @@ export async function initializeDatabase(pool: Pool | null): Promise<void> {
   }
   console.log("[DEBUG] initializeDatabase started...");
   try {
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_student_grades (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        student_id TEXT NOT NULL,
+        class_id TEXT NOT NULL,
+        activity_name TEXT NOT NULL,
+        grade NUMERIC,
+        feedback TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS correction_vault (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -281,6 +295,109 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     // Register automatic background backup schedules every 12 hours
     startPeriodicBackupSchedule(pool, 12 * 60 * 60 * 1000);
   }
+
+  
+  // --- GRADES MODULE ---
+  app.get("/api/grades/:classId", async (req, res) => {
+    try {
+      if (!pool) return res.json([]);
+      const { classId } = req.params;
+      const q = await pool.query("SELECT * FROM d_student_grades WHERE class_id = $1 ORDER BY created_at ASC", [classId]);
+      res.json(q.rows || []);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  
+  app.post("/api/grades/update", async (req, res) => {
+    try {
+      if (!pool) return res.json({ success: true });
+      const { grades } = req.body; // Expect an array of grades
+      
+      if (!Array.isArray(grades)) {
+        return res.status(400).json({ error: "O corpo da requisição deve conter um array 'grades'" });
+      }
+
+      const results = [];
+      
+      for (const item of grades) {
+        const { student_id, class_id, activity_name, grade, feedback } = item;
+        
+        const check = await pool.query(
+          "SELECT id FROM d_student_grades WHERE student_id = $1 AND class_id = $2 AND activity_name = $3",
+          [student_id, class_id, activity_name]
+        );
+        
+        if (check.rows.length > 0) {
+          const id = check.rows[0].id;
+          await pool.query(
+            "UPDATE d_student_grades SET grade = $1, feedback = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+            [grade, feedback, id]
+          );
+          results.push({ id, updated: true });
+        } else {
+          const q = await pool.query(
+            "INSERT INTO d_student_grades (student_id, class_id, activity_name, grade, feedback) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            [student_id, class_id, activity_name, grade, feedback]
+          );
+          results.push({ id: q.rows[0].id, inserted: true });
+        }
+      }
+      
+      res.json({ success: true, results });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+
+  app.post("/api/grades", async (req, res) => {
+    try {
+      if (!pool) return res.json({ success: true });
+      const { student_id, class_id, activity_name, grade, feedback } = req.body;
+      
+      // Check if it exists
+      const check = await pool.query(
+        "SELECT id FROM d_student_grades WHERE student_id = $1 AND class_id = $2 AND activity_name = $3",
+        [student_id, class_id, activity_name]
+      );
+      
+      if (check.rows.length > 0) {
+        // Update
+        const id = check.rows[0].id;
+        await pool.query(
+          "UPDATE d_student_grades SET grade = $1, feedback = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+          [grade, feedback, id]
+        );
+        res.json({ success: true, id, updated: true });
+      } else {
+        // Insert
+        const q = await pool.query(
+          "INSERT INTO d_student_grades (student_id, class_id, activity_name, grade, feedback) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+          [student_id, class_id, activity_name, grade, feedback]
+        );
+        res.json({ success: true, id: q.rows[0].id, inserted: true });
+      }
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+  app.delete("/api/grades/:id", async (req, res) => {
+    try {
+      if (!pool) return res.json({ success: true });
+      await pool.query("DELETE FROM d_student_grades WHERE id = $1", [req.params.id]);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 
   // --- CLASSES ---
   app.get("/api/classes", async (req, res) => {
