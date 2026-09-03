@@ -17,6 +17,7 @@ import ActivityBankView from "./components/ActivityBankView";
 import CompetencyHeatmap from "./components/CompetencyHeatmap";
 import ReportsInterventionsView from "./components/ReportsInterventionsView";
 import AIAssistantView from "./components/AIAssistantView";
+import PedagogicalExecutiveDashboardView from "./components/PedagogicalExecutiveDashboardView";
 import AutomationActionCenterView from "./components/AutomationActionCenterView";
 import TeacherCommandCenterView from "./components/TeacherCommandCenterView";
 import SmartClassDiaryView from "./components/SmartClassDiaryView";
@@ -2450,6 +2451,10 @@ export default function App() {
 
           {currentTab === "similarity" && (
             <SimilarityView />
+          )}
+
+          {currentTab === "pedagogical_executive" && (
+            <PedagogicalExecutiveDashboardView />
           )}
 
           {currentTab === "analytics" && (
