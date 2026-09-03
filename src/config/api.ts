@@ -7,10 +7,13 @@ export const API_BASE_URL =
 
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  if (API_BASE_URL) {
-    return `${API_BASE_URL}${normalizedPath}`;
-  }
-  return normalizedPath;
+  const finalUrl = API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
+  
+  // --- FETCH DIAGNOSTIC LOGGER --- 
+  // Utility requested to map and log endpoint behavior
+  console.log(`[Diagnostic] Endpoint solicitado: ${path} -> URL Resolvida: ${finalUrl}`);
+  
+  return finalUrl;
 };
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
@@ -23,27 +26,24 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       },
       credentials: options.credentials || "same-origin"
     });
-
     const contentType = response.headers.get("content-type") || "";
-
+    
     if (!response.ok) {
       const text = await response.text().catch(() => "");
       throw new Error(`HTTP ${response.status}: ${text.slice(0, 300)}`);
     }
-
+    
     if (!contentType.includes("application/json")) {
       const text = await response.text().catch(() => "");
       throw new Error(`Resposta não JSON recebida: ${text.slice(0, 300)}`);
     }
-
+    
     return response.json();
   } catch (error: any) {
     const message = String(error?.message || error);
-
     if (import.meta.env.DEV) {
       console.warn("[apiFetch error]", error);
     }
-
     if (
       message.includes("chrome-extension://") ||
       message.includes("aistudio.google.com") ||
@@ -51,39 +51,31 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     ) {
       throw new Error("Erro externo do navegador ou ambiente de preview.");
     }
-
     throw error;
   }
 }
 
 export async function safeJson(response: Response) {
   const contentType = response.headers.get("content-type") || "";
-
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
-
   if (!contentType.includes("application/json")) {
     const text = await response.text();
     throw new Error(`Resposta inválida: ${text}`);
   }
-
   return response.json();
 }
 
 export async function safeJsonResponse(response: Response) {
   const contentType = response.headers.get("content-type") || "";
-
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(`HTTP ${response.status}: ${text.slice(0, 120)}`);
   }
-
   if (!contentType.includes("application/json")) {
     const text = await response.text().catch(() => "");
     throw new Error(`Resposta não JSON: ${text.slice(0, 120)}`);
   }
-
   return response.json();
 }
-
