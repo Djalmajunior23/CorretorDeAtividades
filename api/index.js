@@ -1,9 +1,8 @@
-const server = require("../dist/server.cjs");
-
 let isDbInitialized = false;
 
-module.exports = async function handler(req, res) {
-  // Lazy initialize database schema in serverless context
+export default async function handler(req, res) {
+  const server = await import('../dist/server.cjs');
+  
   if (!isDbInitialized && server.pool) {
     try {
       if (typeof server.initDatabase === "function") {
@@ -17,7 +16,7 @@ module.exports = async function handler(req, res) {
       console.warn("[Vercel Serverless] DB initialization warning:", e);
     }
   }
-
-  // Pass the request to the compiled Express app
+  
+  // server.default represents the Express app instance
   return server.default(req, res);
-};
+}
