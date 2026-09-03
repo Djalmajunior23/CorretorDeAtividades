@@ -99,7 +99,13 @@ import {
   Printer
 } from "lucide-react";
 import { TestCase, CorrectionResult, SubmissionLog } from "./types";
-import { apiUrl, safeJsonResponse, apiFetch } from "./config/api";
+import { apiUrl, safeJsonResponse, apiFetch, API_BASE_URL } from "./config/api";
+
+console.log("=========================================");
+console.log("FRONTEND BOOT:");
+console.log("VITE_API_BASE_URL configurada no build:", import.meta.env?.VITE_API_BASE_URL || "(não configurada/vazia)");
+console.log("API_BASE_URL processada:", API_BASE_URL || "(relativa)");
+console.log("=========================================");
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { CodeHistoryModal } from "./components/CodeHistoryModal";
