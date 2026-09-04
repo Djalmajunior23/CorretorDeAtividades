@@ -22,6 +22,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [passingGrade, setPassingGrade] = useState<number>(60);
   const [refreshKey, setRefreshKey] = useState(0);
   const [newActivityName, setNewActivityName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,6 +32,28 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
   const [modalData, setModalData] = useState<{grade: string, feedback: string}>({ grade: "", feedback: "" });
   
   
+  useEffect(() => {
+    if (selectedClass) {
+      const saved = localStorage.getItem(`passingGrade_${selectedClass}`);
+      if (saved !== null && !isNaN(parseFloat(saved))) {
+        setPassingGrade(parseFloat(saved));
+      } else {
+        setPassingGrade(60);
+      }
+    }
+  }, [selectedClass]);
+
+  const handlePassingGradeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = parseFloat(e.target.value);
+    if (isNaN(val)) val = 0;
+    if (val < 0) val = 0;
+    if (val > 100) val = 100;
+    setPassingGrade(val);
+    if (selectedClass) {
+      localStorage.setItem(`passingGrade_${selectedClass}`, val.toString());
+    }
+  };
+
   useEffect(() => {
     if (!selectedClass) {
       
@@ -308,7 +331,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
       row.push(avg);
       
       const avgNum = parseFloat(avg);
-      const situation = isNaN(avgNum) ? "-" : (avgNum >= 60 ? "Aprovado" : "Reprovado");
+      const situation = isNaN(avgNum) ? "-" : (avgNum >= passingGrade ? "Aprovado" : "Reprovado");
       row.push(situation);
 
       const allObs = obsList.length > 0 ? `"${obsList.join(" | ")}"` : "";
@@ -420,6 +443,20 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
           </p>
         </div>
         <div id="grades-manager-toolbar" className="flex items-center gap-3">
+          {selectedClass && (
+            <div className="flex items-center gap-2 mr-2 border-r border-[#1e295b] pr-4">
+              <label className="text-sm font-semibold text-slate-400">Aprovação (%):</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={passingGrade}
+                onChange={handlePassingGradeChange}
+                className="w-[60px] bg-[#0b1120] border border-[#1e295b] text-white rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-indigo-500 font-mono text-center"
+                title="Nota mínima para aprovação (0-100)"
+              />
+            </div>
+          )}
           {saveSuccess && (
             <span className="text-emerald-400 text-sm flex items-center gap-2 font-medium">
               <CheckCircle2 className="w-4 h-4" /> Notas Salvas
@@ -443,7 +480,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
             title="Exportar Diário de Classe (Padrão SENAI)"
           >
             <Download className="w-4 h-4" />
-            Exportar CSV
+            Exportar CSV da Turma
           </button>
 
           <button
@@ -452,7 +489,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold shadow-lg shadow-emerald-500/20"
           >
             {saving ? <span className="animate-spin text-lg block w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <Save className="w-4 h-4" />}
-            {saving ? "Salvando..." : "Salvar Alterações"}
+            {saving ? "Salvando..." : "Salvar Turma"}
           </button>
         </div>
       </div>
@@ -597,6 +634,9 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                 <th className="py-4 px-6 font-mono text-xs text-emerald-400 uppercase tracking-wider text-center border-l border-[#1e295b]/50 bg-[#0b1120] w-[120px]">
                   Média
                 </th>
+                <th className="py-4 px-6 font-mono text-xs text-slate-400 uppercase tracking-wider text-center border-l border-[#1e295b]/50 bg-[#0b1120] w-[140px]">
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -650,34 +690,40 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                     const avgStr = calculateAverage(st.id);
                     const avgNum = parseFloat(avgStr);
                     const hasGrade = avgStr !== "-";
-                    const isApproved = hasGrade && avgNum >= 60;
+                    const isApproved = hasGrade && avgNum >= passingGrade;
                     
                     return (
-                      <td className={`py-3 px-6 border-l border-[#1e295b]/50 text-center group/avg ${hasGrade ? (isApproved ? 'bg-emerald-500/5' : 'bg-red-500/5') : 'bg-slate-500/5'}`}>
-                        <div className="flex items-center justify-center gap-2">
-                          <span className={`font-mono font-bold text-base ${hasGrade ? (isApproved ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}>
-                            {avgStr}
-                          </span>
-                          {hasGrade && (
-                            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md ${isApproved ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                              {isApproved ? 'Apr' : 'Rep'}
+                      <>
+                        <td className={`py-3 px-6 border-l border-[#1e295b]/50 text-center group/avg ${hasGrade ? (isApproved ? 'bg-emerald-500/5' : 'bg-red-500/5') : 'bg-slate-500/5'}`}>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className={`font-mono font-bold text-base ${hasGrade ? (isApproved ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}>
+                              {avgStr}
                             </span>
+                            <button 
+                              onClick={() => handleAutoFillFinalGradeForStudent(st.id)}
+                              className="p-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition-all opacity-0 group-hover/avg:opacity-100"
+                              title="Aplicar Auto-Média para este aluno (cria/atualiza coluna 'Nota Final')"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-3 px-6 border-l border-[#1e295b]/50 text-center">
+                          {hasGrade ? (
+                            <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isApproved ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                              {isApproved ? 'Aprovado' : 'Reprovado'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 font-mono text-sm">-</span>
                           )}
-                          <button 
-                            onClick={() => handleAutoFillFinalGradeForStudent(st.id)}
-                            className="p-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition-all opacity-0 group-hover/avg:opacity-100"
-                            title="Aplicar Auto-Média para este aluno (cria/atualiza coluna 'Nota Final')"
-                          >
-                            <Calculator className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
+                        </td>
+                      </>
                     );
                   })()}
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={activities.length + 2} className="py-8 text-center text-slate-500 font-mono text-sm">
+                  <td colSpan={activities.length + 3} className="py-8 text-center text-slate-500 font-mono text-sm">
                     Nenhum aluno encontrado para "{searchQuery}"
                   </td>
                 </tr>
