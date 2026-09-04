@@ -594,7 +594,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                 />
                 <Bar dataKey="media" radius={[4, 4, 0, 0]}>
                   {chartData.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.media >= 70 ? '#34d399' : entry.media >= 50 ? '#fbbf24' : '#f87171'} />
+                    <Cell key={`cell-${index}`} fill={entry.media >= passingGrade ? '#34d399' : '#f87171'} />
                   ))}
                 </Bar>
               </BarChart>
