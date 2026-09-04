@@ -22,8 +22,11 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [newActivityName, setNewActivityName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [classSearch, setClassSearch] = useState("");
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const [editingCell, setEditingCell] = useState<{studentId: string, activityName: string} | null>(null);
   const [modalData, setModalData] = useState<{grade: string, feedback: string}>({ grade: "", feedback: "" });
   
@@ -93,7 +96,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
     })
     .catch(e => console.error("Error fetching grades data", e))
     .finally(() => setLoading(false));
-  }, [selectedClass]);
+  }, [selectedClass, refreshKey]);
 
   const openCellModal = (studentId: string, activityName: string) => {
     const key = `${studentId}_${activityName}`;
@@ -259,6 +262,17 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
   const filteredStudents = students.filter(st => st.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   
+  
+  const hasUnsavedChanges = Object.values(gradesMap).some((item: any) => item.isDirty);
+
+  const handleResetGrades = () => {
+    if (!hasUnsavedChanges) {
+      toast.info("Não há alterações não salvas para descartar.");
+      return;
+    }
+    setShowResetDialog(true);
+  };
+
   const handleExportCSV = () => {
     if (!selectedClass || students.length === 0) return;
 
@@ -405,13 +419,23 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
             Gestão unificada de avaliações, médias e pareceres por turma.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div id="grades-manager-toolbar" className="flex items-center gap-3">
           {saveSuccess && (
             <span className="text-emerald-400 text-sm flex items-center gap-2 font-medium">
               <CheckCircle2 className="w-4 h-4" /> Notas Salvas
             </span>
           )}
           
+          <button
+            onClick={handleResetGrades}
+            disabled={!hasUnsavedChanges || saving}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1e295b] hover:bg-red-500/20 text-slate-300 hover:text-red-400 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold border border-[#2a3a7c] hover:border-red-500/50"
+            title="Descartar alterações não salvas"
+          >
+            <Trash2 className="w-4 h-4" />
+            Resetar Notas
+          </button>
+
           <button
             onClick={handleExportCSV}
             disabled={!selectedClass || students.length === 0}
@@ -437,6 +461,16 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
         <div className="bg-[#161f36] border border-[#1e295b] p-5 rounded-2xl flex flex-col justify-center">
           <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-2">Turma / Disciplina</label>
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Buscar turma..."
+              value={classSearch}
+              onChange={e => setClassSearch(e.target.value)}
+              className="w-full bg-[#0b1120] border border-[#1e295b] text-white rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500"
+            />
+          </div>
           <div className="relative">
             <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <select
@@ -445,7 +479,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
               className="w-full bg-[#0b1120] border border-[#1e295b] text-white rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500 appearance-none"
             >
               <option value="">Selecione uma turma...</option>
-              {classes.map(c => (
+              {classes.filter(c => c.name.toLowerCase().includes(classSearch.toLowerCase())).map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -701,6 +735,37 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all text-sm font-semibold shadow-lg shadow-indigo-500/20"
               >
                 Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Reset Confirmation Dialog */}
+      {showResetDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#12192e] border border-[#1e295b] w-full max-w-sm rounded-2xl p-6 shadow-2xl relative">
+            <h3 className="text-lg font-bold text-white mb-2">Descartar Alterações?</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Você perderá todas as notas e observações qualitativas não salvas. Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowResetDialog(false)}
+                className="px-4 py-2 rounded-xl text-slate-300 hover:bg-[#1e295b] transition-colors text-sm font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setRefreshKey(prev => prev + 1);
+                  setShowResetDialog(false);
+                  toast.success("Notas e observações restauradas com sucesso.");
+                }}
+                className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all text-sm font-semibold shadow-lg shadow-red-500/20"
+              >
+                Sim, Descartar
               </button>
             </div>
           </div>
