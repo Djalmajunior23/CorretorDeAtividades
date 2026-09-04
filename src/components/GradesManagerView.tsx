@@ -190,8 +190,8 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
       });
       
       if (count > 0) {
-        const avg = (sum / count).toFixed(1);
-        toast.success("Média aplicada para o aluno.");
+        const avg = sum.toFixed(1);
+        toast.success("Nota Final aplicada para o aluno.");
         const key = `${studentId}_${colName}`;
         return {
           ...prev,
@@ -236,7 +236,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
         });
         
         if (count > 0) {
-          const avg = (sum / count).toFixed(1);
+          const avg = sum.toFixed(1);
           const key = `${st.id}_${colName}`;
           nextMap[key] = {
             ...(nextMap[key] || { student_id: st.id, activity_name: colName }),
@@ -405,18 +405,20 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
   const calculateAverage = (studentId: string) => {
     if (activities.length === 0) return "-";
     let sum = 0;
-    let count = 0;
+    let hasGrade = false;
     activities.forEach(act => {
+      // Ignore the "Nota Final" column if it exists to avoid double counting
+      if (act === "Nota Final") return;
       const key = `${studentId}_${act}`;
       const g = gradesMap[key]?.grade;
       if (g !== undefined && g !== null && g !== "") {
         sum += parseFloat(g);
-        count++;
+        hasGrade = true;
       }
     });
-    if (count === 0) return "-";
+    if (!hasGrade) return "-";
     
-  return (sum / count).toFixed(1);
+    return sum.toFixed(1); // Summing points instead of averaging
   };
 
   const chartData = filteredStudents.map(st => {
@@ -590,7 +592,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                   contentStyle={{ backgroundColor: '#0b1120', borderColor: '#1e295b', borderRadius: '12px', color: '#fff' }}
                   itemStyle={{ color: '#34d399', fontWeight: 'bold' }}
                   labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                  formatter={(value) => [`${value} pontos`, 'Média']}
+                  formatter={(value) => [`${value} pontos`, 'Nota Final']}
                 />
                 <Bar dataKey="media" radius={[4, 4, 0, 0]}>
                   {chartData.map((entry: any, index: number) => (
@@ -631,9 +633,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                     </div>
                   </th>
                 ))}
-                <th className="py-4 px-6 font-mono text-xs text-emerald-400 uppercase tracking-wider text-center border-l border-[#1e295b]/50 bg-[#0b1120] w-[120px]">
-                  Média
-                </th>
+                <th className="py-4 px-6 font-mono text-xs text-emerald-400 uppercase tracking-wider text-center border-l border-[#1e295b]/50 bg-[#0b1120] w-[120px]">Nota Final</th>
                 <th className="py-4 px-6 font-mono text-xs text-slate-400 uppercase tracking-wider text-center border-l border-[#1e295b]/50 bg-[#0b1120] w-[140px]">
                   Status
                 </th>
@@ -702,7 +702,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                             <button 
                               onClick={() => handleAutoFillFinalGradeForStudent(st.id)}
                               className="p-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition-all opacity-0 group-hover/avg:opacity-100"
-                              title="Aplicar Auto-Média para este aluno (cria/atualiza coluna 'Nota Final')"
+                              title="Aplicar Soma Automática para este aluno (cria/atualiza coluna 'Nota Final')"
                             >
                               <Calculator className="w-3.5 h-3.5" />
                             </button>
