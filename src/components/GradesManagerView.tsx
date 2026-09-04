@@ -308,7 +308,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
       row.push(avg);
       
       const avgNum = parseFloat(avg);
-      const situation = isNaN(avgNum) ? "-" : (avgNum >= 70 ? "Aprovado" : (avgNum >= 50 ? "Recuperação" : "Reprovado"));
+      const situation = isNaN(avgNum) ? "-" : (avgNum >= 60 ? "Aprovado" : "Reprovado");
       row.push(situation);
 
       const allObs = obsList.length > 0 ? `"${obsList.join(" | ")}"` : "";
@@ -646,18 +646,34 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                     );
                   })}
 
-                  <td className="py-3 px-6 border-l border-[#1e295b]/50 text-center bg-emerald-500/5 group/avg">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="font-mono font-bold text-emerald-400 text-base">{calculateAverage(st.id)}</span>
-                      <button 
-                        onClick={() => handleAutoFillFinalGradeForStudent(st.id)}
-                        className="p-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition-all opacity-0 group-hover/avg:opacity-100"
-                        title="Aplicar Auto-Média para este aluno (cria/atualiza coluna 'Nota Final')"
-                      >
-                        <Calculator className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
+                  {(() => {
+                    const avgStr = calculateAverage(st.id);
+                    const avgNum = parseFloat(avgStr);
+                    const hasGrade = avgStr !== "-";
+                    const isApproved = hasGrade && avgNum >= 60;
+                    
+                    return (
+                      <td className={`py-3 px-6 border-l border-[#1e295b]/50 text-center group/avg ${hasGrade ? (isApproved ? 'bg-emerald-500/5' : 'bg-red-500/5') : 'bg-slate-500/5'}`}>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className={`font-mono font-bold text-base ${hasGrade ? (isApproved ? 'text-emerald-400' : 'text-red-400') : 'text-slate-400'}`}>
+                            {avgStr}
+                          </span>
+                          {hasGrade && (
+                            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md ${isApproved ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                              {isApproved ? 'Apr' : 'Rep'}
+                            </span>
+                          )}
+                          <button 
+                            onClick={() => handleAutoFillFinalGradeForStudent(st.id)}
+                            className="p-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition-all opacity-0 group-hover/avg:opacity-100"
+                            title="Aplicar Auto-Média para este aluno (cria/atualiza coluna 'Nota Final')"
+                          >
+                            <Calculator className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    );
+                  })()}
                 </tr>
               )) : (
                 <tr>
