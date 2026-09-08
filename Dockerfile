@@ -32,8 +32,12 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 # Copy build artifacts from builder stage
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/*.traineddata ./
-# Also copy any other needed files if server.ts needs them at runtime
-# (server.ts bundle excludes external packages but resolves relative imports)
+
+# Ensure data directory and app files are writable by node user
+RUN mkdir -p /data && chown -R node:node /app /data
+
+# Run as unprivileged node user
+USER node
 
 # Expose the port
 EXPOSE 3000

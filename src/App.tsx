@@ -12,50 +12,62 @@ declare global {
 import { motion, AnimatePresence } from "motion/react";
 import { Toaster, toast } from 'sonner';
 import Sidebar from "./components/layout/Sidebar";
-import GeneratorView from "./components/GeneratorView";
-import ActivityBankView from "./components/ActivityBankView";
-import CompetencyHeatmap from "./components/CompetencyHeatmap";
-import ReportsInterventionsView from "./components/ReportsInterventionsView";
-import AIAssistantView from "./components/AIAssistantView";
-import PedagogicalExecutiveDashboardView from "./components/PedagogicalExecutiveDashboardView";
-import AutomationActionCenterView from "./components/AutomationActionCenterView";
-import TeacherCommandCenterView from "./components/TeacherCommandCenterView";
-import SmartClassDiaryView from "./components/SmartClassDiaryView";
-import CompetenciesManagerView from "./components/CompetenciesManagerView";
-import DashboardView from "./components/DashboardView";
-import GradesManagerView from "./components/GradesManagerView";
-import PlanejamentoView from "./components/PlanejamentoView";
-import { LessonLoggerView } from "./components/LessonLoggerView";
-import TurmasView from "./components/TurmasView";
-import { ClassManagerView } from "./components/ClassManagerView";
-import { StudentsManagerView } from "./components/StudentsManagerView";
-import AvaliacoesView from "./components/AvaliacoesView";
-import RecuperacaoView from "./components/RecuperacaoView";
-import MateriaisView from "./components/MateriaisView";
-import PedagogicalDashboard from "./components/dashboard/PedagogicalDashboard";
-import BatchCorrectionView from "./components/BatchCorrectionView";
-import SimilarityView from "./components/SimilarityView";
-import EducationalAnalyticsView from "./components/EducationalAnalyticsView";
-import QuestionBankView from "./components/QuestionBankView";
-import SmartLabsView from "./components/SmartLabsView";
-import PedagogicalTracksView from "./components/PedagogicalTracksView";
-import ResourceLibraryView from "./components/ResourceLibraryView";
-import ReportsView from "./components/ReportsView";
-import HelpCenterView from "./components/HelpCenterView";
-import SystemHealthView from "./components/SystemHealthView";
-import MultiAgentReviewView from "./components/MultiAgentReviewView";
-import AIPedagogicalExecutiveDashboard from "./components/AIPedagogicalExecutiveDashboard";
-import PredictiveAnalyticsView from "./components/PredictiveAnalyticsView";
-import AIPredictiveInsightsView from "./components/AIPredictiveInsightsView";
-import PredictivePerformanceView from "./components/PredictivePerformanceView";
-import AiVisionaryTeacherView from "./components/AiVisionaryTeacherView";
-import AiVisionModelAssessmentView from "./components/AiVisionModelAssessmentView";
-import AiCurriculumArchitectView from "./components/AiCurriculumArchitectView";
-import CollaborativeSandboxView from "./components/CollaborativeSandboxView";
-import LmsIntegrationView from "./components/LmsIntegrationView";
-import AdvancedAiHubView from "./components/AdvancedAiHubView";
-import SlaRemindersSchedulerCard from "./components/SlaRemindersSchedulerCard";
 import { VercelCloudSyncModal } from "./components/VercelCloudSyncModal";
+
+// Dynamic Code Splitting (React.lazy) for high performance & minimal initial bundle size
+const GeneratorView = React.lazy(() => import("./components/GeneratorView"));
+const ActivityBankView = React.lazy(() => import("./components/ActivityBankView"));
+const CompetencyHeatmap = React.lazy(() => import("./components/CompetencyHeatmap"));
+const ReportsInterventionsView = React.lazy(() => import("./components/ReportsInterventionsView"));
+const AIAssistantView = React.lazy(() => import("./components/AIAssistantView"));
+const PedagogicalExecutiveDashboardView = React.lazy(() => import("./components/PedagogicalExecutiveDashboardView"));
+const AutomationActionCenterView = React.lazy(() => import("./components/AutomationActionCenterView"));
+const TeacherCommandCenterView = React.lazy(() => import("./components/TeacherCommandCenterView"));
+const SmartClassDiaryView = React.lazy(() => import("./components/SmartClassDiaryView"));
+const CompetenciesManagerView = React.lazy(() => import("./components/CompetenciesManagerView"));
+const DashboardView = React.lazy(() => import("./components/DashboardView"));
+const GradesManagerView = React.lazy(() => import("./components/GradesManagerView"));
+const PlanejamentoView = React.lazy(() => import("./components/PlanejamentoView"));
+const LessonLoggerView = React.lazy(() => import("./components/LessonLoggerView").then(m => ({ default: m.LessonLoggerView })));
+const TurmasView = React.lazy(() => import("./components/TurmasView"));
+const ClassManagerView = React.lazy(() => import("./components/ClassManagerView").then(m => ({ default: m.ClassManagerView })));
+const StudentsManagerView = React.lazy(() => import("./components/StudentsManagerView").then(m => ({ default: m.StudentsManagerView })));
+const AvaliacoesView = React.lazy(() => import("./components/AvaliacoesView"));
+const RecuperacaoView = React.lazy(() => import("./components/RecuperacaoView"));
+const MateriaisView = React.lazy(() => import("./components/MateriaisView"));
+const PedagogicalDashboard = React.lazy(() => import("./components/dashboard/PedagogicalDashboard"));
+const BatchCorrectionView = React.lazy(() => import("./components/BatchCorrectionView"));
+const SimilarityView = React.lazy(() => import("./components/SimilarityView"));
+const EducationalAnalyticsView = React.lazy(() => import("./components/EducationalAnalyticsView"));
+const QuestionBankView = React.lazy(() => import("./components/QuestionBankView"));
+const SmartLabsView = React.lazy(() => import("./components/SmartLabsView"));
+const PedagogicalTracksView = React.lazy(() => import("./components/PedagogicalTracksView"));
+const ResourceLibraryView = React.lazy(() => import("./components/ResourceLibraryView"));
+const ReportsView = React.lazy(() => import("./components/ReportsView"));
+const HelpCenterView = React.lazy(() => import("./components/HelpCenterView"));
+const SystemHealthView = React.lazy(() => import("./components/SystemHealthView"));
+const MultiAgentReviewView = React.lazy(() => import("./components/MultiAgentReviewView"));
+const AIPedagogicalExecutiveDashboard = React.lazy(() => import("./components/AIPedagogicalExecutiveDashboard"));
+const PredictiveAnalyticsView = React.lazy(() => import("./components/PredictiveAnalyticsView"));
+const AIPredictiveInsightsView = React.lazy(() => import("./components/AIPredictiveInsightsView"));
+const PredictivePerformanceView = React.lazy(() => import("./components/PredictivePerformanceView"));
+const AiVisionaryTeacherView = React.lazy(() => import("./components/AiVisionaryTeacherView"));
+const AiVisionModelAssessmentView = React.lazy(() => import("./components/AiVisionModelAssessmentView"));
+const AiCurriculumArchitectView = React.lazy(() => import("./components/AiCurriculumArchitectView"));
+const CollaborativeSandboxView = React.lazy(() => import("./components/CollaborativeSandboxView"));
+const LmsIntegrationView = React.lazy(() => import("./components/LmsIntegrationView"));
+const AdvancedAiHubView = React.lazy(() => import("./components/AdvancedAiHubView"));
+const SlaRemindersSchedulerCard = React.lazy(() => import("./components/SlaRemindersSchedulerCard"));
+
+const ViewLoadingFallback: React.FC = () => (
+  <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
+    <div className="relative flex items-center justify-center mb-4">
+      <div className="w-10 h-10 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
+      <div className="absolute w-5 h-5 rounded-full bg-emerald-500/10 blur-sm animate-pulse" />
+    </div>
+    <span className="text-xs font-mono text-slate-400 tracking-wider">Carregando módulo sob demanda...</span>
+  </div>
+);
 import { 
   exportUrgentAttentionInterventionPDF, 
   openUrgentAttentionPrintPreview, 
@@ -2425,6 +2437,7 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-8 scrollbar-thin">
           <ErrorBoundary>
             <AppErrorBoundary>
+              <React.Suspense fallback={<ViewLoadingFallback />}>
 
             {currentTab === "dashboard" && (
             <DashboardView onNavigate={(tab) => setTab(tab)} />
@@ -6515,6 +6528,7 @@ export default function App() {
             </div>
           )}
 
+              </React.Suspense>
             </AppErrorBoundary>
           </ErrorBoundary>
 

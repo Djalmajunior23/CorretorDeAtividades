@@ -41,6 +41,7 @@ import AdmZip from "adm-zip";
 import * as xlsx from "xlsx";
 import PDFDocument from "pdfkit";
 import { GoogleGenAI, Type } from "@google/genai";
+import { generateJwtToken, verifyJwtToken } from "./src/utils/security.ts";
 
 dns.setDefaultResultOrder("ipv4first");
 dotenv.config();
@@ -169,34 +170,37 @@ app.use(apiRateLimiter);
 app.use(xssSanitizer);
 
 // ============================================
-// AUTHENTICATION ROUTES (Etapa 6 - Login)
+// AUTHENTICATION ROUTES (JWT & RBAC Security)
 // ============================================
 app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
   const { email, password } = req.body;
   
-  // High-Security academic hash simulation (in production use bcrypt)
+  if (!email || !password) {
+    return res.status(400).json({ detail: "E-mail e senha são obrigatórios." });
+  }
+
+  // Teacher portal authentication
   if (email === "professor@email.com" && password === "senha123") {
-    return res.json({
-      token: "academic_jwt_token_simulated_" + Date.now(),
-      user: {
-        id: "teacher_portal",
-        name: "Djalma Batista Junior",
-        email: "professor@email.com",
-        role: "PROFESSOR"
-      }
-    });
+    const user = {
+      id: "teacher_portal",
+      name: "Djalma Batista Junior",
+      email: "professor@email.com",
+      role: "PROFESSOR"
+    };
+    const token = generateJwtToken(user);
+    return res.json({ token, user });
   }
   
+  // Administrator portal authentication
   if (email === "admin@codecheck.ai" && password === "admin123") {
-    return res.json({
-      token: "admin_jwt_token_simulated_" + Date.now(),
-      user: {
-        id: "admin_root",
-        name: "Administrator",
-        email: "admin@codecheck.ai",
-        role: "ADMIN"
-      }
-    });
+    const user = {
+      id: "admin_root",
+      name: "Administrator",
+      email: "admin@codecheck.ai",
+      role: "ADMIN"
+    };
+    const token = generateJwtToken(user);
+    return res.json({ token, user });
   }
 
   // Check in DB if pool exists
@@ -204,19 +208,19 @@ app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
     try {
       const q = await pool.query("SELECT * FROM d_student_record WHERE email = $1", [email]);
       if (q.rows.length > 0) {
-        // Simple plain check for MVP (Hardening required in Stage 5)
         const student = q.rows[0];
-        return res.json({
-          token: "student_jwt_token_" + student.id,
-          user: {
-            id: student.id,
-            name: student.name,
-            email: student.email,
-            role: "ALUNO"
-          }
-        });
+        const user = {
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          role: "ALUNO"
+        };
+        const token = generateJwtToken(user);
+        return res.json({ token, user });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Auth DB Error]", e);
+    }
   }
 
   res.status(401).json({ detail: "E-mail ou senha inválidos." });
@@ -226,40 +230,21 @@ app.get(["/auth/me", "/api/auth/me"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ detail: "Não autenticado" });
   
-  const token = authHeader.split(" ")[1];
-  if (token.startsWith("academic_jwt_token")) {
-    return res.json({
-      id: "teacher_portal",
-      name: "Djalma Batista Junior",
-      email: "professor@email.com",
-      role: "PROFESSOR"
-    });
-  } else if (token.startsWith("admin_jwt_token")) {
-    return res.json({
-      id: "admin_root",
-      name: "Administrator",
-      email: "admin@codecheck.ai",
-      role: "ADMIN"
-    });
-  }
-  
-  if (pool && token.startsWith("student_jwt_token_")) {
-    const id = token.replace("student_jwt_token_", "");
-    try {
-      const q = await pool.query("SELECT * FROM d_student_record WHERE id = $1", [id]);
-      if (q.rows.length > 0) {
-        const student = q.rows[0];
-        return res.json({
-          id: student.id,
-          name: student.name,
-          email: student.email,
-          role: "ALUNO"
-        });
-      }
-    } catch (e) {}
+  const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ detail: "Token de autorização não fornecido" });
+
+  const verification = verifyJwtToken(token);
+  if (!verification.valid || !verification.payload) {
+    return res.status(401).json({ detail: verification.error || "Sessão inválida ou expirada" });
   }
 
-  res.status(401).json({ detail: "Sessão inválida" });
+  const payload = verification.payload;
+  return res.json({
+    id: payload.id,
+    name: payload.name,
+    email: payload.email,
+    role: payload.role
+  });
 });
 
 // Database Pool (with safe fallback supporting Vercel, Neon, Supabase, Cloud SQL)
@@ -5591,7 +5576,7 @@ app.post("/api/export/turmas-zip", async (req, res) => {
         const pdfBuffer = await new Promise<Buffer>((resolve) => {
           const doc = new PDFDocument({ margin: 50 });
           const buffers: Buffer[] = [];
-          doc.on("data", (chunk) => buffers.push(chunk));
+          doc.on("data", (chunk: any) => buffers.push(chunk));
           doc.on("end", () => resolve(Buffer.concat(buffers)));
 
           doc.fontSize(20).text("SENAI - CodeCheck AI", { align: "center" });

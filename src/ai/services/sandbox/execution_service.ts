@@ -214,24 +214,47 @@ export class ExecutionService {
       if (language === "cpp" || language === "c" || language === "java") {
          // This is a simplified version. A real sandbox would compile separately.
          // For now, let's assume we use a wrapper or the environment has it.
-         // To keep it simple and safe for the agent, I'll focus on scripting languages 
-         // which are more likely to be present in the container.
       }
 
-      const child = spawn(command.cmd, command.args, { cwd, env: { ...process.env, NODE_ENV: "production" } });
+      // Hardened sandbox environment: explicitly strip all sensitive credentials
+      const safeEnv: Record<string, string> = {
+        NODE_ENV: "production",
+        TMPDIR: cwd,
+        TEMP: cwd,
+        TMP: cwd,
+        LANG: "en_US.UTF-8"
+      };
+      if (process.env.PATH) safeEnv.PATH = process.env.PATH;
+      if (process.env.Path) safeEnv.Path = process.env.Path;
+      if (process.env.SYSTEMROOT) safeEnv.SYSTEMROOT = process.env.SYSTEMROOT;
+      if (process.env.HOMEPATH) safeEnv.HOMEPATH = process.env.HOMEPATH;
+
+      const child = spawn(command.cmd, command.args, { 
+        cwd, 
+        env: safeEnv,
+        stdio: ["pipe", "pipe", "pipe"]
+      });
 
       const timeout = setTimeout(() => {
-        child.kill();
+        try {
+          child.kill();
+        } catch (e) {}
         status = "timeout";
       }, timeoutSec * 1000);
 
       if (stdin) {
-        child.stdin.write(stdin);
-        child.stdin.end();
+        try {
+          child.stdin.write(stdin);
+          child.stdin.end();
+        } catch (e) {}
       }
 
-      child.stdout.on("data", (data) => { stdout += data.toString(); });
-      child.stderr.on("data", (data) => { stderr += data.toString(); });
+      child.stdout.on("data", (data) => { 
+        if (stdout.length < 100000) stdout += data.toString(); 
+      });
+      child.stderr.on("data", (data) => { 
+        if (stderr.length < 100000) stderr += data.toString(); 
+      });
 
       child.on("close", (code) => {
         clearTimeout(timeout);
@@ -253,12 +276,14 @@ export class ExecutionService {
   }
 
   private static getCommand(language: string, fileName: string): { cmd: string; args: string[] } | null {
+    const isWin = process.platform === "win32";
     switch (language.toLowerCase()) {
-      case "python": return { cmd: "python3", args: [fileName] };
-      case "javascript": return { cmd: "node", args: [fileName] };
+      case "python": return { cmd: isWin ? "python" : "python3", args: [fileName] };
+      case "javascript":
+      case "js":
+      case "node":
+        return { cmd: "node", args: [fileName] };
       case "php": return { cmd: "php", args: [fileName] };
-      // Note: Real JIT compilation for C/C++/Java requires a build step. 
-      // For this sandbox, we stick to common interpreters found in many standard Linux environments.
       default: return null;
     }
   }
