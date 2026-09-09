@@ -73,21 +73,22 @@ export default function EducationalAnalyticsView() {
     }
   }, [classes]);
 
-  const distClassStudents = students.filter(s => !selectedDistClass || s.class_name === selectedDistClass);
-  const approvedCount = distClassStudents.length > 0
+  const distClassStudents = students.filter(s => !selectedDistClass || s.class_name === selectedDistClass || s.class_id === selectedDistClass);
+  const hasStudents = distClassStudents.length > 0;
+  const approvedCount = hasStudents
     ? distClassStudents.filter(s => (s.average_score || 0) >= 60).length
-    : 28;
-  const recoveryCount = distClassStudents.length > 0
+    : (students.length === 0 ? 28 : 0);
+  const recoveryCount = hasStudents
     ? distClassStudents.filter(s => (s.average_score || 0) >= 40 && (s.average_score || 0) < 60).length
-    : 12;
-  const reprovedCount = distClassStudents.length > 0
+    : (students.length === 0 ? 12 : 0);
+  const reprovedCount = hasStudents
     ? distClassStudents.filter(s => (s.average_score || 0) < 40).length
-    : 5;
+    : (students.length === 0 ? 5 : 0);
 
   const gradeDistributionData = [
-    { name: "Aprovados", value: approvedCount > 0 ? approvedCount : 28, color: "#10b981" },
-    { name: "Recuperação", value: recoveryCount >= 0 ? recoveryCount : 12, color: "#f59e0b" },
-    { name: "Reprovados", value: reprovedCount >= 0 ? reprovedCount : 5, color: "#ef4444" },
+    { name: "Aprovados", value: approvedCount, color: "#10b981" },
+    { name: "Recuperação", value: recoveryCount, color: "#f59e0b" },
+    { name: "Reprovados", value: reprovedCount, color: "#ef4444" },
   ];
 
   useEffect(() => {
@@ -1165,7 +1166,7 @@ export default function EducationalAnalyticsView() {
                       <strong className="text-white block mb-1 font-bold flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Como o cálculo é feito:
                       </strong>
-                      Calculada categorizando os discentes da turma selecionada com base na média final: Aprovados (≥70), Recuperação (50 a 69) e Reprovados (&lt;50).
+                      Calculada categorizando os discentes da turma selecionada com base na média final: Aprovados (≥60), Recuperação (40 a 59) e Reprovados (&lt;40).
                     </div>
                   </div>
                 </div>
