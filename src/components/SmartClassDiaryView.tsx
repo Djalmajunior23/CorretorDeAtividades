@@ -28,6 +28,8 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { apiUrl, safeJsonResponse, API_BASE_URL } from "../config/api";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 
 import { AttendanceDashboard } from "./dashboard/AttendanceDashboard";
@@ -980,6 +982,128 @@ export default function SmartClassDiaryView({
       "Todos os alunos marcados como Presentes em todos os horários.",
       "info",
     );
+  };
+
+  // Mark all students absent
+  const markAllAbsent = () => {
+    const updated = safeAttendanceRecords.map((r) => ({
+      ...r,
+      status: "F,F,F,F,F",
+    }));
+    setAttendanceRecords(updated);
+    showToast("Todos os alunos marcados com Falta.", "info");
+  };
+
+  // Auto justify absences
+  const markAllJustified = () => {
+    const updated = safeAttendanceRecords.map((r) => {
+      const isAbsent = r.status && (r.status.includes("F") || r.status === "falta");
+      return {
+        ...r,
+        justification: isAbsent && !r.justification ? "Atividade compensatória / Atestado" : r.justification,
+      };
+    });
+    setAttendanceRecords(updated);
+    showToast("Justificativa padrão aplicada para ausências.", "info");
+  };
+
+  // Export Official Attendance Sheet PDF
+  const exportOfficialAttendancePdf = () => {
+    const targetSession = safeSessions.find(s => s.id === selectedAttendanceSessionId);
+    const targetClassName = targetSession?.class_name || (safeClasses.find(c => c.id === selectedClass)?.name) || selectedClass || "Turma Regular";
+    const sessionTopic = targetSession?.lesson_topic || "Registro de Conteúdo e Frequência";
+    const sessionDate = targetSession?.date || new Date().toISOString().split("T")[0];
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    // Official SENAI Header
+    doc.setFillColor(15, 118, 110); // SENAI Teal
+    doc.rect(10, 10, 277, 24, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text("SENAI - DIÁRIO OFICIAL DE CLASSE & FREQUÊNCIA", 14, 18);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(204, 251, 241);
+    doc.text(`Turma: ${targetClassName} | Data da Aula: ${sessionDate} | Carga Horária: 5 Horas-Aula`, 14, 25);
+    doc.text(`Conteúdo Ministrado: ${sessionTopic.slice(0, 100)}`, 14, 30);
+
+    // Build Table Rows
+    const tableData = safeAttendanceRecords.map((stud, idx) => {
+      let currentStatus = stud.status || "P,P,P,P,P";
+      if (!currentStatus.includes(",")) {
+        if (currentStatus === "presente") currentStatus = "P,P,P,P,P";
+        else if (currentStatus === "falta") currentStatus = "F,F,F,F,F";
+        else if (currentStatus === "atraso") currentStatus = "A,A,A,A,A";
+        else currentStatus = "P,P,P,P,P";
+      }
+
+      const pArr = currentStatus.split(",");
+      const h1 = pArr[0] || "P";
+      const h2 = pArr[1] || "P";
+      const h3 = pArr[2] || "P";
+      const h4 = pArr[3] || "P";
+      const h5 = pArr[4] || "P";
+
+      const presencas = [h1, h2, h3, h4, h5].filter(x => x === "P" || x === "A").length;
+      const faltas = 5 - presencas;
+      const freqPercent = `${((presencas / 5) * 100).toFixed(0)}%`;
+      const situacao = (presencas / 5) >= 0.75 ? "REGULAR" : "RISCO (<75%)";
+
+      return [
+        `0${idx + 1}`.slice(-2),
+        stud.student_name,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        presencas.toString(),
+        faltas.toString(),
+        freqPercent,
+        situacao,
+        stud.justification || "______________________"
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 38,
+      head: [["Nº", "Nome do Estudante", "H1", "H2", "H3", "H4", "H5", "Pres.", "Faltas", "% Freq.", "Situação", "Assinatura / Justificativa"]],
+      body: tableData,
+      theme: "grid",
+      headStyles: { fillColor: [15, 118, 110], fontSize: 8, halign: "center" },
+      bodyStyles: { fontSize: 7.5 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 10 },
+        1: { cellWidth: 55 },
+        2: { halign: "center", cellWidth: 10 },
+        3: { halign: "center", cellWidth: 10 },
+        4: { halign: "center", cellWidth: 10 },
+        5: { halign: "center", cellWidth: 10 },
+        6: { halign: "center", cellWidth: 10 },
+        7: { halign: "center", cellWidth: 14 },
+        8: { halign: "center", cellWidth: 14 },
+        9: { halign: "center", cellWidth: 16 },
+        10: { halign: "center", cellWidth: 26 },
+        11: { cellWidth: 92 },
+      },
+      margin: { left: 10, right: 10 },
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 12;
+    if (finalY < 185) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(71, 85, 105);
+      doc.text("Assinatura do Docente Responsável: __________________________________________", 14, finalY);
+      doc.text("Coordenação Pedagógica SENAI: __________________________________________", 155, finalY);
+    }
+
+    doc.save(`Diario_Frequencia_${targetClassName.replace(/\s+/g, "_")}_${sessionDate}.pdf`);
+    showToast("Diário Oficial de Frequência exportado em PDF com sucesso!", "success");
   };
 
   // Update single student attendance state for a specific period
@@ -2848,17 +2972,43 @@ export default function SmartClassDiaryView({
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-fade-in">
             <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <span className="text-xs font-bold text-gray-500 uppercase">
-                Alunos matriculados ({safeAttendanceRecords.length})
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-gray-500 uppercase">
+                  Alunos matriculados ({safeAttendanceRecords.length})
+                </span>
+                <span className="text-[11px] font-bold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-lg border border-teal-200">
+                  MEC/SENAI: Mínimo 75%
+                </span>
+              </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={markAllPresent}
-                  className="px-3.5 py-1.5 bg-teal-100 hover:bg-teal-200 text-teal-900 rounded-xl font-bold text-xs uppercase"
+                  className="px-3 py-1.5 bg-teal-100 hover:bg-teal-200 text-teal-900 rounded-xl font-bold text-xs uppercase transition-all shadow-sm"
                 >
-                  ✓ Marcar Presente para Todos
+                  ✓ Presente para Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={markAllAbsent}
+                  className="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-900 rounded-xl font-bold text-xs uppercase transition-all shadow-sm"
+                >
+                  ✕ Faltas
+                </button>
+                <button
+                  type="button"
+                  onClick={markAllJustified}
+                  className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-bold text-xs uppercase transition-all shadow-sm"
+                >
+                  ⚖️ Justificar
+                </button>
+                <button
+                  type="button"
+                  onClick={exportOfficialAttendancePdf}
+                  className="px-3.5 py-1.5 bg-teal-800 hover:bg-teal-700 text-white rounded-xl font-bold text-xs uppercase transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" /> PDF Oficial
                 </button>
               </div>
             </div>
@@ -2888,7 +3038,20 @@ export default function SmartClassDiaryView({
                   </button>
                 </div>
               ) : (
-                safeAttendanceRecords.map((stud, idx) => (
+                safeAttendanceRecords.map((stud, idx) => {
+                  let currentStatus = stud.status || "P,P,P,P,P";
+                  if (!currentStatus.includes(",")) {
+                    if (currentStatus === "presente") currentStatus = "P,P,P,P,P";
+                    else if (currentStatus === "falta") currentStatus = "F,F,F,F,F";
+                    else if (currentStatus === "atraso") currentStatus = "A,A,A,A,A";
+                    else currentStatus = "P,P,P,P,P";
+                  }
+                  const pArr = currentStatus.split(",");
+                  const presentPeriods = pArr.filter((x: string) => x === "P" || x === "A").length;
+                  const currentRate = Math.round((presentPeriods / 5) * 100);
+                  const isAtRisk = currentRate < 75;
+
+                  return (
                   <div
                     key={idx}
                     className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors"
@@ -2897,9 +3060,22 @@ export default function SmartClassDiaryView({
                       <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-teal-800 to-teal-600 text-white font-bold flex items-center justify-center text-xs shadow">
                         {stud.student_name[0]}
                       </div>
-                      <span className="font-bold text-gray-900">
-                        {stud.student_name}
-                      </span>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900">
+                            {stud.student_name}
+                          </span>
+                          <span
+                            className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                              isAtRisk
+                                ? "bg-rose-100 text-rose-700 border border-rose-200 animate-pulse"
+                                : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                            }`}
+                          >
+                            {isAtRisk ? `⚠️ ${currentRate}% Risco SENAI` : `✓ ${currentRate}% Regular`}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
@@ -2983,8 +3159,8 @@ export default function SmartClassDiaryView({
                       )}
                     </div>
                   </div>
-                ))
-              )}
+                );
+              }))}
             </div>
 
             <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end">
