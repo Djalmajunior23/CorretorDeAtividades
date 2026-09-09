@@ -75,13 +75,13 @@ export default function EducationalAnalyticsView() {
 
   const distClassStudents = students.filter(s => !selectedDistClass || s.class_name === selectedDistClass);
   const approvedCount = distClassStudents.length > 0
-    ? distClassStudents.filter(s => (s.average_score || 0) >= 70).length
+    ? distClassStudents.filter(s => (s.average_score || 0) >= 60).length
     : 28;
   const recoveryCount = distClassStudents.length > 0
-    ? distClassStudents.filter(s => (s.average_score || 0) >= 50 && (s.average_score || 0) < 70).length
+    ? distClassStudents.filter(s => (s.average_score || 0) >= 40 && (s.average_score || 0) < 60).length
     : 12;
   const reprovedCount = distClassStudents.length > 0
-    ? distClassStudents.filter(s => (s.average_score || 0) < 50).length
+    ? distClassStudents.filter(s => (s.average_score || 0) < 40).length
     : 5;
 
   const gradeDistributionData = [

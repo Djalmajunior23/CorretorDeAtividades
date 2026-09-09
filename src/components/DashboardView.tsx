@@ -375,7 +375,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                         <span className="text-[9px] text-slate-500 font-mono uppercase font-bold">
                           Nota Avaliada
                         </span>
-                        <span className={`text-xs font-mono font-bold ${cls.score >= 70 ? 'text-emerald-450' : 'text-rose-400'}`}>
+                        <span className={`text-xs font-mono font-bold ${cls.score >= 60 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {cls.score} / 100
                         </span>
                       </div>

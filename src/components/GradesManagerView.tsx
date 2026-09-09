@@ -58,7 +58,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [passingGrade, setPassingGrade] = useState<number>(60);
-  const [calculationMethod, setCalculationMethod] = useState<CalculationMethod>("average");
+  const [calculationMethod, setCalculationMethod] = useState<CalculationMethod>("sum");
   const [refreshKey, setRefreshKey] = useState(0);
   const [newActivityName, setNewActivityName] = useState("");
   const [newActivityWeight, setNewActivityWeight] = useState<number>(1);
@@ -85,6 +85,8 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
       const savedMethod = localStorage.getItem(`calcMethod_${selectedClass}`) as CalculationMethod;
       if (savedMethod && ["average", "weighted", "sum"].includes(savedMethod)) {
         setCalculationMethod(savedMethod);
+      } else {
+        setCalculationMethod("sum");
       }
 
       const savedWeights = localStorage.getItem(`actWeights_${selectedClass}`);
@@ -435,7 +437,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
       if (finalGrade !== null) {
         if (finalGrade >= passingGrade) {
           status = "approved";
-        } else if (finalGrade >= passingGrade - 15) {
+        } else if (finalGrade >= passingGrade - 20) {
           status = "recovery";
         } else {
           status = "failing";
@@ -465,10 +467,10 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
         highestGrade: 0,
         lowestGrade: 0,
         distribution: [
-          { range: "90 - 100 (Excelente)", count: 0, color: "#10b981" },
-          { range: "70 - 89 (Adequado)", count: 0, color: "#6366f1" },
-          { range: "50 - 69 (Atenção)", count: 0, color: "#f59e0b" },
-          { range: "0 - 49 (Crítico)", count: 0, color: "#ef4444" }
+          { range: "80 - 100 (Excelente)", count: 0, color: "#10b981" },
+          { range: "60 - 79 (Aprovado)", count: 0, color: "#6366f1" },
+          { range: "40 - 59 (Recuperação)", count: 0, color: "#f59e0b" },
+          { range: "0 - 39 (Crítico)", count: 0, color: "#ef4444" }
         ]
       };
     }
@@ -482,10 +484,10 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
     const approvalRate = Number(((approved / gradedList.length) * 100).toFixed(1));
 
     const distribution = [
-      { range: "90 - 100 (Excelente)", count: grades.filter(g => g >= 90).length, color: "#10b981" },
-      { range: "70 - 89 (Adequado)", count: grades.filter(g => g >= 70 && g < 90).length, color: "#6366f1" },
-      { range: "50 - 69 (Atenção)", count: grades.filter(g => g >= 50 && g < 70).length, color: "#f59e0b" },
-      { range: "0 - 49 (Crítico)", count: grades.filter(g => g < 50).length, color: "#ef4444" }
+      { range: "80 - 100 (Excelente)", count: grades.filter(g => g >= 80).length, color: "#10b981" },
+      { range: "60 - 79 (Aprovado)", count: grades.filter(g => g >= 60 && g < 80).length, color: "#6366f1" },
+      { range: "40 - 59 (Recuperação)", count: grades.filter(g => g >= 40 && g < 60).length, color: "#f59e0b" },
+      { range: "0 - 39 (Crítico)", count: grades.filter(g => g < 40).length, color: "#ef4444" }
     ];
 
     return {
@@ -1200,8 +1202,8 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                             let inputColorClass = "border-slate-800 bg-[#030712] text-slate-200";
                             if (gradeVal !== "") {
                               const num = parseFloat(gradeVal);
-                              if (num >= 70) inputColorClass = "border-emerald-500/30 bg-emerald-500/5 text-emerald-300 font-bold";
-                              else if (num >= 50) inputColorClass = "border-amber-500/30 bg-amber-500/5 text-amber-300 font-bold";
+                              if (num >= 60) inputColorClass = "border-emerald-500/30 bg-emerald-500/5 text-emerald-300 font-bold";
+                              else if (num >= 40) inputColorClass = "border-amber-500/30 bg-amber-500/5 text-amber-300 font-bold";
                               else inputColorClass = "border-rose-500/30 bg-rose-500/5 text-rose-400 font-bold";
                             }
 
@@ -1241,7 +1243,7 @@ export default function GradesManagerView({ classes, selectedClass, setSelectedC
                             <span className={`font-mono text-sm font-black ${
                               finalGrade === null ? "text-slate-600" :
                               finalGrade >= passingGrade ? "text-emerald-400" :
-                              finalGrade >= passingGrade - 15 ? "text-amber-400" : "text-rose-400"
+                              finalGrade >= passingGrade - 20 ? "text-amber-400" : "text-rose-400"
                             }`}>
                               {finalGrade !== null ? finalGrade : "-"}
                             </span>

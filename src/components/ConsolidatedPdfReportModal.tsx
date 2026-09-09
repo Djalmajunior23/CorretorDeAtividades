@@ -243,12 +243,12 @@ export function ConsolidatedPdfReportModal({
         averageGrade: std.averageGrade,
         gradeDecimal: Math.round((std.averageGrade / 10) * 10) / 10,
         totalHours: 80,
-        attendedHours: std.averageGrade >= 70 ? 76 : 60,
-        missedHours: std.averageGrade >= 70 ? 4 : 20,
-        attendancePercentage: std.averageGrade >= 70 ? 95 : 75,
-        academicStatus: std.averageGrade >= 70 ? "Aprovado por Média" : "Em Recuperação",
+        attendedHours: std.averageGrade >= 60 ? 76 : 60,
+        missedHours: std.averageGrade >= 60 ? 4 : 20,
+        attendancePercentage: std.averageGrade >= 60 ? 95 : 75,
+        academicStatus: std.averageGrade >= 60 ? "Aprovado por Média" : "Em Recuperação",
         attendanceStatus: "Apto",
-        finalResult: std.averageGrade >= 70 ? "APROVADO" : "EM RECUPERAÇÃO",
+        finalResult: std.averageGrade >= 60 ? "APROVADO" : "EM RECUPERAÇÃO",
         notes: `Intervenção: ${std.frequentError || "Acompanhamento geral"}`
       }));
 

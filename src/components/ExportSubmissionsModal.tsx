@@ -192,7 +192,7 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
         const score = res.final_score ?? res.score ?? 0;
         const testsPassed = res.tests_passed ?? 0;
         const totalTests = res.total_tests ?? 0;
-        const status = sub.status || (score >= 70 ? "Aprovado" : "Revisão Necessária");
+        const status = sub.status || (score >= 60 ? "Aprovado" : "Revisão Necessária");
         const data = sub.created_at || new Date().toISOString();
         return {
           id: sub.id || idx + 1,
@@ -228,7 +228,7 @@ export function ExportSubmissionsModal({ submissions, onClose }: ExportSubmissio
         const score = res.final_score ?? res.score ?? 0;
         const testsPassed = res.tests_passed ?? 0;
         const totalTests = res.total_tests ?? 0;
-        const status = sub.status || (score >= 70 ? "Aprovado" : "Revisão Necessária");
+        const status = sub.status || (score >= 60 ? "Aprovado" : "Revisão Necessária");
         const data = sub.created_at || new Date().toISOString();
 
         const escapeCsv = (val: any) => `"${String(val ?? "").replace(/"/g, '""')}"`;

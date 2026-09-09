@@ -69,13 +69,13 @@ const INITIAL_SEED_QUESTIONS: QuestionItem[] = [
     language: "python",
     difficulty: "Iniciante",
     bloom_level: "Aplicar",
-    statement: "Escreva uma função em Python chamada 'calcular_aprovacao(n1, n2, n3)' que receba 3 notas (pesos 2, 3 e 5). Retorne 'Aprovado' se a média >= 7.0, 'Recuperacao' se entre 5.0 e 6.9, e 'Reprovado' caso contrário.",
+    statement: "Escreva uma função em Python chamada 'calcular_aprovacao(n1, n2, n3)' que receba 3 notas (pesos 2, 3 e 5). Retorne 'Aprovado' se a média >= 6.0 (60%), 'Recuperacao' se entre 4.0 e 5.9, e 'Reprovado' caso contrário.",
     starter_code: "def calcular_aprovacao(n1, n2, n3):\n    # Desenvolva sua solução aqui\n    pass",
-    reference_solution: "def calcular_aprovacao(n1, n2, n3):\n    media = (n1*2 + n2*3 + n3*5) / 10\n    if media >= 7.0:\n        return 'Aprovado'\n    elif media >= 5.0:\n        return 'Recuperacao'\n    else:\n        return 'Reprovado'",
+    reference_solution: "def calcular_aprovacao(n1, n2, n3):\n    media = (n1*2 + n2*3 + n3*5) / 10\n    if media >= 6.0:\n        return 'Aprovado'\n    elif media >= 4.0:\n        return 'Recuperacao'\n    else:\n        return 'Reprovado'",
     test_cases: [
-      { input: "calcular_aprovacao(8, 7, 9)", output: "'Aprovado'" },
-      { input: "calcular_aprovacao(5, 6, 5)", output: "'Recuperacao'" },
-      { input: "calcular_aprovacao(2, 4, 3)", output: "'Reprovado'" }
+      { input: "calcular_aprovacao(6, 6, 7)", output: "'Aprovado'" },
+      { input: "calcular_aprovacao(4, 5, 4)", output: "'Recuperacao'" },
+      { input: "calcular_aprovacao(2, 3, 3)", output: "'Reprovado'" }
     ],
     rubric: { "Sintaxe e Declaração": 25, "Cálculo Ponderado Correto": 35, "Estrutura Condicional": 40 },
     created_by_ai: false
