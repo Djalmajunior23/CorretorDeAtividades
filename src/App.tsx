@@ -59,6 +59,7 @@ const LmsIntegrationView = React.lazy(() => import("./components/LmsIntegrationV
 const AdvancedAiHubView = React.lazy(() => import("./components/AdvancedAiHubView"));
 const SlaRemindersSchedulerCard = React.lazy(() => import("./components/SlaRemindersSchedulerCard"));
 const DiagramAssessmentView = React.lazy(() => import("./components/DiagramAssessmentView"));
+const ActivitiesControlHubView = React.lazy(() => import("./components/ActivitiesControlHubView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2573,20 +2574,7 @@ export default function App() {
           )}
 
           {currentTab === "activities" && (
-            <div className="flex flex-col gap-8">
-              <div className="p-6 rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <span className="text-xs font-mono font-bold tracking-widest text-[#10b981] uppercase">Fase 5: Banco de Questões Inteligente</span>
-                  <h2 className="text-2xl font-bold tracking-tight text-white font-display">Gerenciador de Atividades e Questões</h2>
-                  <p className="text-sm text-slate-400 mt-1">Gere novas atividades com nosso Copiloto IA ou gerencie o acervo institucional cadastrado.</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-8">
-                <GeneratorView />
-                <div className="border-t border-slate-800 pb-2" />
-                <ActivityBankView />
-              </div>
-            </div>
+            <ActivitiesControlHubView />
           )}
 
           {currentTab === "generator" && featureFlags.ENABLE_ACTIVITY_GENERATOR && (

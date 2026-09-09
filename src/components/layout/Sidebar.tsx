@@ -71,7 +71,7 @@ export default function Sidebar({
     { id: "students", label: "Alunos", icon: Users, desc: "Gestão e Importação CSV", visible: true },
     { id: "notas", label: "Notas", icon: Award, desc: "Gestão de Avaliações e Médias", visible: true },
     { id: "evidences", label: "Evidências", icon: FileCheck, desc: "Histórico Pedagógico", visible: true },
-    { id: "activities", label: "Atividades", icon: Zap, desc: "Banco de Questões e IA", visible: true },
+    { id: "activities", label: "Atividades", icon: Zap, desc: "Controle de Entregas, IA & Autor", visible: true },
     { id: "question_bank", label: "Banco de Questões", icon: Database, desc: "Questões e Desafios IA", visible: true },
     { id: "batch", label: "Correção em Lote", icon: Layers, desc: "Processamento Massivo ZIP", visible: true },
     { id: "similarity", label: "Similaridade", icon: FileSearch, desc: "Análise de Códigos", visible: true },
