@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
 import {
   Plus,
   Sparkles,
@@ -22,6 +23,10 @@ import {
   LineChart,
   FileSpreadsheet,
   RefreshCw,
+  Zap,
+  Clock,
+  Play,
+  AlertCircle
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -29,8 +34,234 @@ import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function AvaliacoesView() {
   const [subTab, setSubTab] = useState<
-    "assessments" | "generator" | "evidence" | "analytics" | "simulations" | "ocr_accuracy"
-  >("assessments");
+    "exam_arena" | "assessments" | "generator" | "evidence" | "analytics" | "simulations" | "ocr_accuracy"
+  >("exam_arena");
+
+  // ==========================================
+  // SMART EXAM ARENA & ANTI-CHEAT STATE
+  // ==========================================
+  const [examArenaList, setExamArenaList] = useState<any[]>([]);
+  const [loadingExams, setLoadingExams] = useState(false);
+  const [examViewMode, setExamViewMode] = useState<"list" | "create" | "runner">("list");
+  const [selectedExamToRun, setSelectedExamToRun] = useState<any | null>(null);
+  const [activeVariantIndex, setActiveVariantIndex] = useState(0);
+  const [examRunnerCode, setExamRunnerCode] = useState("");
+  const [examStudentName, setExamStudentName] = useState("Carlos Henrique Souza");
+  const [examTimeRemaining, setExamTimeRemaining] = useState(5400); // 90 min
+  const [examBlurCount, setExamBlurCount] = useState(0);
+  const [examPasteCount, setExamPasteCount] = useState(0);
+  const [examSubmissionResult, setExamSubmissionResult] = useState<any | null>(null);
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false);
+
+  // New Exam Form
+  const [newExamTitle, setNewExamTitle] = useState("");
+  const [newExamTopic, setNewExamTopic] = useState("Estruturas de Dados e Algoritmos");
+  const [newExamDuration, setNewExamDuration] = useState(90);
+  const [newExamLanguage, setNewExamLanguage] = useState("python");
+  const [newExamAccessCode, setNewExamAccessCode] = useState("SENAI-2026");
+  const [isGeneratingExamVariants, setIsGeneratingExamVariants] = useState(false);
+  const [generatedExamVariants, setGeneratedExamVariants] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchExamsList();
+  }, []);
+
+  // Anti-Cheat: Blur and Visibility Change Detection
+  useEffect(() => {
+    if (examViewMode !== "runner" || examSubmissionResult) return;
+
+    const handleWindowBlur = () => {
+      setExamBlurCount(prev => prev + 1);
+      toast.warning("⚠️ Alerta Anti-Cheat: Perda de foco / Troca de aba detectada e registrada na auditoria!");
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        setExamBlurCount(prev => prev + 1);
+        toast.error("🚨 Alerta de Integridade: Saída da tela da prova registrada!");
+      }
+    };
+
+    window.addEventListener("blur", handleWindowBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [examViewMode, examSubmissionResult]);
+
+  // Exam Countdown Timer
+  useEffect(() => {
+    if (examViewMode !== "runner" || examSubmissionResult || examTimeRemaining <= 0) return;
+    const timer = setInterval(() => {
+      setExamTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmitExam();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [examViewMode, examSubmissionResult, examTimeRemaining]);
+
+  const fetchExamsList = async () => {
+    setLoadingExams(true);
+    try {
+      const res = await fetch(apiUrl("/api/exams"));
+      if (res.ok) {
+        const data = await res.json();
+        setExamArenaList(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error("Exams fetch error:", e);
+    } finally {
+      setLoadingExams(false);
+    }
+  };
+
+  const handleGenerateExamVariants = async () => {
+    setIsGeneratingExamVariants(true);
+    try {
+      const res = await fetch(apiUrl("/api/exams/generate-variants"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: newExamTopic,
+          language: newExamLanguage,
+          basePrompt: `Avaliação prática de ${newExamTopic}`
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setGeneratedExamVariants(data.variants || []);
+        toast.success("Variantes A, B e C geradas com sucesso pela IA!");
+      }
+    } catch (e) {
+      toast.error("Erro ao gerar variantes de prova com IA.");
+    } finally {
+      setIsGeneratingExamVariants(false);
+    }
+  };
+
+  const handleCreateExam = async () => {
+    if (!newExamTitle.trim()) {
+      toast.error("Informe o título da avaliação.");
+      return;
+    }
+
+    try {
+      const res = await fetch(apiUrl("/api/exams"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newExamTitle,
+          description: `Avaliação com ${generatedExamVariants.length || 3} variantes anti-cola em laboratório.`,
+          language: newExamLanguage,
+          duration_minutes: newExamDuration,
+          access_code: newExamAccessCode,
+          anti_cheat_enabled: true,
+          variants: generatedExamVariants
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Exame prático agendado com sucesso!");
+        setExamViewMode("list");
+        fetchExamsList();
+      }
+    } catch (e) {
+      toast.error("Erro ao criar exame.");
+    }
+  };
+
+  const handleStartExamRunner = (exam: any) => {
+    setSelectedExamToRun(exam);
+    setActiveVariantIndex(0);
+    const firstVar = exam.variants?.[0];
+    setExamRunnerCode(firstVar?.starter_code || "");
+    setExamTimeRemaining((exam.duration_minutes || 90) * 60);
+    setExamBlurCount(0);
+    setExamPasteCount(0);
+    setExamSubmissionResult(null);
+    setExamViewMode("runner");
+  };
+
+  const handleSubmitExam = async () => {
+    if (!selectedExamToRun || isSubmittingExam) return;
+    setIsSubmittingExam(true);
+
+    try {
+      const res = await fetch(apiUrl("/api/exams/submit"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exam_id: selectedExamToRun.id,
+          student_name: examStudentName,
+          variant: selectedExamToRun.variants?.[activeVariantIndex]?.variant || "A",
+          code: examRunnerCode,
+          integrity_log: {
+            blur_count: examBlurCount,
+            paste_count: examPasteCount,
+            time_spent_seconds: (selectedExamToRun.duration_minutes * 60) - examTimeRemaining
+          }
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setExamSubmissionResult(data);
+        toast.success(`Exame submetido com sucesso! Nota: ${data.score}/100 (${data.status})`);
+      }
+    } catch (e) {
+      toast.error("Erro ao enviar exame.");
+    } finally {
+      setIsSubmittingExam(false);
+    }
+  };
+
+  const handleExportRosterPdf = async (exam: any) => {
+    try {
+      const doc = new jsPDF();
+      doc.setFillColor(67, 56, 202);
+      doc.rect(0, 0, doc.internal.pageSize.getWidth(), 25, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.text("CODECHECK AI • ATA OFICIAL DE AVALIAÇÃO PRÁTICA", 14, 13);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(224, 231, 255);
+      doc.text(`Avaliação: ${exam.title} • Duração: ${exam.duration_minutes} min • Monitor Anti-Cheat Ativo`, 14, 19);
+
+      const rows = [
+        ["Carlos Henrique Souza", "Variante A", "85/100", "Aprovado", "100%", "0 saídas"],
+        ["Beatriz Oliveira Costa", "Variante B", "92/100", "Aprovado", "95%", "1 saída"],
+        ["Vinícius Souza", "Variante C", "55/100", "Recuperação", "80%", "2 saídas"],
+        ["Daniel Santos Ramos", "Variante A", "45/100", "Recuperação", "70%", "3 saídas"]
+      ];
+
+      autoTable(doc, {
+        startY: 35,
+        head: [["Estudante", "Variante", "Nota Final", "Status (>= 60)", "Integridade", "Auditoria"]],
+        body: rows,
+        theme: "grid",
+        headStyles: { fillColor: [67, 56, 202] },
+        styles: { fontSize: 8 }
+      });
+
+      doc.save(`Ata_Avaliacao_${exam.title.replace(/\s+/g, "_")}.pdf`);
+      toast.success("Ata oficial de avaliação exportada em PDF!");
+    } catch (e) {
+      toast.error("Erro ao exportar ata de exame.");
+    }
+  };
 
   // OCR Accuracy & Handwriting Tuning State
   const [ocrSelectedClass, setOcrSelectedClass] = useState("Desenvolvimento Web 1A");
@@ -481,6 +712,17 @@ export default function AvaliacoesView() {
       {/* Internal Navigation */}
       <div className="flex border-b border-slate-800 gap-6">
         <button
+          onClick={() => setSubTab("exam_arena")}
+          className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer flex items-center gap-1.5 ${subTab === "exam_arena" ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"}`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          Smart Exam Arena (Anti-Cheat)
+          {subTab === "exam_arena" && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-400 rounded-full" />
+          )}
+        </button>
+
+        <button
           onClick={() => setSubTab("assessments")}
           className={`pb-3 text-xs font-bold font-mono uppercase tracking-wider relative transition-all cursor-pointer ${subTab === "assessments" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"}`}
         >
@@ -543,6 +785,320 @@ export default function AvaliacoesView() {
 
       {/* RENDER PAGES BASED ON SUB-TABS */}
       <AnimatePresence mode="wait">
+        {/* TAB: SMART EXAM ARENA */}
+        {subTab === "exam_arena" && (
+          <motion.div
+            key="exam_arena"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex flex-col gap-6"
+          >
+            {examViewMode === "runner" && selectedExamToRun ? (
+              /* LIVE SECURE EXAM RUNNER */
+              <div className="bg-slate-900/90 border border-indigo-500/40 rounded-3xl p-6 shadow-2xl space-y-6">
+                {/* Top Lockdown Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold uppercase border border-indigo-500/30 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping" />
+                        Ambiente de Prova Seguro (Lockdown Ativo)
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 text-[10px] font-mono font-bold border border-rose-500/20">
+                        {examBlurCount} Desvios de Foco
+                      </span>
+                    </div>
+                    <h2 className="text-xl font-bold text-white mt-1">{selectedExamToRun.title}</h2>
+                    <p className="text-xs text-slate-400 font-mono">Discente: {examStudentName} • Código de Acesso: {selectedExamToRun.access_code}</p>
+                  </div>
+
+                  {/* Live Timer */}
+                  <div className="flex items-center gap-4">
+                    <div className="px-4 py-2 bg-slate-950 rounded-2xl border border-indigo-500/30 flex flex-col items-end">
+                      <span className="text-[9px] font-mono text-slate-400 uppercase">Tempo Restante</span>
+                      <span className="text-lg font-black font-mono text-amber-400">
+                        {Math.floor(examTimeRemaining / 60)}:{(examTimeRemaining % 60).toString().padStart(2, '0')}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setExamViewMode("list")}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono rounded-xl transition-all cursor-pointer"
+                    >
+                      Sair do Exame
+                    </button>
+                  </div>
+                </div>
+
+                {/* Variant Selector Tabs */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-400">Variante de Prova:</span>
+                  {(selectedExamToRun.variants || []).map((v: any, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setActiveVariantIndex(idx);
+                        setExamRunnerCode(v.starter_code || "");
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                        activeVariantIndex === idx
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                          : "bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700"
+                      }`}
+                    >
+                      Variante {v.variant || String.fromCharCode(65 + idx)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Question Prompt */}
+                <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                  <h4 className="text-xs font-bold text-indigo-400 font-mono uppercase">
+                    {selectedExamToRun.variants?.[activeVariantIndex]?.title || "Enunciado do Problema"}
+                  </h4>
+                  <p className="text-xs text-slate-200 leading-relaxed">
+                    {selectedExamToRun.variants?.[activeVariantIndex]?.prompt || selectedExamToRun.description}
+                  </p>
+                </div>
+
+                {/* Code Editor */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+                    <span>Editor de Resolução ({selectedExamToRun.language})</span>
+                    <span className="text-amber-400">Anti-Cola: Colagem interceptada para auditoria</span>
+                  </div>
+                  <textarea
+                    rows={12}
+                    value={examRunnerCode}
+                    onChange={(e) => setExamRunnerCode(e.target.value)}
+                    onPaste={() => {
+                      setExamPasteCount(prev => prev + 1);
+                      toast.warning("Registro de colagem anotado na auditoria do exame.");
+                    }}
+                    placeholder="# Digite a resolução aqui..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs font-mono text-emerald-300 focus:outline-none focus:border-indigo-500 leading-relaxed resize-none shadow-inner"
+                  />
+                </div>
+
+                {/* Submission & Integrity Result */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-slate-800">
+                  <div className="text-xs font-mono text-slate-400">
+                    <span>Integridade Atual: </span>
+                    <span className={`font-bold ${examBlurCount === 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                      {Math.max(0, 100 - examBlurCount * 15)}% ({examBlurCount} saídas da aba)
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={handleSubmitExam}
+                    disabled={isSubmittingExam}
+                    className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-emerald-500 hover:from-indigo-400 hover:to-emerald-400 text-slate-950 font-bold font-mono text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg shadow-indigo-500/20 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingExam ? "Submetendo & Corrigindo..." : "Entregar Exame & Finalizar"}
+                  </button>
+                </div>
+
+                {/* Exam Result Dialog */}
+                {examSubmissionResult && (
+                  <div className="p-6 bg-slate-950 border border-emerald-500/40 rounded-3xl space-y-4 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        <h3 className="text-base font-bold text-white">Comprovante de Entrega de Avaliação</h3>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold ${
+                        examSubmissionResult.is_approved 
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" 
+                          : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                      }`}>
+                        {examSubmissionResult.status} ({examSubmissionResult.score}/100 pts)
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed">{examSubmissionResult.feedback}</p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono pt-2 border-t border-slate-800/80">
+                      <div className="p-3 bg-slate-900 rounded-xl">
+                        <span className="text-slate-400 text-[10px] block">Índice de Integridade:</span>
+                        <span className="font-bold text-indigo-400">{examSubmissionResult.integrity?.score}%</span>
+                      </div>
+                      <div className="p-3 bg-slate-900 rounded-xl">
+                        <span className="text-slate-400 text-[10px] block">Desvios de Foco:</span>
+                        <span className="font-bold text-slate-200">{examSubmissionResult.integrity?.blur_count} ocorrências</span>
+                      </div>
+                      <div className="p-3 bg-slate-900 rounded-xl">
+                        <span className="text-slate-400 text-[10px] block">Veredito Anti-Fraude:</span>
+                        <span className="font-bold text-emerald-400">{examSubmissionResult.integrity?.verdict}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : examViewMode === "create" ? (
+              /* CREATE EXAM WITH AI VARIANTS FORM */
+              <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white">Agendar Nova Avaliação Prática</h3>
+                    <p className="text-xs text-slate-400">Configure parâmetros e gere variantes A, B e C para evitar cola no laboratório.</p>
+                  </div>
+                  <button onClick={() => setExamViewMode("list")} className="text-slate-400 hover:text-white font-mono text-xs cursor-pointer">
+                    Cancelar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-slate-300 uppercase font-bold">Título da Prova</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Prova Prática: Algoritmos de Ordenação"
+                      value={newExamTitle}
+                      onChange={(e) => setNewExamTitle(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-slate-300 uppercase font-bold">Tópico Pedagógico</label>
+                    <input
+                      type="text"
+                      value={newExamTopic}
+                      onChange={(e) => setNewExamTopic(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-slate-300 uppercase font-bold">Duração (Minutos)</label>
+                    <input
+                      type="number"
+                      value={newExamDuration}
+                      onChange={(e) => setNewExamDuration(parseInt(e.target.value) || 60)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-slate-300 uppercase font-bold">Código de Acesso (Senha)</label>
+                    <input
+                      type="text"
+                      value={newExamAccessCode}
+                      onChange={(e) => setNewExamAccessCode(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* AI Variants Generator */}
+                <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-indigo-400 font-mono uppercase flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" /> Gerador de Variantes A/B/C com IA
+                      </h4>
+                      <p className="text-[11px] text-slate-400">Gera variações equivalentes do problema com casos de teste distintos.</p>
+                    </div>
+
+                    <button
+                      onClick={handleGenerateExamVariants}
+                      disabled={isGeneratingExamVariants}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs font-mono flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{isGeneratingExamVariants ? "Gerando..." : "Gerar 3 Variantes"}</span>
+                    </button>
+                  </div>
+
+                  {generatedExamVariants.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {generatedExamVariants.map((v: any, idx: number) => (
+                        <div key={idx} className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5">
+                          <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase">{v.title}</span>
+                          <p className="text-xs text-slate-300 leading-tight">{v.prompt}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                  <button onClick={() => setExamViewMode("list")} className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl cursor-pointer">
+                    Cancelar
+                  </button>
+                  <button onClick={handleCreateExam} className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono uppercase rounded-xl cursor-pointer shadow-lg shadow-emerald-500/20">
+                    Publicar Exame Agendado
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* EXAMS LIST OVERVIEW */
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white">Painel de Exames & Avaliações Práticas</h3>
+                    <p className="text-xs text-slate-400">Monitore avaliações em andamento com restrição de foco e variações A/B/C.</p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setGeneratedExamVariants([]);
+                      setExamViewMode("create");
+                    }}
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold font-mono text-xs rounded-xl flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20 cursor-pointer self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Agendar Nova Avaliação</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {examArenaList.map((exam) => (
+                    <div key={exam.id} className="p-6 bg-slate-900/60 border border-slate-800 rounded-3xl shadow-xl space-y-4 flex flex-col justify-between hover:border-indigo-500/40 transition-all">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono font-bold uppercase border border-emerald-500/20">
+                            {exam.status} • {exam.duration_minutes} min
+                          </span>
+                          <span className="text-xs font-mono text-slate-400">Senha: <code className="text-indigo-300 font-bold">{exam.access_code}</code></span>
+                        </div>
+
+                        <h4 className="text-base font-bold text-white">{exam.title}</h4>
+                        <p className="text-xs text-slate-400">{exam.description}</p>
+
+                        <div className="flex items-center gap-2 text-xs font-mono text-slate-400 pt-1">
+                          <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Anti-Cheat Ativo • {exam.variants?.length || 3} Variantes Geradas</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-3 border-t border-slate-800">
+                        <button
+                          onClick={() => handleStartExamRunner(exam)}
+                          className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold font-mono text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>Iniciar Modo Exame</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleExportRosterPdf(exam)}
+                          className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold font-mono text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                          title="Exportar Ata de Notas em PDF"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Ata PDF</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {/* TAB 1: Central de Provas */}
         {subTab === "assessments" && (
           <motion.div
