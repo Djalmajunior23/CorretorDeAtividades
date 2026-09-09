@@ -83,6 +83,7 @@ export default function Sidebar({
     { id: "reports", label: "Pareceres e Relatórios", icon: FileCheck, desc: "Geração de Documentos", visible: true },
     { id: "avaliacoes", label: "Avaliações", icon: FileText, desc: "Provas, Simulados e Evidências", visible: true },
     { id: "corrector", label: "Correções", icon: Terminal, desc: "Parâmetros e Sandbox", visible: true },
+    { id: "diagram_assessment", label: "Diagramas & Modelagem", icon: Network, desc: "Auditoria DER, DDL & UML", visible: true },
     { id: "competencies", label: "Competências", icon: Award, desc: "Mapeamento Curricular SENAI", visible: featureFlags.ENABLE_COMPETENCY_MANAGER !== false },
     { id: "recuperacao", label: "Recuperação", icon: RefreshCw, desc: "Estudos Paralelos F13", visible: true },
     { id: "materiais", label: "Materiais", icon: BookOpen, desc: "Biblioteca & Apoio Didático", visible: true },

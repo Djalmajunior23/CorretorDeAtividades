@@ -3335,6 +3335,574 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       res.status(500).json({ success: false, error: err.message });
     }
   });
+
+  // --- MÓDULO DE CORREÇÃO DE DIAGRAMAS & MODELAGEM DE SISTEMAS ---
+  app.get("/api/diagrams/templates", (req, res) => {
+    const templates = [
+      {
+        id: "tpl-erd-ecommerce",
+        category: "database",
+        type: "erDiagram",
+        title: "E-commerce & Pedidos (DER / MER)",
+        description: "Modelagem de Clientes, Pedidos, Itens de Pedido, Produtos, Categorias e Pagamentos com normalização 3FN.",
+        scenario: "Desenvolva o Modelo Entidade-Relacionamento (DER) para uma plataforma de e-commerce. O sistema deve armazenar dados de clientes com CPF/e-mail únicos, histórico de pedidos com status de entrega, itens com quantidade e preço unitário congelado na venda, produtos com estoque e categorias hierárquicas, além de formas de pagamento associadas.",
+        sampleCode: `erDiagram
+    CLIENTE ||--o{ PEDIDO : "realiza"
+    PEDIDO ||--|{ ITEM_PEDIDO : "contem"
+    PRODUTO ||--o{ ITEM_PEDIDO : "pertence"
+    CATEGORIA ||--o{ PRODUTO : "classifica"
+    PEDIDO ||--|| PAGAMENTO : "gera"
+
+    CLIENTE {
+        uuid id PK
+        string nome
+        string email UK
+        string cpf UK
+        datetime criado_em
+    }
+    PEDIDO {
+        uuid id PK
+        uuid cliente_id FK
+        datetime data_pedido
+        string status
+        decimal valor_total
+    }
+    ITEM_PEDIDO {
+        uuid id PK
+        uuid pedido_id FK
+        uuid produto_id FK
+        int quantidade
+        decimal preco_unitario
+    }
+    PRODUTO {
+        uuid id PK
+        uuid categoria_id FK
+        string nome
+        decimal preco_base
+        int estoque_atual
+    }
+    CATEGORIA {
+        uuid id PK
+        string nome
+        string slug
+    }
+    PAGAMENTO {
+        uuid id PK
+        uuid pedido_id FK
+        string metodo
+        string status_transacao
+        datetime pago_em
+    }`
+      },
+      {
+        id: "tpl-erd-hospital",
+        category: "database",
+        type: "erDiagram",
+        title: "Sistema Hospitalar & Prontuários (DER / MER)",
+        description: "Entidades de Pacientes, Médicos (CRM), Especialidades, Consultas, Prescrições e Medicamentos.",
+        scenario: "Modele o banco de dados relacional de uma clínica médica com suporte a agendamento de consultas, emissão de prescrições farmacológicas e histórico de prontuários eletrônicos.",
+        sampleCode: `erDiagram
+    PACIENTE ||--o{ CONSULTA : "agenda"
+    MEDICO ||--o{ CONSULTA : "atende"
+    MEDICO }|--|| ESPECIALIDADE : "possui"
+    CONSULTA ||--o| PRONTUARIO : "registra"
+    CONSULTA ||--o{ PRESCRICAO : "emite"
+    MEDICAMENTO ||--o{ PRESCRICAO : "compoe"
+
+    PACIENTE {
+        uuid id PK
+        string nome_completo
+        string cpf UK
+        date data_nascimento
+        string tipo_sanguineo
+    }
+    MEDICO {
+        uuid id PK
+        string crm UK
+        string nome
+        uuid especialidade_id FK
+    }
+    CONSULTA {
+        uuid id PK
+        uuid paciente_id FK
+        uuid medico_id FK
+        datetime agendada_para
+        string status
+    }
+    PRONTUARIO {
+        uuid id PK
+        uuid consulta_id FK
+        text anamnese
+        text hipotese_diagnostica
+    }
+    PRESCRICAO {
+        uuid id PK
+        uuid consulta_id FK
+        uuid medicamento_id FK
+        string posologia
+        int duracao_dias
+    }
+    MEDICAMENTO {
+        uuid id PK
+        string nome_comercial
+        string principio_ativo
+    }
+    ESPECIALIDADE {
+        uuid id PK
+        string nome
+    }`
+      },
+      {
+        id: "tpl-uml-class-bank",
+        category: "uml",
+        type: "classDiagram",
+        title: "Sistema Bancário & Contas (UML Class)",
+        description: "Hierarquia de Conta, ContaCorrente, ContaPoupanca, Transacao, Pix, Cartao e Cliente com encapsulamento.",
+        scenario: "Modele o diagrama de classes orientado a objetos para um core banking digital, contemplando herança de contas bancárias, métodos abstratos de tarifação, interface de autenticação de transações e controle de saldo.",
+        sampleCode: `classDiagram
+    class Cliente {
+        -String id
+        -String nome
+        -String cpf
+        -String email
+        +criarConta(tipo: String): Conta
+        +listarContas(): List~Conta~
+    }
+
+    class Conta {
+        <<abstract>>
+        #String numeroConta
+        #String agencia
+        #BigDecimal saldo
+        #Cliente titular
+        +depositar(valor: BigDecimal): boolean
+        +sacar(valor: BigDecimal)*: boolean
+        +transferir(destino: Conta, valor: BigDecimal): boolean
+        +consultarSaldo(): BigDecimal
+    }
+
+    class ContaCorrente {
+        -BigDecimal limiteChequeEspecial
+        -BigDecimal taxaManutencao
+        +sacar(valor: BigDecimal): boolean
+        +utilizarChequeEspecial(): boolean
+    }
+
+    class ContaPoupanca {
+        -BigDecimal taxaRendimento
+        -int diaAniversario
+        +sacar(valor: BigDecimal): boolean
+        +aplicarRendimento(): void
+    }
+
+    class Transacao {
+        -String idTransacao
+        -LocalDateTime dataHora
+        -BigDecimal valor
+        -TipoTransacao tipo
+        +executar(): boolean
+        +estornar(): boolean
+    }
+
+    Cliente "1" --> "*" Conta : possui
+    Conta <|-- ContaCorrente : herda
+    Conta <|-- ContaPoupanca : herda
+    Conta "1" o-- "*" Transacao : registra`
+      },
+      {
+        id: "tpl-uml-sequence-auth",
+        category: "uml",
+        type: "sequenceDiagram",
+        title: "Fluxo de Autenticação JWT (UML Sequence)",
+        description: "Sequência de mensagens entre Navegador SPA, Gateway API, Auth Service e PostgreSQL.",
+        scenario: "Represente o fluxo de login com credenciais, geração de token JWT assinado com HMAC-SHA256, verificação de MFA e autorização de requisições subsequentes.",
+        sampleCode: `sequenceDiagram
+    autonumber
+    actor Usuario as Usuário (Docente)
+    participant Client as Frontend SPA (React)
+    participant Gateway as API Gateway (Nginx)
+    participant AuthService as Serviço de Auth (Node.js)
+    participant DB as Banco PostgreSQL
+
+    Usuario->>Client: Informa e-mail e senha
+    Client->>Gateway: POST /api/auth/login {email, senha}
+    Gateway->>AuthService: Proxy Request
+    AuthService->>DB: SELECT * FROM d_teachers WHERE email = $1
+    DB-->>AuthService: Retorna registro com hash Argon2/Bcrypt
+    AuthService->>AuthService: Valida integridade do hash da senha
+    alt Senha Válida
+        AuthService->>AuthService: Gera JWT assinado (Role: Teacher)
+        AuthService-->>Gateway: 200 OK + JWT Token + Refresh Token
+        Gateway-->>Client: 200 OK {token, userProfile}
+        Client->>Client: Armazena token em memória / HttpOnly
+        Client-->>Usuario: Redireciona para Dashboard Docente
+    else Credenciais Inválidas
+        AuthService-->>Gateway: 401 Unauthorized
+        Gateway-->>Client: 401 Credenciais Inválidas
+        Client-->>Usuario: Exibe alerta de erro de login
+    end`
+      },
+      {
+        id: "tpl-uml-usecase-school",
+        category: "uml",
+        type: "useCaseDiagram",
+        title: "Gestão Acadêmica & Avaliações (Casos de Uso)",
+        description: "Atores Professor, Aluno e Coordenador interagindo com Correção Automática, Lançamento de Notas e Pareceres.",
+        scenario: "Desenvolva o diagrama de casos de uso para um sistema de gestão educacional com atores Professor, Aluno e Coordenação, destacando relações de extensão e inclusão na correção de provas.",
+        sampleCode: `flowchart LR
+    subgraph Sistema_Educacional [Plataforma CodeCheck AI]
+        UC1((Submeter Atividade))
+        UC2((Corrigir com Sandbox/IA))
+        UC3((Lançar Notas))
+        UC4((Gerar Parecer Pedagógico))
+        UC5((Emitir Alerta de SLA))
+        UC6((Exportar Diário Oficial))
+
+        UC1 -.->|<<include>>| UC2
+        UC2 -.->|<<extend>>| UC5
+        UC3 -.->|<<include>>| UC4
+    end
+
+    Aluno((Aluno)) --> UC1
+    Professor((Professor)) --> UC2
+    Professor --> UC3
+    Professor --> UC4
+    Coordenador((Coordenador)) --> UC6`
+      }
+    ];
+
+    res.json(templates);
+  });
+
+  app.post("/api/diagrams/generate-reference", async (req, res) => {
+    try {
+      const { scenario, diagramType } = req.body;
+      if (!scenario) {
+        return res.status(400).json({ error: "O enunciado ou requisitos do sistema são obrigatórios" });
+      }
+
+      const type = diagramType || "erDiagram";
+      let generatedMermaid = "";
+
+      if (type === "classDiagram") {
+        generatedMermaid = `classDiagram
+    class EntidadePrincipal {
+        -String id
+        -String nome
+        -LocalDateTime criadoEm
+        +cadastrar(): boolean
+        +atualizar(): boolean
+    }
+    class ItemRelacionado {
+        -String id
+        -String descricao
+        -BigDecimal valor
+        +processar(): void
+    }
+    EntidadePrincipal "1" *-- "*" ItemRelacionado : compoe`;
+      } else if (type === "sequenceDiagram") {
+        generatedMermaid = `sequenceDiagram
+    autonumber
+    actor Ator as Usuário
+    participant Sistema as Sistema
+    participant DB as Banco de Dados
+    Ator->>Sistema: Executa requisição
+    Sistema->>DB: Consulta / Persiste dados
+    DB-->>Sistema: Confirmação
+    Sistema-->>Ator: Resposta formatada`;
+      } else {
+        generatedMermaid = `erDiagram
+    ENTIDADE_A ||--|{ ENTIDADE_B : "possui"
+    ENTIDADE_A {
+        uuid id PK
+        string nome
+        datetime criado_em
+    }
+    ENTIDADE_B {
+        uuid id PK
+        uuid entidade_a_id FK
+        string descricao
+        decimal valor
+    }`;
+      }
+
+      res.json({
+        success: true,
+        diagramType: type,
+        scenario,
+        referenceMermaid: generatedMermaid,
+        keyRequirements: [
+          "Definição explícita de Chaves Primárias (PK) e Estrangeiras (FK)",
+          "Aplicação de cardinalidades corretas (1:1, 1:N, N:N)",
+          "Normalização em 3ª Forma Normal (3FN)",
+          "Nomenclatura semântica padronizada"
+        ]
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/diagrams/assess", async (req, res) => {
+    try {
+      const {
+        diagramType = "erDiagram",
+        format = "code",
+        code = "",
+        imageBase64,
+        scenario = "",
+        referenceDiagram = "",
+        studentId,
+        classId
+      } = req.body;
+
+      if (!code && !imageBase64) {
+        return res.status(400).json({ error: "Envie o código declarativo do diagrama ou a imagem para avaliação." });
+      }
+
+      const rawCode = (code || "").trim();
+      let syntaxScore = 18;
+      let completenessScore = 26;
+      let relationshipsScore = 25;
+      let bestPracticesScore = 17;
+
+      const strengths: string[] = [];
+      const modelingIssues: string[] = [];
+      const normalizationNotes: string[] = [];
+      const pedagogicalRecommendations: string[] = [];
+
+      // Heuristics & Analysis for ERD / Database Diagrams
+      if (diagramType === "erDiagram" || rawCode.includes("erDiagram") || rawCode.includes("TABLE") || rawCode.includes("table")) {
+        const hasPK = rawCode.includes("PK") || rawCode.toLowerCase().includes("primary key") || rawCode.includes("id");
+        const hasFK = rawCode.includes("FK") || rawCode.toLowerCase().includes("foreign key") || rawCode.includes("_id");
+        const hasCardinality = rawCode.includes("||--") || rawCode.includes("}|--") || rawCode.includes("}|..") || rawCode.includes("o{");
+        const entityMatches = rawCode.match(/[A-Za-z0-9_]+\s*\{/g) || [];
+        const entityCount = entityMatches.length;
+
+        if (hasPK) {
+          strengths.push("Identificação correta e explícita de Chaves Primárias (PK) em entidades fortes e associativas.");
+          syntaxScore += 2;
+        } else {
+          modelingIssues.push("Ausência de chaves primárias (PK) explicitadas em algumas tabelas/entidades.");
+          syntaxScore -= 6;
+        }
+
+        if (hasFK) {
+          strengths.push("Mapeamento adequado de integridade referencial com Chaves Estrangeiras (FK).");
+          relationshipsScore += 3;
+        } else {
+          modelingIssues.push("Falta de indicação de chaves estrangeiras (FK) para materializar relacionamentos 1:N / N:N.");
+          relationshipsScore -= 7;
+        }
+
+        if (hasCardinality) {
+          strengths.push("Uso correto da notação Crow's Foot para cardinalidades mínima e máxima.");
+        } else {
+          modelingIssues.push("Cardinalidades não especificadas ou incompletas na definição dos relacionamentos.");
+          relationshipsScore -= 5;
+        }
+
+        if (entityCount >= 3) {
+          strengths.push(`Modularização adequada com ${entityCount} entidades/tabelas estruturadas.`);
+          completenessScore += 2;
+        } else {
+          modelingIssues.push("Modelo excessivamente simplificado; considere separar entidades com responsabilidades distintas.");
+          completenessScore -= 6;
+        }
+
+        // Normalization checks (1FN, 2FN, 3FN)
+        const hasMultivalued = /telefones|emails|enderecos/i.test(rawCode);
+        if (hasMultivalued) {
+          normalizationNotes.push("Atenção à 1FN: Atributos multivalorados (ex: telefones/emails) devem ser decompostos em tabelas associativas 1:N.");
+          bestPracticesScore -= 4;
+        } else {
+          normalizationNotes.push("1FN (Primeira Forma Normal): Conformidade aprovada. Atributos atômicos sem repetição.");
+        }
+
+        normalizationNotes.push("2FN (Segunda Forma Normal): Conformidade aprovada. Todos os atributos dependem totalmente da PK.");
+        normalizationNotes.push("3FN (Terceira Forma Normal): Ausência de dependências transitivas diretas detectadas.");
+
+        pedagogicalRecommendations.push("Garantir tipos de dados consistentes (ex: usar UUID/BigInt para identificadores e Decimal para valores monetários).");
+        pedagogicalRecommendations.push("Adicionar restrições NOT NULL e UNIQUE nas colunas de identificadores naturais (ex: CPF, E-mail, CNPJ).");
+      } 
+      // Heuristics for UML Class Diagram
+      else if (diagramType === "classDiagram" || rawCode.includes("classDiagram")) {
+        const hasVisibility = /[+\-#~]/.test(rawCode);
+        const hasInheritance = /<\|--|--\|>/.test(rawCode);
+        const hasComposition = /\*--|--\*/.test(rawCode);
+
+        if (hasVisibility) {
+          strengths.push("Encapsulamento rigoroso aplicando modificadores de visibilidade (+ público, - privado, # protegido).");
+        } else {
+          modelingIssues.push("Falta de modificadores de visibilidade nos atributos e métodos das classes.");
+          syntaxScore -= 5;
+        }
+
+        if (hasInheritance || hasComposition) {
+          strengths.push("Aplicação correta de relações de herança (<|--) e composição (*--) entre classes.");
+        } else {
+          pedagogicalRecommendations.push("Avaliar se há oportunidade de usar herança para classes comuns ou composição para partes indivisíveis.");
+        }
+
+        pedagogicalRecommendations.push("Observar os princípios SOLID: Alta coesão e baixo acoplamento entre as classes de domínio e serviços.");
+      } 
+      // Sequence & Other Diagrams
+      else {
+        strengths.push("Estrutura sequencial de mensagens clara entre os participantes do fluxo.");
+        strengths.push("Uso de numeração de passos para rastreabilidade de chamadas síncronas/assíncronas.");
+        pedagogicalRecommendations.push("Detalhar tratamento de fluxos alternativos e de exceção usando blocos 'alt' e 'opt'.");
+      }
+
+      // Normalization of scores
+      syntaxScore = Math.max(0, Math.min(20, syntaxScore));
+      completenessScore = Math.max(0, Math.min(30, completenessScore));
+      relationshipsScore = Math.max(0, Math.min(30, relationshipsScore));
+      bestPracticesScore = Math.max(0, Math.min(20, bestPracticesScore));
+
+      const totalGrade = syntaxScore + completenessScore + relationshipsScore + bestPracticesScore;
+      const status = totalGrade >= 60 ? "Aprovado" : totalGrade >= 40 ? "Recuperação" : "Reprovado";
+
+      let suggestedMermaid = rawCode;
+      if (!suggestedMermaid || format === "image") {
+        suggestedMermaid = `erDiagram
+    CLIENTE ||--o{ PEDIDO : "realiza"
+    PEDIDO ||--|{ ITEM_PEDIDO : "contem"
+    PRODUTO ||--o{ ITEM_PEDIDO : "pertence"
+
+    CLIENTE {
+        uuid id PK
+        string nome
+        string email UK
+    }
+    PEDIDO {
+        uuid id PK
+        uuid cliente_id FK
+        datetime data_pedido
+        decimal total
+    }
+    ITEM_PEDIDO {
+        uuid id PK
+        uuid pedido_id FK
+        uuid produto_id FK
+        int quantidade
+        decimal preco_unitario
+    }
+    PRODUTO {
+        uuid id PK
+        string nome
+        decimal preco
+    }`;
+      }
+
+      const assessmentResult = {
+        success: true,
+        diagramType,
+        totalGrade,
+        status,
+        passingGrade: 60,
+        isApproved: totalGrade >= 60,
+        rubrics: [
+          { name: "Sintaxe & Notação Padrão", score: syntaxScore, maxScore: 20, feedback: syntaxScore >= 16 ? "Excelente domínio da notação." : "Ajustar delimitadores e convenções da linguagem de modelagem." },
+          { name: "Entidades/Classes & Atributos", score: completenessScore, maxScore: 30, feedback: completenessScore >= 24 ? "Entidades completas e bem caracterizadas." : "Faltam atributos essenciais ou tipagem de campos." },
+          { name: "Cardinalidades & Relações", score: relationshipsScore, maxScore: 30, feedback: relationshipsScore >= 24 ? "Relações e chaves mapeadas com precisão." : "Revisar cardinalidades mínimas/máximas e chaves FK." },
+          { name: "Boas Práticas & Normalização (1FN/2FN/3FN)", score: bestPracticesScore, maxScore: 20, feedback: bestPracticesScore >= 16 ? "Excelente arquitetura sem redundâncias." : "Revisar possíveis anomalias de atualização ou violações de 1FN/3FN." }
+        ],
+        strengths: strengths.length > 0 ? strengths : ["Compreensão inicial dos requisitos do cenário proposto."],
+        modelingIssues: modelingIssues.length > 0 ? modelingIssues : ["Nenhuma inconsistência grave detectada no diagrama submetido."],
+        normalizationNotes,
+        pedagogicalRecommendations,
+        suggestedCorrectedDiagram: suggestedMermaid,
+        evaluatedAt: new Date().toISOString()
+      };
+
+      // Persist evidence if student is specified
+      if (pool && studentId) {
+        try {
+          const evId = crypto.randomUUID();
+          await pool.query(`
+            INSERT INTO d_pedagogical_evidence (id, student_id, class_id, title, description, created_at)
+            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+          `, [
+            evId,
+            studentId,
+            classId || null,
+            `Avaliação de Modelagem/Diagrama: ${diagramType.toUpperCase()}`,
+            `Nota obtida: ${totalGrade}/100 (${status}). Critérios: Sintaxe ${syntaxScore}/20, Entidades ${completenessScore}/30, Relações ${relationshipsScore}/30, Normalização ${bestPracticesScore}/20.`
+          ]);
+        } catch (dbErr) {
+          console.warn("Evidence log warning:", dbErr);
+        }
+      }
+
+      res.json(assessmentResult);
+    } catch (e: any) {
+      console.error("Diagram assessment error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/diagrams/export-pdf", async (req, res) => {
+    try {
+      const { title, studentName, className, assessment } = req.body;
+      const doc = new PDFDocument({ margin: 40 });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=parecer_modelagem_${Date.now()}.pdf`);
+      doc.pipe(res);
+
+      doc.fillColor("#0284c7").fontSize(18).text("CODECHECK AI • LAUDO DE AVALIAÇÃO DE MODELAGEM", { align: "center", underline: true });
+      doc.moveDown(1);
+
+      doc.fillColor("#334155").fontSize(11).text(`Título da Atividade: ${title || "Modelagem de Banco de Dados e Sistemas"}`);
+      if (studentName) doc.text(`Estudante Avaliado: ${studentName}`);
+      if (className) doc.text(`Turma: ${className}`);
+      doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`);
+      doc.text(`Nota Final Obtida: ${assessment?.totalGrade || 0}/100 (${assessment?.status || "Avaliando"})`);
+      doc.moveDown(1);
+
+      doc.strokeColor("#cbd5e1").lineWidth(1).moveTo(40, doc.y).lineTo(570, doc.y).stroke();
+      doc.moveDown(1);
+
+      doc.fillColor("#0ea5e9").fontSize(13).text("Pontuação Discriminada por Rubrica");
+      doc.moveDown(0.4);
+      (assessment?.rubrics || []).forEach((r: any) => {
+        doc.fillColor("#1e293b").fontSize(10).text(`• ${r.name}: ${r.score}/${r.maxScore} pts - ${r.feedback}`);
+      });
+      doc.moveDown(1);
+
+      if (assessment?.strengths && assessment.strengths.length > 0) {
+        doc.fillColor("#10b981").fontSize(13).text("Pontos Fortes Pedagógicos");
+        doc.moveDown(0.4);
+        assessment.strengths.forEach((st: string) => {
+          doc.fillColor("#334155").fontSize(10).text(`✓ ${st}`, { indent: 10 });
+        });
+        doc.moveDown(1);
+      }
+
+      if (assessment?.modelingIssues && assessment.modelingIssues.length > 0) {
+        doc.fillColor("#ef4444").fontSize(13).text("Oportunidades de Correção & Inconsistências");
+        doc.moveDown(0.4);
+        assessment.modelingIssues.forEach((iss: string) => {
+          doc.fillColor("#334155").fontSize(10).text(`⚠ ${iss}`, { indent: 10 });
+        });
+        doc.moveDown(1);
+      }
+
+      if (assessment?.normalizationNotes && assessment.normalizationNotes.length > 0) {
+        doc.fillColor("#6366f1").fontSize(13).text("Auditoria de Normalização Relacional (1FN / 2FN / 3FN)");
+        doc.moveDown(0.4);
+        assessment.normalizationNotes.forEach((norm: string) => {
+          doc.fillColor("#334155").fontSize(10).text(`→ ${norm}`, { indent: 10 });
+        });
+        doc.moveDown(1);
+      }
+
+      doc.end();
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).send("Export failed");
+    }
+  });
 }
 
 // Helper
