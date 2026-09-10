@@ -16,6 +16,10 @@ import { aiService } from "./src/ai/services/AIService";
 import { AssessmentAiService } from "./src/services/assessmentAiService";
 import { OllamaProvider } from "./src/ai/providers/OllamaProvider";
 import { ProviderFactory } from "./src/ai/factory/ProviderFactory";
+import { TechInterviewAiService } from "./src/services/techInterviewAiService";
+import { CognitiveTelemetryService } from "./src/services/cognitiveTelemetryService";
+import { CapstoneProjectService } from "./src/services/capstoneProjectService";
+import { CodeArenaService } from "./src/services/codeArenaService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -5791,6 +5795,183 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 1: TECH MOCK INTERVIEW AI & EMPLOYABILITY
+  // ==========================================
+  app.post("/api/interviews/start", async (req, res) => {
+    try {
+      const { studentName, studentRegistration, targetRole, language, focusArea, providerConfig } = req.body;
+      const session = await TechInterviewAiService.startInterviewSession({
+        studentName: studentName || "Estudante SENAI",
+        studentRegistration,
+        targetRole: targetRole || "junior_fullstack",
+        language: language || "TypeScript",
+        focusArea,
+        providerConfig
+      });
+      res.json({ success: true, ...session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/interviews/evaluate", async (req, res) => {
+    try {
+      const { sessionId, studentName, studentRegistration, targetRole, questions, answers, providerConfig } = req.body;
+      const report = await TechInterviewAiService.evaluateInterview({
+        sessionId: sessionId || `intv_${Date.now()}`,
+        studentName: studentName || "Estudante",
+        studentRegistration,
+        targetRole: targetRole || "junior_fullstack",
+        questions: questions || [],
+        answers: answers || [],
+        providerConfig
+      });
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/interviews/export-pdf", async (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) {
+        return res.status(400).json({ error: "Report payload is required." });
+      }
+      const pdfBuffer = await TechInterviewAiService.generateReportPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_empregabilidade_${report.studentName.replace(/\\s+/g, "_")}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 2: COGNITIVE LOAD & LIVE ENGAGEMENT RADAR
+  // ==========================================
+  app.post("/api/telemetry/record-event", (req, res) => {
+    try {
+      const metrics = CognitiveTelemetryService.recordTelemetryEvent(req.body);
+      res.json({ success: true, metrics });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/telemetry/radar", (req, res) => {
+    try {
+      const classId = req.query.classId as string | undefined;
+      const radar = CognitiveTelemetryService.getClassroomRadar(classId);
+      res.json({ success: true, radar });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/telemetry/micro-hint", async (req, res) => {
+    try {
+      const hint = await CognitiveTelemetryService.generateMicroHint(req.body);
+      res.json({ success: true, hint });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 3: CAPSTONE PROJECT ARCHITECT & PBL DISPATCHER
+  // ==========================================
+  app.post("/api/capstone/generate-spec", async (req, res) => {
+    try {
+      const spec = await CapstoneProjectService.generateProjectSpec(req.body);
+      res.json({ success: true, spec });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/capstone/allocate-roles", (req, res) => {
+    try {
+      const allocation = CapstoneProjectService.allocateTeamRoles(req.body);
+      res.json({ success: true, allocation });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/capstone/evaluate-360", (req, res) => {
+    try {
+      const evaluation = CapstoneProjectService.evaluateCapstoneProject(req.body);
+      res.json({ success: true, evaluation });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/capstone/export-pdf", async (req, res) => {
+    try {
+      const { spec } = req.body;
+      if (!spec) {
+        return res.status(400).json({ error: "Project spec payload is required." });
+      }
+      const pdfBuffer = await CapstoneProjectService.generateCapstonePdf(spec);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=dossie_capstone_${spec.projectId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 4: CODE ARENA - DUELS & LEADERBOARD
+  // ==========================================
+  app.post("/api/code-arena/create-room", async (req, res) => {
+    try {
+      const room = await CodeArenaService.createRoom(req.body);
+      res.json({ success: true, room });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/code-arena/room/:id", (req, res) => {
+    try {
+      const room = CodeArenaService.getRoom(req.params.id);
+      res.json({ success: true, room });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/code-arena/generate-challenge", async (req, res) => {
+    try {
+      const challenge = await CodeArenaService.generateChallenge(req.body);
+      res.json({ success: true, challenge });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/code-arena/submit-solution", (req, res) => {
+    try {
+      const result = CodeArenaService.submitSolution(req.body);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/code-arena/leaderboard", (_req, res) => {
+    try {
+      const leaderboard = CodeArenaService.getLeaderboard();
+      res.json({ success: true, leaderboard });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 }

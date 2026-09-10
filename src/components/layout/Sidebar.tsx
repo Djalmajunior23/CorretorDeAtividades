@@ -32,7 +32,8 @@ import {
   TrendingUp,
   Brain,
   Eye,
-  Network
+  Network,
+  Swords
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -102,6 +103,10 @@ export default function Sidebar({
     { id: "collab_sandbox", label: "Sandbox Live", icon: Users, desc: "Programação Colaborativa", visible: true },
     { id: "lms_integration", label: "Integração LMS", icon: BookOpen, desc: "Moodle & Google Classroom", visible: true },
     { id: "ai_powerhouse", label: "Super IA do Professor", icon: Sparkles, desc: "Banca Socrática, Aulas & Forense", visible: true },
+    { id: "tech_interview", label: "Mock Interview & Empregabilidade", icon: Briefcase, desc: "STAR, Live Coding & Laudo PDF", visible: true },
+    { id: "cognitive_radar", label: "Radar Cognitivo Live", icon: Activity, desc: "Cadência, Churn & Micro-Dicas IA", visible: true },
+    { id: "capstone_architect", label: "Arquiteto Capstone & PBL", icon: Layers, desc: "Gherkin, Squads & Rubricas 360°", visible: true },
+    { id: "code_arena", label: "Code Arena & Duelos", icon: Swords, desc: "1v1, Co-op & Ranking Elo", visible: true },
     { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];

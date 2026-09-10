@@ -62,6 +62,10 @@ const DiagramAssessmentView = React.lazy(() => import("./components/DiagramAsses
 const ActivitiesControlHubView = React.lazy(() => import("./components/ActivitiesControlHubView"));
 const SkillTreePortfolioView = React.lazy(() => import("./components/SkillTreePortfolioView"));
 const TeacherAiPowerhouseView = React.lazy(() => import("./components/TeacherAiPowerhouseView"));
+const TechInterviewSimulatorView = React.lazy(() => import("./components/TechInterviewSimulatorView"));
+const CognitiveTelemetryRadarView = React.lazy(() => import("./components/CognitiveTelemetryRadarView"));
+const CapstoneProjectArchitectView = React.lazy(() => import("./components/CapstoneProjectArchitectView"));
+const CodeArenaView = React.lazy(() => import("./components/CodeArenaView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2565,6 +2569,22 @@ export default function App() {
 
            {currentTab === "ai_powerhouse" && (
              <TeacherAiPowerhouseView />
+           )}
+
+           {currentTab === "tech_interview" && (
+             <TechInterviewSimulatorView />
+           )}
+
+           {currentTab === "cognitive_radar" && (
+             <CognitiveTelemetryRadarView />
+           )}
+
+           {currentTab === "capstone_architect" && (
+             <CapstoneProjectArchitectView />
+           )}
+
+           {currentTab === "code_arena" && (
+             <CodeArenaView />
            )}
 
           {currentTab === "avaliacoes" && (
