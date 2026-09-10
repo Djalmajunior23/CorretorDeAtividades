@@ -101,6 +101,7 @@ export default function Sidebar({
     { id: "predictive_performance", label: "Desempenho Preditivo", icon: TrendingUp, desc: "AI_PEDAGOGICAL_MODEL • Retenção e Bloqueio", visible: true },
     { id: "collab_sandbox", label: "Sandbox Live", icon: Users, desc: "Programação Colaborativa", visible: true },
     { id: "lms_integration", label: "Integração LMS", icon: BookOpen, desc: "Moodle & Google Classroom", visible: true },
+    { id: "ai_powerhouse", label: "Super IA do Professor", icon: Sparkles, desc: "Banca Socrática, Aulas & Forense", visible: true },
     { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];

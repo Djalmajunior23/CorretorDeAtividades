@@ -61,6 +61,7 @@ const SlaRemindersSchedulerCard = React.lazy(() => import("./components/SlaRemin
 const DiagramAssessmentView = React.lazy(() => import("./components/DiagramAssessmentView"));
 const ActivitiesControlHubView = React.lazy(() => import("./components/ActivitiesControlHubView"));
 const SkillTreePortfolioView = React.lazy(() => import("./components/SkillTreePortfolioView"));
+const TeacherAiPowerhouseView = React.lazy(() => import("./components/TeacherAiPowerhouseView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2560,6 +2561,10 @@ export default function App() {
 
            {currentTab === "advanced_ai" && (
              <AdvancedAiHubView />
+           )}
+
+           {currentTab === "ai_powerhouse" && (
+             <TeacherAiPowerhouseView />
            )}
 
           {currentTab === "avaliacoes" && (
