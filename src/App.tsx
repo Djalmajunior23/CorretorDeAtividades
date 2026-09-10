@@ -70,6 +70,10 @@ const PullRequestReviewStudioView = React.lazy(() => import("./components/PullRe
 const MutationTestingLabView = React.lazy(() => import("./components/MutationTestingLabView"));
 const AccessibilityInspectorView = React.lazy(() => import("./components/AccessibilityInspectorView"));
 const ArchitecturalBoardView = React.lazy(() => import("./components/ArchitecturalBoardView"));
+const DevSecOpsThreatLabView = React.lazy(() => import("./components/DevSecOpsThreatLabView"));
+const ChaosEngineeringSimulatorView = React.lazy(() => import("./components/ChaosEngineeringSimulatorView"));
+const PairProgrammingCopilotView = React.lazy(() => import("./components/PairProgrammingCopilotView"));
+const SaepReadinessDashboardView = React.lazy(() => import("./components/SaepReadinessDashboardView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2605,6 +2609,22 @@ export default function App() {
 
            {currentTab === "arch_board" && (
              <ArchitecturalBoardView />
+           )}
+
+           {currentTab === "devsecops_lab" && (
+             <DevSecOpsThreatLabView />
+           )}
+
+           {currentTab === "chaos_simulator" && (
+             <ChaosEngineeringSimulatorView />
+           )}
+
+           {currentTab === "pair_copilot" && (
+             <PairProgrammingCopilotView />
+           )}
+
+           {currentTab === "saep_readiness" && (
+             <SaepReadinessDashboardView />
            )}
 
           {currentTab === "avaliacoes" && (

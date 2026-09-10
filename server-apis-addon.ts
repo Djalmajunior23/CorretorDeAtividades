@@ -24,6 +24,10 @@ import { PullRequestReviewService } from "./src/services/pullRequestReviewServic
 import { MutationTestingService } from "./src/services/mutationTestingService";
 import { AccessibilityAuditService } from "./src/services/accessibilityAuditService";
 import { ArchitecturalBoardService } from "./src/services/architecturalBoardService";
+import { DevSecOpsThreatService } from "./src/services/devSecOpsThreatService";
+import { ChaosEngineeringService } from "./src/services/chaosEngineeringService";
+import { PairProgrammingCopilotService } from "./src/services/pairProgrammingCopilotService";
+import { SaepReadinessService } from "./src/services/saepReadinessService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -6082,6 +6086,133 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const pdfBuffer = await ArchitecturalBoardService.generateReportPdf(session);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename=laudo_adr_${session.sessionId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 9: DEVSECOPS & THREAT MODELING LAB
+  // ==========================================
+  app.post("/api/devsecops/threat-model", async (req, res) => {
+    try {
+      const report = await DevSecOpsThreatService.analyzeThreatsAndExploits(req.body);
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/devsecops/export-pdf", async (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) return res.status(400).json({ error: "Report data is required" });
+      const pdfBuffer = await DevSecOpsThreatService.generateThreatReportPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=dossie_devsecops_${report.reportId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 10: CHAOS ENGINEERING & RESILIENCE SIMULATOR
+  // ==========================================
+  app.post("/api/chaos/simulate", async (req, res) => {
+    try {
+      const report = await ChaosEngineeringService.runChaosExperiment(req.body);
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/chaos/export-pdf", async (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) return res.status(400).json({ error: "Report data is required" });
+      const pdfBuffer = await ChaosEngineeringService.generateChaosReportPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_chaos_${report.simulationId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 11: AI REAL-TIME PAIR PROGRAMMING COPILOT
+  // ==========================================
+  app.post("/api/pairing/start-session", async (req, res) => {
+    try {
+      const session = await PairProgrammingCopilotService.startSession(req.body);
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/pairing/interact-turn", async (req, res) => {
+    try {
+      const result = await PairProgrammingCopilotService.interactSocraticTurn(req.body);
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/pairing/ping-pong-step", async (req, res) => {
+    try {
+      const result = await PairProgrammingCopilotService.advancePingPongStep(req.body);
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/pairing/export-pdf", async (req, res) => {
+    try {
+      const { session } = req.body;
+      if (!session) return res.status(400).json({ error: "Session data is required" });
+      const pdfBuffer = await PairProgrammingCopilotService.generatePairingSessionPdf(session);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=mentoria_pair_${session.sessionId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 12: CURRICULAR COMPETENCY & SAEP/ENADE READINESS
+  // ==========================================
+  app.post("/api/saep-readiness/generate-exam", async (req, res) => {
+    try {
+      const questions = await SaepReadinessService.generateTriExam(req.body);
+      res.json({ success: true, questions });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/saep-readiness/evaluate-cohort", async (req, res) => {
+    try {
+      const report = await SaepReadinessService.evaluateCohort(req.body);
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/saep-readiness/export-pdf", async (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) return res.status(400).json({ error: "Report data is required" });
+      const pdfBuffer = await SaepReadinessService.generateSaepDossierPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=relatorio_saep_${report.cohortId}.pdf`);
       res.send(pdfBuffer);
     } catch (e: any) {
       res.status(500).json({ error: e.message });

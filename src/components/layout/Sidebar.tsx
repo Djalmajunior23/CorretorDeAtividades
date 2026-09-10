@@ -36,7 +36,10 @@ import {
   Swords,
   GitPullRequest,
   Bug,
-  Building2
+  Building2,
+  ShieldAlert,
+  Flame,
+  GraduationCap
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -114,6 +117,10 @@ export default function Sidebar({
     { id: "mutation_lab", label: "Mutation Testing Lab", icon: Bug, desc: "TDD & Testes de Mutação", visible: true },
     { id: "a11y_inspector", label: "Inspetor de Acessibilidade", icon: Eye, desc: "WCAG 2.2, Contraste & Daltonismo", visible: true },
     { id: "arch_board", label: "Banca de Arquitetura", icon: Building2, desc: "Sabatina Multi-Agente & ADR", visible: true },
+    { id: "devsecops_lab", label: "DevSecOps Red/Blue Lab", icon: ShieldAlert, desc: "STRIDE, DREAD & Exploit Red/Blue", visible: true },
+    { id: "chaos_simulator", label: "Chaos Engineering Lab", icon: Flame, desc: "Stress, Jitter & Circuit Breakers", visible: true },
+    { id: "pair_copilot", label: "AI Pair Copilot & TDD", icon: Users, desc: "Mentoria Socrática & Ping-Pong TDD", visible: true },
+    { id: "saep_readiness", label: "SAEP / ENADE Simulator", icon: GraduationCap, desc: "Matriz CHA, TRI & Plano de Ação", visible: true },
     { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];
