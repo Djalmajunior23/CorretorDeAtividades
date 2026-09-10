@@ -74,6 +74,10 @@ const DevSecOpsThreatLabView = React.lazy(() => import("./components/DevSecOpsTh
 const ChaosEngineeringSimulatorView = React.lazy(() => import("./components/ChaosEngineeringSimulatorView"));
 const PairProgrammingCopilotView = React.lazy(() => import("./components/PairProgrammingCopilotView"));
 const SaepReadinessDashboardView = React.lazy(() => import("./components/SaepReadinessDashboardView"));
+const WasmSandboxRuntimeView = React.lazy(() => import("./components/WasmSandboxRuntimeView"));
+const VivaVoceExamView = React.lazy(() => import("./components/VivaVoceExamView"));
+const AgileSquadSimulatorView = React.lazy(() => import("./components/AgileSquadSimulatorView"));
+const IotIndustrySimulatorView = React.lazy(() => import("./components/IotIndustrySimulatorView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2625,6 +2629,22 @@ export default function App() {
 
            {currentTab === "saep_readiness" && (
              <SaepReadinessDashboardView />
+           )}
+
+           {currentTab === "wasm_sandbox" && (
+             <WasmSandboxRuntimeView />
+           )}
+
+           {currentTab === "viva_voce" && (
+             <VivaVoceExamView />
+           )}
+
+           {currentTab === "agile_squad" && (
+             <AgileSquadSimulatorView />
+           )}
+
+           {currentTab === "iot_industry" && (
+             <IotIndustrySimulatorView />
            )}
 
           {currentTab === "avaliacoes" && (

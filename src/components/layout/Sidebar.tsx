@@ -39,7 +39,9 @@ import {
   Building2,
   ShieldAlert,
   Flame,
-  GraduationCap
+  GraduationCap,
+  Volume2,
+  Radio
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -121,6 +123,10 @@ export default function Sidebar({
     { id: "chaos_simulator", label: "Chaos Engineering Lab", icon: Flame, desc: "Stress, Jitter & Circuit Breakers", visible: true },
     { id: "pair_copilot", label: "AI Pair Copilot & TDD", icon: Users, desc: "Mentoria Socrática & Ping-Pong TDD", visible: true },
     { id: "saep_readiness", label: "SAEP / ENADE Simulator", icon: GraduationCap, desc: "Matriz CHA, TRI & Plano de Ação", visible: true },
+    { id: "wasm_sandbox", label: "Wasm Micro-VM Sandbox", icon: Cpu, desc: "Compilador & Micro-VM In-Browser", visible: true },
+    { id: "viva_voce", label: "AI Viva-Voce Arguição Oral", icon: Volume2, desc: "Defesa Técnica & Oratória por Voz", visible: true },
+    { id: "agile_squad", label: "Virtual Agile Scrum Squad", icon: Users, desc: "Scrum Master AI, PO & GitOps", visible: true },
+    { id: "iot_industry", label: "Indústria 4.0 & IoT Lab", icon: Radio, desc: "Hardware-in-the-Loop & MQTT", visible: true },
     { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];

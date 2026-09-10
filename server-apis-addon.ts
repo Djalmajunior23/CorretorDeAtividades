@@ -28,6 +28,10 @@ import { DevSecOpsThreatService } from "./src/services/devSecOpsThreatService";
 import { ChaosEngineeringService } from "./src/services/chaosEngineeringService";
 import { PairProgrammingCopilotService } from "./src/services/pairProgrammingCopilotService";
 import { SaepReadinessService } from "./src/services/saepReadinessService";
+import { WasmSandboxService } from "./src/services/wasmSandboxService";
+import { VivaVoceExamService } from "./src/services/vivaVoceExamService";
+import { AgileSquadSimulatorService } from "./src/services/agileSquadSimulatorService";
+import { IotIndustrySimulatorService } from "./src/services/iotIndustrySimulatorService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -6213,6 +6217,124 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const pdfBuffer = await SaepReadinessService.generateSaepDossierPdf(report);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename=relatorio_saep_${report.cohortId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 13: WASM MICRO-VM SANDBOX
+  // ==========================================
+  app.post("/api/wasm-sandbox/execute", async (req, res) => {
+    try {
+      const result = await WasmSandboxService.executeCode(req.body);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/wasm-sandbox/export-pdf", async (req, res) => {
+    try {
+      const { result } = req.body;
+      if (!result) return res.status(400).json({ error: "Result data is required" });
+      const pdfBuffer = await WasmSandboxService.generateWasmReportPdf(result);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_wasm_${result.executionId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 14: AI VIVA-VOCE ORAL CODE DEFENSE
+  // ==========================================
+  app.post("/api/viva-voce/start-exam", async (req, res) => {
+    try {
+      const session = await VivaVoceExamService.startSession(req.body);
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/viva-voce/submit-answer", async (req, res) => {
+    try {
+      const session = await VivaVoceExamService.evaluateOralAnswer(req.body);
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/viva-voce/export-pdf", async (req, res) => {
+    try {
+      const { session } = req.body;
+      if (!session) return res.status(400).json({ error: "Session data is required" });
+      const pdfBuffer = await VivaVoceExamService.generateVivaVocePdf(session);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_viva_voce_${session.sessionId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 15: VIRTUAL AGILE SCRUM SQUAD & GITOPS
+  // ==========================================
+  app.post("/api/agile-squad/start-sprint", async (req, res) => {
+    try {
+      const sprint = await AgileSquadSimulatorService.startSprint(req.body);
+      res.json({ success: true, sprint });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/agile-squad/trigger-event", async (req, res) => {
+    try {
+      const result = await AgileSquadSimulatorService.triggerSprintEvent(req.body);
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/agile-squad/export-pdf", async (req, res) => {
+    try {
+      const { sprint } = req.body;
+      if (!sprint) return res.status(400).json({ error: "Sprint data is required" });
+      const pdfBuffer = await AgileSquadSimulatorService.generateAgileReportPdf(sprint);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_sprint_${sprint.sprintId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 16: INDUSTRY 4.0 & IOT HARDWARE SIMULATOR
+  // ==========================================
+  app.post("/api/iot-industry/simulate", async (req, res) => {
+    try {
+      const report = await IotIndustrySimulatorService.simulateHardware(req.body);
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/iot-industry/export-pdf", async (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) return res.status(400).json({ error: "Report data is required" });
+      const pdfBuffer = await IotIndustrySimulatorService.generateIotReportPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_iot_${report.simulationId}.pdf`);
       res.send(pdfBuffer);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
