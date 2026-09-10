@@ -20,6 +20,10 @@ import { TechInterviewAiService } from "./src/services/techInterviewAiService";
 import { CognitiveTelemetryService } from "./src/services/cognitiveTelemetryService";
 import { CapstoneProjectService } from "./src/services/capstoneProjectService";
 import { CodeArenaService } from "./src/services/codeArenaService";
+import { PullRequestReviewService } from "./src/services/pullRequestReviewService";
+import { MutationTestingService } from "./src/services/mutationTestingService";
+import { AccessibilityAuditService } from "./src/services/accessibilityAuditService";
+import { ArchitecturalBoardService } from "./src/services/architecturalBoardService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -5972,6 +5976,115 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       res.json({ success: true, leaderboard });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 5: GITOPS & PULL REQUEST REVIEW COPILOT
+  // ==========================================
+  app.post("/api/gitops/pr/review", async (req, res) => {
+    try {
+      const pr = await PullRequestReviewService.createAndReviewPR(req.body);
+      res.json({ success: true, pr });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/gitops/pr/export-pdf", async (req, res) => {
+    try {
+      const { pr } = req.body;
+      if (!pr) return res.status(400).json({ error: "PR data is required" });
+      const pdfBuffer = await PullRequestReviewService.generateReportPdf(pr);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_pr_${pr.id}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 6: AUTOMATED MUTATION TESTING & TDD LAB
+  // ==========================================
+  app.post("/api/mutation-testing/run-suite", async (req, res) => {
+    try {
+      const report = await MutationTestingService.runMutationTesting(req.body);
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/mutation-testing/export-pdf", async (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) return res.status(400).json({ error: "Mutation report is required" });
+      const pdfBuffer = await MutationTestingService.generateReportPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_mutation_${report.reportId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 7: ACCESSIBILITY (A11Y) & WCAG 2.2 INSPECTOR
+  // ==========================================
+  app.post("/api/a11y/audit", async (req, res) => {
+    try {
+      const audit = await AccessibilityAuditService.auditFrontendCode(req.body);
+      res.json({ success: true, audit });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/a11y/export-pdf", async (req, res) => {
+    try {
+      const { audit } = req.body;
+      if (!audit) return res.status(400).json({ error: "Audit data is required" });
+      const pdfBuffer = await AccessibilityAuditService.generateReportPdf(audit);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_a11y_${audit.auditId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 8: VIRTUAL ARCHITECTURAL BOARD & MULTI-AGENT PANEL
+  // ==========================================
+  app.post("/api/arch-board/start-session", async (req, res) => {
+    try {
+      const session = await ArchitecturalBoardService.startSession(req.body);
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/arch-board/conclude-session", async (req, res) => {
+    try {
+      const session = await ArchitecturalBoardService.concludeBoardAndGenerateADR(req.body);
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/arch-board/export-pdf", async (req, res) => {
+    try {
+      const { session } = req.body;
+      if (!session) return res.status(400).json({ error: "Session data is required" });
+      const pdfBuffer = await ArchitecturalBoardService.generateReportPdf(session);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_adr_${session.sessionId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 }

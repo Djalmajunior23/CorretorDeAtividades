@@ -33,7 +33,10 @@ import {
   Brain,
   Eye,
   Network,
-  Swords
+  Swords,
+  GitPullRequest,
+  Bug,
+  Building2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -107,6 +110,10 @@ export default function Sidebar({
     { id: "cognitive_radar", label: "Radar Cognitivo Live", icon: Activity, desc: "Cadência, Churn & Micro-Dicas IA", visible: true },
     { id: "capstone_architect", label: "Arquiteto Capstone & PBL", icon: Layers, desc: "Gherkin, Squads & Rubricas 360°", visible: true },
     { id: "code_arena", label: "Code Arena & Duelos", icon: Swords, desc: "1v1, Co-op & Ranking Elo", visible: true },
+    { id: "pr_review", label: "AI Code Review & PR", icon: GitPullRequest, desc: "GitOps, Clean Code & Diff", visible: true },
+    { id: "mutation_lab", label: "Mutation Testing Lab", icon: Bug, desc: "TDD & Testes de Mutação", visible: true },
+    { id: "a11y_inspector", label: "Inspetor de Acessibilidade", icon: Eye, desc: "WCAG 2.2, Contraste & Daltonismo", visible: true },
+    { id: "arch_board", label: "Banca de Arquitetura", icon: Building2, desc: "Sabatina Multi-Agente & ADR", visible: true },
     { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];

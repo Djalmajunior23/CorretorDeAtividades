@@ -66,6 +66,10 @@ const TechInterviewSimulatorView = React.lazy(() => import("./components/TechInt
 const CognitiveTelemetryRadarView = React.lazy(() => import("./components/CognitiveTelemetryRadarView"));
 const CapstoneProjectArchitectView = React.lazy(() => import("./components/CapstoneProjectArchitectView"));
 const CodeArenaView = React.lazy(() => import("./components/CodeArenaView"));
+const PullRequestReviewStudioView = React.lazy(() => import("./components/PullRequestReviewStudioView"));
+const MutationTestingLabView = React.lazy(() => import("./components/MutationTestingLabView"));
+const AccessibilityInspectorView = React.lazy(() => import("./components/AccessibilityInspectorView"));
+const ArchitecturalBoardView = React.lazy(() => import("./components/ArchitecturalBoardView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2585,6 +2589,22 @@ export default function App() {
 
            {currentTab === "code_arena" && (
              <CodeArenaView />
+           )}
+
+           {currentTab === "pr_review" && (
+             <PullRequestReviewStudioView />
+           )}
+
+           {currentTab === "mutation_lab" && (
+             <MutationTestingLabView />
+           )}
+
+           {currentTab === "a11y_inspector" && (
+             <AccessibilityInspectorView />
+           )}
+
+           {currentTab === "arch_board" && (
+             <ArchitecturalBoardView />
            )}
 
           {currentTab === "avaliacoes" && (
