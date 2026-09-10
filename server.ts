@@ -30,6 +30,7 @@ import { ExecutionService } from "./src/ai/services/sandbox/execution_service.ts
 import { SimilarityService } from "./src/ai/services/SimilarityService.ts";
 import { EducationalAnalyticsService } from "./src/ai/services/EducationalAnalyticsService.ts";
 import { ProjectReviewEngine } from "./src/services/projectReviewEngine.ts";
+import { AssessmentAiService } from "./src/services/assessmentAiService.ts";
 import { ProviderFactory } from "./src/ai/factory/ProviderFactory.ts";
 import { OllamaProvider } from "./src/ai/providers/OllamaProvider.ts";
 import { AIGateway } from "./src/ai/services/AIGateway.ts";
@@ -6028,8 +6029,26 @@ app.post("/api/codecheck/module06/recovery-plan", async (req, res) => {
 
 app.post("/api/codecheck/module06/simulated-exam", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_AI_SIMULATED_EXAMS) return res.status(403).json({ error: "Desativado" });
-  const result = await AIProvider.generate(JSON.stringify(req.body), "simulated_exam");
-  res.json(result);
+  try {
+    const { theme, comp, competency, difficulty, count, questions_count, context_scenario, language, provider_config } = req.body;
+    const assessment = await AssessmentAiService.generateContextualAssessment({
+      theme: theme || "Estruturas de Dados e Algoritmos",
+      competencies: comp ? [comp] : (competency ? [competency] : ["COMP-01", "COMP-02"]),
+      difficulty: difficulty || "Média",
+      questionsCount: count || questions_count || 5,
+      contextScenario: context_scenario || "Monitoramento e Gestão de Sistemas Distribuídos",
+      language: language || "python",
+      providerConfig: provider_config
+    });
+    res.json({
+      success: true,
+      data: assessment,
+      ...assessment
+    });
+  } catch (err: any) {
+    const fallback = AIProvider.getLocalFallback(JSON.stringify(req.body), "simulated_exam");
+    res.json({ success: true, data: fallback, ...fallback });
+  }
 });
 
 app.post("/api/codecheck/module06/class-diagnosis", async (req, res) => {

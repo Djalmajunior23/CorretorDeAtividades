@@ -26,7 +26,17 @@ import {
   Zap,
   Clock,
   Play,
-  AlertCircle
+  AlertCircle,
+  Server,
+  Cpu,
+  Layers,
+  Settings2,
+  Code2,
+  Check,
+  Copy,
+  FileCode,
+  ExternalLink,
+  FileCheck
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -381,16 +391,24 @@ export default function AvaliacoesView() {
   const [formUc, setFormUc] = useState("Lógica de Programação");
   const [formComp, setFormComp] = useState("COMP-02");
 
-  // State for AI Exam Builder (Módulo 3)
-  const [aiTheme, setAiTheme] = useState(
-    "Instruções de repetição condicional While e Loops Aninhados",
-  );
-  const [aiComp, setAiComp] = useState("COMP-02");
-  const [aiDifficulty, setAiDifficulty] = useState("Média");
-  const [aiAssessmentModel, setAiAssessmentModel] = useState("Nível Médio");
-  const [aiQuestionsCount, setAiQuestionsCount] = useState(3);
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiSuggestedExam, setAiSuggestedExam] = useState<any | null>(null);
+  const handleCreateManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formTitle.trim()) return;
+    setAssessments([
+      ...assessments,
+      {
+        id: Date.now(),
+        title: formTitle,
+        type: formType,
+        uc: formUc,
+        status: "Rascunho",
+        questionsCount: 5,
+        competency: formComp,
+      },
+    ]);
+    setFormTitle("");
+    setShowManualForm(false);
+  };
 
   // State for Evidence storage (Módulo 6 & 7)
   const [evidences, setEvidences] = useState([
@@ -423,9 +441,7 @@ export default function AvaliacoesView() {
     },
   ]);
   const [newEvidenceStudent, setNewEvidenceStudent] = useState("");
-  const [newEvidenceClass, setNewEvidenceClass] = useState(
-    "Desenvolvimento Web 1A",
-  );
+  const [newEvidenceClass, setNewEvidenceClass] = useState("Desenvolvimento Web 1A");
   const [newEvidenceComp, setNewEvidenceComp] = useState("COMP-01");
   const [newEvidenceGrade, setNewEvidenceGrade] = useState("8.5");
   const [newEvidenceFile, setNewEvidenceFile] = useState("");
@@ -442,86 +458,220 @@ export default function AvaliacoesView() {
   const [generatedSimulation, setGeneratedSimulation] = useState<any | null>(null);
   const [selectedWeaknesses, setSelectedWeaknesses] = useState<string[]>([]);
 
-  const handleCreateManual = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formTitle.trim()) return;
-    setAssessments([
-      ...assessments,
-      {
-        id: Date.now(),
-        title: formTitle,
-        type: formType,
-        uc: formUc,
-        status: "Rascunho",
-        questionsCount: 5,
-        competency: formComp,
-      },
-    ]);
-    setFormTitle("");
-    setShowManualForm(false);
+  // State for AI Exam Builder (Módulo 3 - Contextual Multi-LLM Engine)
+  const [aiTheme, setAiTheme] = useState(
+    "Estruturas de Repetição, Vetores e Otimização Assintótica"
+  );
+  const [aiUnitCurricular, setAiUnitCurricular] = useState("Lógica de Programação e Algoritmos");
+  const [aiContextScenario, setAiContextScenario] = useState("Sistema de Gestão Hospitalar & Triagem de Emergência");
+  const [aiSelectedCompetencies, setAiSelectedCompetencies] = useState<string[]>(["COMP-01", "COMP-02", "COMP-03"]);
+  const [aiDifficulty, setAiDifficulty] = useState("Média");
+  const [aiLanguage, setAiLanguage] = useState("python");
+  const [aiQuestionsCount, setAiQuestionsCount] = useState(5);
+  const [aiQuestionTypes, setAiQuestionTypes] = useState<string[]>([
+    "multiple_choice",
+    "code_tracing",
+    "hands_on_coding",
+    "architectural_case"
+  ]);
+  const [aiGenerateVariants, setAiGenerateVariants] = useState(true);
+  const [aiActiveVariant, setAiActiveVariant] = useState<"A" | "B" | "C">("A");
+
+  // Multi-LLM & VPS State
+  const [aiProvider, setAiProvider] = useState<"ollama" | "gemini" | "openai" | "groq" | "deepseek" | "auto">("ollama");
+  const [aiModel, setAiModel] = useState("qwen2.5-coder:3b");
+  const [aiVpsUrl, setAiVpsUrl] = useState("http://host.docker.internal:11434");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [isTestingAiConnection, setIsTestingAiConnection] = useState(false);
+  const [aiConnectionStatus, setAiConnectionStatus] = useState<any | null>(null);
+
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSuggestedExam, setAiSuggestedExam] = useState<any | null>(null);
+
+  const scenarioPresets = [
+    { title: "🏥 Sistema Hospitalar", desc: "Triagem de emergência Manchester e leitos UTI" },
+    { title: "🏭 Indústria 4.0 & IoT", desc: "Telemetria de sensores e esteiras inteligentes" },
+    { title: "💳 Fintech & Antifraude", desc: "Processamento de pagamentos Pix e score de risco" },
+    { title: "📦 E-commerce & Logística", desc: "Rastreamento de entregas e microsserviços" },
+    { title: "🚗 Cidades Inteligentes", desc: "Semáforos adaptativos e controle de tráfego" },
+    { title: "🎮 Game Development", desc: "Mecânicas de inventário e colisões em tempo real" }
+  ];
+
+  const handleTestAiConnection = async () => {
+    setIsTestingAiConnection(true);
+    try {
+      const res = await fetch(apiUrl("/api/assessments/test-ai-connection"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: aiProvider,
+          baseUrl: aiVpsUrl,
+          apiKey: aiApiKey,
+          model: aiModel
+        })
+      });
+      const data = await res.json();
+      setAiConnectionStatus(data);
+      if (data.online) {
+        toast.success(`✅ ${data.message}`);
+        if (data.models && data.models.length > 0 && !data.models.includes(aiModel)) {
+          setAiModel(data.models[0]);
+        }
+      } else {
+        toast.warning(`⚠️ ${data.message}`);
+      }
+    } catch (e: any) {
+      toast.error(`Erro ao testar conexão com IA: ${e.message}`);
+      setAiConnectionStatus({ online: false, message: "Servidor inalcançável." });
+    } finally {
+      setIsTestingAiConnection(false);
+    }
   };
 
   const handleGenerateAIExam = async () => {
+    if (!aiTheme.trim()) {
+      toast.error("Informe o tema/ementa da avaliação.");
+      return;
+    }
     setAiGenerating(true);
-    setAiSuggestedExam(null);
 
     try {
-      const resp = await fetch(apiUrl("/api/codecheck/module06/simulated-exam"), {
+      const resp = await fetch(apiUrl("/api/assessments/generate-contextual"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           theme: aiTheme,
-          comp: aiComp,
+          unitCurricular: aiUnitCurricular,
+          contextScenario: aiContextScenario,
+          competencies: aiSelectedCompetencies,
           difficulty: aiDifficulty,
-          model: aiAssessmentModel,
-          count: aiQuestionsCount,
+          language: aiLanguage,
+          questionsCount: aiQuestionsCount,
+          questionTypes: aiQuestionTypes,
+          generateVariants: aiGenerateVariants,
+          providerConfig: {
+            provider: aiProvider,
+            model: aiModel,
+            baseUrl: aiVpsUrl,
+            apiKey: aiApiKey
+          }
         }),
       });
-      const data = await resp.json();
 
-      setTimeout(() => {
-        setAiSuggestedExam({
-          title: `Avaliação com IA: ${aiTheme}`,
-          competency: aiComp,
-          questions: [
-            {
-              num: 1,
-              enunciado:
-                "Escreva uma estrutura em Python que imprima os números de 1 a 10 utilizando o laço 'while' de forma simplificada, validando limites de forma assintótica ideal.",
-              alternatives: [
-                "A) while i <= 10: print(i)",
-                "B) while i < 11: print(i)",
-                "C) for i in range(1, 11): print(i)",
-                "D) Nenhuma das anteriores",
-              ],
-              gabarito: "C",
-              justification:
-                "O laço for com determinismo do iterador aproveita a pilha de execução melhor",
-              rubric:
-                "Critério de Correção: Valide complexidade cilomática <= 2. Bonifique indentação impecável.",
-            },
-            {
-              num: 2,
-              enunciado:
-                "Explique como evitar loop infinito quando se trabalha com sentenças condicionais de alteração de variáveis sentinelas em Java.",
-              alternatives: [
-                "A) Inicializar a variável com zero",
-                "B) Modificar a variável de controle obrigatoriamente dentro do escopo interno",
-                "C) Usar break recursivo",
-                "D) Todas as alternativas",
-              ],
-              gabarito: "B",
-              justification:
-                "A modificação garante a quebra lógica da condição booleana no registrador",
-              rubric:
-                "Critério de Correção: Analise se o aluno declarou incremento pós-condição.",
-            },
-          ],
-        });
-        setAiGenerating(false);
-      }, 1500);
-    } catch {
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.assessment) {
+          setAiSuggestedExam(data.assessment);
+          setAiActiveVariant("A");
+          toast.success(`🎉 Avaliação com ${data.assessment.questions_count} questões gerada com sucesso via IA!`);
+        }
+      } else {
+        toast.error("Falha ao gerar avaliação via IA.");
+      }
+    } catch (e: any) {
+      toast.error(`Erro na requisição: ${e.message}`);
+    } finally {
       setAiGenerating(false);
+    }
+  };
+
+  const handleExportStudentExamPdf = async (variant: "A" | "B" | "C" = "A") => {
+    if (!aiSuggestedExam) return;
+    try {
+      const res = await fetch(apiUrl("/api/assessments/export-student-exam-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assessment: aiSuggestedExam,
+          variant
+        })
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Caderno_Prova_Aluno_Variante_${variant}_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast.success(`📄 Caderno de Prova do Aluno (Variante ${variant}) exportado em PDF!`);
+      }
+    } catch (e) {
+      toast.error("Erro ao exportar PDF do caderno de prova.");
+    }
+  };
+
+  const handleExportTeacherGuidePdf = async () => {
+    if (!aiSuggestedExam) return;
+    try {
+      const res = await fetch(apiUrl("/api/assessments/export-teacher-guide-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assessment: aiSuggestedExam
+        })
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Guia_Docente_Gabarito_Comentado_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast.success("📘 Guia do Docente com Gabarito Comentado e Rubricas exportado em PDF!");
+      }
+    } catch (e) {
+      toast.error("Erro ao exportar guia do docente.");
+    }
+  };
+
+  const handleSendToExamArena = async () => {
+    if (!aiSuggestedExam) return;
+    try {
+      const variantsData = aiSuggestedExam.variants && aiSuggestedExam.variants.length > 0
+        ? aiSuggestedExam.variants.map((v: any) => ({
+            variant: v.variant,
+            title: v.variant_title,
+            prompt: v.questions[0]?.enunciado || aiSuggestedExam.theme,
+            starter_code: v.questions[0]?.starter_code || (aiLanguage === "python" ? "def solucao(dados):\n    pass" : "function solucao(dados) {}"),
+            test_cases: v.questions[0]?.test_cases || [{ input: "[10, 20]", expected: "30" }]
+          }))
+        : [
+            {
+              variant: "A",
+              title: `Variante A • ${aiSuggestedExam.theme}`,
+              prompt: aiSuggestedExam.questions[0]?.enunciado,
+              starter_code: aiSuggestedExam.questions[0]?.starter_code || "def solucao(dados):\n    pass",
+              test_cases: aiSuggestedExam.questions[0]?.test_cases || []
+            }
+          ];
+
+      const res = await fetch(apiUrl("/api/exams"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: aiSuggestedExam.title,
+          description: `Avaliação com ${aiSuggestedExam.questions_count} questões fundamentadas no cenário: ${aiSuggestedExam.context_scenario}.`,
+          language: aiLanguage,
+          duration_minutes: aiSuggestedExam.estimated_duration_minutes || 90,
+          access_code: `SENAI-${Math.floor(1000 + Math.random() * 9000)}`,
+          anti_cheat_enabled: true,
+          variants: variantsData
+        })
+      });
+
+      if (res.ok) {
+        toast.success("🛡️ Avaliação enviada diretamente para o Smart Exam Arena (Lockdown Anti-Cola)!");
+        setSubTab("exam_arena");
+        fetchExamsList();
+      }
+    } catch (e) {
+      toast.error("Erro ao enviar avaliação para a Arena.");
     }
   };
 
@@ -1263,7 +1413,7 @@ export default function AvaliacoesView() {
           </motion.div>
         )}
 
-        {/* TAB 2: Intelligent Generator with IA */}
+        {/* TAB 2: Intelligent Generator with IA (Contextual Multi-LLM Engine) */}
         {subTab === "generator" && (
           <motion.div
             key="generator"
@@ -1272,218 +1422,628 @@ export default function AvaliacoesView() {
             exit={{ opacity: 0, y: -10 }}
             className="flex flex-col gap-6"
           >
-            <div className="p-6 rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col gap-6">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-[#10b981]/10 text-emerald-400 border border-emerald-500/15">
+            {/* Multi-LLM Provider & VPS Connection Header */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/20 shadow-xl flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      Motor de Inteligência Artificial & Servidor VPS
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono font-bold border border-emerald-500/20">
+                        Multi-LLM Ativo
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Configure o Ollama na sua VPS ou selecione provedores em nuvem (Gemini, OpenAI, Groq, DeepSeek) com fallback resiliente.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestAiConnection}
+                    disabled={isTestingAiConnection}
+                    className="px-3.5 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/30 rounded-xl text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    {isTestingAiConnection ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-300" />
+                    ) : (
+                      <Server className="w-3.5 h-3.5 text-indigo-400" />
+                    )}
+                    Testar Conexão VPS / IA
+                  </button>
+                </div>
+              </div>
+
+              {/* Provider Configuration Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                    Provedor Principal
+                  </label>
+                  <select
+                    value={aiProvider}
+                    onChange={(e) => setAiProvider(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-slate-200 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="ollama">🖥️ Ollama (Local / VPS)</option>
+                    <option value="gemini">✨ Google Gemini (Cloud Flash/Pro)</option>
+                    <option value="openai">⚡ OpenAI GPT (4o / 4o-mini / o3-mini)</option>
+                    <option value="groq">🚀 Groq (Llama 3.3 70B / Mixtral)</option>
+                    <option value="deepseek">🧠 DeepSeek (Reasoner / Chat)</option>
+                    <option value="auto">🔄 Modo Híbrido (Auto Fallback)</option>
+                  </select>
+                </div>
+
+                {aiProvider === "ollama" && (
+                  <>
+                    <div className="flex flex-col gap-1.5 md:col-span-2">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Endpoint URL do Ollama (VPS)
+                      </label>
+                      <input
+                        type="text"
+                        value={aiVpsUrl}
+                        onChange={(e) => setAiVpsUrl(e.target.value)}
+                        placeholder="http://seu-ip-vps:11434"
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs font-mono text-emerald-400 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Modelo no Ollama
+                      </label>
+                      <input
+                        type="text"
+                        value={aiModel}
+                        onChange={(e) => setAiModel(e.target.value)}
+                        placeholder="qwen2.5-coder:3b"
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {aiProvider !== "ollama" && (
+                  <>
+                    <div className="flex flex-col gap-1.5 md:col-span-2">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Chave de API ({aiProvider.toUpperCase()})
+                      </label>
+                      <input
+                        type="password"
+                        value={aiApiKey}
+                        onChange={(e) => setAiApiKey(e.target.value)}
+                        placeholder="Deixe em branco para usar a chave do arquivo .env"
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Modelo de IA
+                      </label>
+                      <input
+                        type="text"
+                        value={aiModel}
+                        onChange={(e) => setAiModel(e.target.value)}
+                        placeholder={aiProvider === "gemini" ? "gemini-2.5-flash" : aiProvider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4o-mini"}
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Ping Connection Result Badge */}
+              {aiConnectionStatus && (
+                <div className={`p-3 rounded-xl text-xs font-mono flex items-center justify-between gap-2 border ${
+                  aiConnectionStatus.online ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${aiConnectionStatus.online ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+                    <span>{aiConnectionStatus.message}</span>
+                  </div>
+                  {aiConnectionStatus.models && aiConnectionStatus.models.length > 0 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto max-w-md">
+                      <span className="text-[10px] text-slate-400 uppercase">Tags:</span>
+                      {aiConnectionStatus.models.slice(0, 4).map((m: string, idx: number) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setAiModel(m)}
+                          className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] hover:border-emerald-400 transition-all cursor-pointer"
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Main Pedagogical Assessment Builder Form */}
+            <div className="p-6 rounded-2xl bg-[#0f172a] border border-slate-800 flex flex-col gap-6 shadow-2xl">
+              <div className="flex items-center gap-2.5 border-b border-slate-800/80 pb-4">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">
-                    Criador e Gerador de Provas com IA
+                    Construtor de Avaliações Contextualizadas com IA
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Idealize questões completas de avaliações, justificativas
-                    didáticas e rubricas com IA.
+                    Defina o cenário do mundo real, a ementa técnica e a matriz SENAI para gerar cadernos de prova, rubricas e baterias de testes sem limites.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-2">
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <label className="text-xs font-mono font-bold text-slate-400 uppercase">
-                    Tema/Tópico Pedagógico
+              {/* Form Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                {/* UC & Theme */}
+                <div className="flex flex-col gap-1.5 md:col-span-5">
+                  <label className="text-xs font-mono font-bold text-slate-300 uppercase flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                    Unidade Curricular (UC)
+                  </label>
+                  <input
+                    type="text"
+                    value={aiUnitCurricular}
+                    onChange={(e) => setAiUnitCurricular(e.target.value)}
+                    placeholder="Ex: Desenvolvimento de Sistemas, Lógica de Programação..."
+                    className="w-full bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-xs hover:border-slate-700 focus:outline-none focus:border-emerald-500 font-semibold"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5 md:col-span-7">
+                  <label className="text-xs font-mono font-bold text-slate-300 uppercase flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                    Tema / Ementa Pedagógica Detalhada
                   </label>
                   <input
                     type="text"
                     value={aiTheme}
                     onChange={(e) => setAiTheme(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-850 px-4 py-2.5 rounded-xl text-xs hover:border-slate-800 focus:outline-none focus:border-emerald-500 font-semibold"
+                    placeholder="Ex: POO em Java (Polimorfismo e Exceções), Algoritmos de Ordenação, APIs REST..."
+                    className="w-full bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-xs hover:border-slate-700 focus:outline-none focus:border-emerald-500 font-semibold"
                   />
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-mono font-bold text-slate-400 uppercase">
-                    Modelo de Avaliação
-                  </label>
-                  <select
-                    value={aiAssessmentModel}
-                    onChange={(e) => {
-                      setAiAssessmentModel(e.target.value);
-                      // Auto-adjust difficulty based on model if needed
-                      if (e.target.value === "Nível Fácil") setAiDifficulty("Fácil");
-                      if (e.target.value === "Nível Médio") setAiDifficulty("Média");
-                      if (e.target.value === "Foco em Lógica") setAiDifficulty("Difícil");
-                    }}
-                    className="w-full bg-slate-900 border border-slate-850 px-4 py-2.5 rounded-xl text-xs hover:border-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer font-semibold"
-                  >
-                    <option value="Nível Fácil">Nível Fácil</option>
-                    <option value="Nível Médio">Nível Médio</option>
-                    <option value="Foco em Lógica">Foco em Lógica</option>
-                    <option value="Simulado SAEP">Simulado SAEP</option>
-                    <option value="Recuperação Paralela">Recuperação Paralela</option>
-                  </select>
-                </div>
+                {/* Real-World Context Scenario & Presets */}
+                <div className="flex flex-col gap-2 md:col-span-12 bg-slate-950/80 p-4 rounded-xl border border-slate-850">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-mono font-bold text-amber-300 uppercase flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      Estudo de Caso / Cenário Empresarial do Mundo Real
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      Injeta imersão e contexto prático de mercado em todas as questões
+                    </span>
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-mono font-bold text-slate-400 uppercase">
-                    Dificuldade Estimada
-                  </label>
-                  <select
-                    value={aiDifficulty}
-                    onChange={(e) => setAiDifficulty(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-850 px-4 py-2.5 rounded-xl text-xs hover:border-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer font-semibold"
-                  >
-                    <option value="Fácil">Básica/Inicial</option>
-                    <option value="Média">Média (Recomendada)</option>
-                    <option value="Difícil">Complexa (Desafio)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-mono font-bold text-slate-400 uppercase">
-                    Competência Requerida (Syllabus)
-                  </label>
-                  <select
-                    value={aiComp}
-                    onChange={(e) => setAiComp(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-850 px-4 py-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-500 cursor-pointer font-semibold"
-                  >
-                    <option value="COMP-01">
-                      COMP-01 (Dados primitivos, Tipos, Variáveis)
-                    </option>
-                    <option value="COMP-02">
-                      COMP-02 (Selecção condicional, Loops, Laços)
-                    </option>
-                    <option value="COMP-03">
-                      COMP-03 (Pesquisa, Arranjos, Matrizes)
-                    </option>
-                    <option value="COMP-04">
-                      COMP-04 (Abstração, Funções, Parâmetros)
-                    </option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-mono font-bold text-slate-400 uppercase">
-                    Quantidade de Questões
-                  </label>
                   <input
-                    type="number"
-                    value={aiQuestionsCount}
-                    onChange={(e) =>
-                      setAiQuestionsCount(Number(e.target.value))
-                    }
-                    className="w-full bg-slate-900 border border-slate-850 px-4 py-2.5 rounded-xl text-xs focus:outline-none focus:border-emerald-500 font-semibold"
+                    type="text"
+                    value={aiContextScenario}
+                    onChange={(e) => setAiContextScenario(e.target.value)}
+                    placeholder="Descreva o caso real (ex: Sistema de telemetria IoT em linha de montagem industrial 4.0)"
+                    className="w-full bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-xs text-slate-100 hover:border-slate-700 focus:outline-none focus:border-amber-500 font-medium"
                   />
+
+                  {/* Preset Pills */}
+                  <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
+                    <span className="text-[10px] font-mono text-slate-500 uppercase shrink-0">Presets Rápidos:</span>
+                    {scenarioPresets.map((sc, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setAiContextScenario(`${sc.title}: ${sc.desc}`)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] text-slate-300 border border-slate-800 hover:border-amber-500/40 transition-all shrink-0 cursor-pointer flex items-center gap-1"
+                      >
+                        {sc.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Competencies */}
+                <div className="flex flex-col gap-2 md:col-span-6 bg-slate-950/50 p-4 rounded-xl border border-slate-850">
+                  <label className="text-xs font-mono font-bold text-slate-300 uppercase flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5 text-emerald-400" />
+                    Matriz de Competências SENAI
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {[
+                      { id: "COMP-01", label: "COMP-01: Dados primitivos & Variáveis" },
+                      { id: "COMP-02", label: "COMP-02: Condicionais & Repetições" },
+                      { id: "COMP-03", label: "COMP-03: Vetores, Matrizes & Coleções" },
+                      { id: "COMP-04", label: "COMP-04: Funções & Modularização" },
+                      { id: "COMP-05", label: "COMP-05: Classes & Paradigma POO" },
+                      { id: "COMP-06", label: "COMP-06: Banco de Dados & APIs" }
+                    ].map((comp) => {
+                      const isSelected = aiSelectedCompetencies.includes(comp.id);
+                      return (
+                        <label
+                          key={comp.id}
+                          className={`flex items-center gap-2 p-2 rounded-lg border text-[11px] font-mono transition-all cursor-pointer ${
+                            isSelected ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300" : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              if (isSelected) {
+                                setAiSelectedCompetencies(aiSelectedCompetencies.filter(c => c !== comp.id));
+                              } else {
+                                setAiSelectedCompetencies([...aiSelectedCompetencies, comp.id]);
+                              }
+                            }}
+                            className="rounded text-emerald-500 focus:ring-0"
+                          />
+                          {comp.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Execution parameters */}
+                <div className="flex flex-col gap-3 md:col-span-6 bg-slate-950/50 p-4 rounded-xl border border-slate-850">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Linguagem de Código
+                      </label>
+                      <select
+                        value={aiLanguage}
+                        onChange={(e) => setAiLanguage(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        <option value="python">Python 3</option>
+                        <option value="javascript">JavaScript (Node.js)</option>
+                        <option value="typescript">TypeScript</option>
+                        <option value="java">Java 21</option>
+                        <option value="csharp">C# (.NET)</option>
+                        <option value="cpp">C / C++</option>
+                        <option value="sql">SQL (PostgreSQL/MySQL)</option>
+                        <option value="php">PHP</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Dificuldade Estimada
+                      </label>
+                      <select
+                        value={aiDifficulty}
+                        onChange={(e) => setAiDifficulty(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        <option value="Fácil">Nível 1 - Fundamentos (Fácil)</option>
+                        <option value="Média">Nível 2 - Aplicação Prática (Média)</option>
+                        <option value="Difícil">Nível 3 - Otimização & Casos de Borda (Difícil)</option>
+                        <option value="Progressiva">Mista (Progressiva 1 → 3)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Quantidade de Questões
+                      </label>
+                      <select
+                        value={aiQuestionsCount}
+                        onChange={(e) => setAiQuestionsCount(Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        <option value={3}>3 Questões (Curta)</option>
+                        <option value={5}>5 Questões (Padrão Recomendado)</option>
+                        <option value={8}>8 Questões (Completa)</option>
+                        <option value={10}>10 Questões (Aprofundada)</option>
+                        <option value={15}>15 Questões (Simulado SAEP)</option>
+                        <option value={20}>20 Questões (Banco de Exame)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1 justify-center">
+                      <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        Variantes Anti-Cola
+                      </label>
+                      <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={aiGenerateVariants}
+                          onChange={(e) => setAiGenerateVariants(e.target.checked)}
+                          className="rounded text-indigo-500 focus:ring-0"
+                        />
+                        <span className="text-[11px] text-slate-300">Gerar Variantes A, B e C</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2 border-t border-slate-900">
+              {/* Action Button */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
+                <div className="text-xs text-slate-400 font-mono flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Provedor Selecionado: <strong>{aiProvider.toUpperCase()}</strong> ({aiModel})</span>
+                </div>
+
                 <button
+                  type="button"
                   onClick={handleGenerateAIExam}
-                  className="px-5 py-3 bg-gradient-to-r from-emerald-400 to-emerald-600 hover:from-emerald-500 hover:to-emerald-700 text-[#030712] font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-500/10"
+                  disabled={aiGenerating}
+                  className="px-6 py-3 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-600 hover:from-emerald-500 hover:to-emerald-700 text-[#030712] font-extrabold text-xs rounded-xl flex items-center gap-2.5 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   {aiGenerating ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                      <span>Processando Avaliação na IA...</span>
+                    </>
                   ) : (
-                    <Sparkles className="w-4 h-4" />
+                    <>
+                      <Sparkles className="w-4 h-4 text-slate-950" />
+                      <span>Gerar Avaliação Contextualizada ({aiQuestionsCount} Questões)</span>
+                    </>
                   )}
-                  Gerar Questões e Rubricas com IA
                 </button>
               </div>
             </div>
 
-            {/* Suggestion Preview layout (Módulo 3) */}
+            {/* Suggestion Preview Layout (Generated Assessment Deck) */}
             <AnimatePresence>
               {aiSuggestedExam && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.98 }}
-                  className="p-6 rounded-2xl bg-slate-950 border border-emerald-500/20 flex flex-col gap-6"
+                  className="p-6 rounded-3xl bg-slate-950 border border-emerald-500/30 flex flex-col gap-6 shadow-2xl"
                 >
-                  <div className="flex justify-between items-center pb-4 border-b border-slate-900">
+                  {/* Top Deck Header */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-850">
                     <div>
-                      <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded uppercase">
-                        Modelo Gerado
-                      </span>
-                      <h4 className="text-sm font-bold text-white mt-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Avaliação Pronta ({aiSuggestedExam.questions_count} Questões • {aiSuggestedExam.total_points} Pts)
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                          {aiSuggestedExam.language?.toUpperCase()} • {aiSuggestedExam.target_difficulty}
+                        </span>
+                        {aiSuggestedExam.ai_metadata && (
+                          <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                            IA: {aiSuggestedExam.ai_metadata.provider_used} ({aiSuggestedExam.ai_metadata.model_used})
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-lg font-bold text-white mt-1.5 font-display">
                         {aiSuggestedExam.title}
                       </h4>
-                      <p className="text-xs text-slate-500 font-mono mt-0.5">
-                        Mapeado à Competência {aiSuggestedExam.competency}
+                      <p className="text-xs text-slate-400 font-mono mt-0.5">
+                        Cenário Real: <strong className="text-amber-300">{aiSuggestedExam.context_scenario}</strong> • Unidade Curricular: <strong>{aiSuggestedExam.unit_curricular}</strong>
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    {/* Actions Toolbar */}
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
-                        onClick={() => setAiSuggestedExam(null)}
-                        className="px-3 py-1.5 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-mono font-bold"
+                        type="button"
+                        onClick={() => handleExportStudentExamPdf(aiActiveVariant)}
+                        className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-750 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                       >
-                        Descartar
+                        <Download className="w-3.5 h-3.5 text-emerald-400" />
+                        Caderno do Aluno (PDF)
                       </button>
+
                       <button
-                        onClick={handleApproveAIExam}
-                        className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-955 font-bold text-xs rounded-xl shadow cursor-pointer"
+                        type="button"
+                        onClick={handleExportTeacherGuidePdf}
+                        className="px-3.5 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/30 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                       >
-                        Publicar Avaliação
+                        <FileCheck className="w-3.5 h-3.5 text-indigo-400" />
+                        Guia do Professor (PDF)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSendToExamArena}
+                        className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/30 cursor-pointer"
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                        Enviar para Smart Exam Arena
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleApproveAIExam}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-xl shadow transition-all cursor-pointer"
+                      >
+                        Publicar Prova
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-6">
-                    {aiSuggestedExam.questions.map((q: any) => (
-                      <div
-                        key={q.num}
-                        className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-3"
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <span className="w-5 h-5 rounded bg-slate-800 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">
-                            Q{q.num}
-                          </span>
-                          <span className="text-xs font-bold leading-relaxed text-slate-200">
-                            {q.enunciado}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-7 text-[11px] text-slate-400 font-semibold">
-                          {q.alternatives.map((alt: string, key: number) => (
-                            <span
-                              key={key}
-                              className="p-2 bg-slate-950 border border-slate-900 rounded-lg"
-                            >
-                              {alt}
-                            </span>
-                          ))}
-                        </div>
-
-                        <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-900 text-xs text-slate-300 flex flex-col gap-2 mt-2">
-                          <div>
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 block pb-1 border-b border-[#10b981]/15 mb-1.5">
-                              Gabarito e Justificativa
-                            </span>
-                            <span>
-                              Correcta: <strong>{q.gabarito}</strong> —{" "}
-                              {q.justification}
-                            </span>
-                          </div>
-
-                          <div className="mt-1">
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#a5f3fc] block pb-1 border-b border-cyan-500/10 mb-1.5">
-                              Critérios de Correção (Rubricas)
-                            </span>
-                            <span
-                              className="font-mono text-[10px]"
-                              style={{ color: "#a5f3fc" }}
-                            >
-                              {q.rubric}
-                            </span>
-                          </div>
-                        </div>
+                  {/* Anti-Cheat Variant Switcher */}
+                  {aiSuggestedExam.variants && aiSuggestedExam.variants.length > 0 && (
+                    <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+                      <span className="text-xs font-mono text-slate-400 font-bold uppercase flex items-center gap-1.5">
+                        <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                        Variantes Anti-Cola para Laboratório:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {(["A", "B", "C"] as const).map((vCode) => (
+                          <button
+                            key={vCode}
+                            type="button"
+                            onClick={() => setAiActiveVariant(vCode)}
+                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              aiActiveVariant === vCode
+                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/40"
+                                : "bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700"
+                            }`}
+                          >
+                            <span>Variante {vCode}</span>
+                            {aiActiveVariant === vCode && <Check className="w-3 h-3" />}
+                          </button>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Questions List */}
+                  <div className="flex flex-col gap-6">
+                    {(() => {
+                      const questionsToDisplay = aiActiveVariant === "B" && aiSuggestedExam.variants?.[1]?.questions
+                        ? aiSuggestedExam.variants[1].questions
+                        : aiActiveVariant === "C" && aiSuggestedExam.variants?.[2]?.questions
+                        ? aiSuggestedExam.variants[2].questions
+                        : aiSuggestedExam.questions;
+
+                      return (questionsToDisplay || []).map((q: any, qIdx: number) => {
+                        const isCodeTracing = q.type === "code_tracing";
+                        const isHandsOn = q.type === "hands_on_coding";
+                        const isMultipleChoice = q.type === "multiple_choice" || (!isCodeTracing && !isHandsOn);
+
+                        return (
+                          <div
+                            key={q.id || qIdx}
+                            className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800/90 flex flex-col gap-4 shadow-lg hover:border-slate-700 transition-all"
+                          >
+                            {/* Question Header */}
+                            <div className="flex items-start justify-between gap-4 border-b border-slate-800/60 pb-3">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-7 h-7 rounded-xl bg-slate-800 text-emerald-400 border border-emerald-500/20 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                                  Q{q.num || qIdx + 1}
+                                </span>
+                                <div>
+                                  <span className="text-sm font-bold text-slate-100 block">
+                                    {q.title || `Questão ${qIdx + 1}`}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    Competência: <strong className="text-indigo-300">{q.competency}</strong> • Dificuldade: <strong>{q.difficulty}</strong>
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono font-bold">
+                                  {q.points || 20} Pts
+                                </span>
+                                <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-mono font-bold uppercase">
+                                  {isCodeTracing ? "Code Tracing" : isHandsOn ? "Hands-on Prático" : "Múltipla Escolha"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Context & Statement */}
+                            {q.context_intro && (
+                              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 text-xs text-amber-200/90 leading-relaxed italic">
+                                <strong>Contexto do Problema:</strong> {q.context_intro}
+                              </div>
+                            )}
+
+                            <p className="text-xs font-medium leading-relaxed text-slate-200">
+                              {q.enunciado}
+                            </p>
+
+                            {/* Code Snippet */}
+                            {q.code_snippet && (
+                              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-emerald-400 leading-relaxed overflow-x-auto">
+                                <div className="text-[9px] text-slate-500 pb-1.5 border-b border-slate-850 mb-2 uppercase flex items-center justify-between">
+                                  <span>Trecho de Código ({aiSuggestedExam.language})</span>
+                                  <span>Tracing de Execução</span>
+                                </div>
+                                <pre>{q.code_snippet}</pre>
+                              </div>
+                            )}
+
+                            {/* Starter Code for Hands-on */}
+                            {q.starter_code && (
+                              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-cyan-300 leading-relaxed overflow-x-auto">
+                                <div className="text-[9px] text-slate-500 pb-1.5 border-b border-slate-850 mb-2 uppercase flex items-center justify-between">
+                                  <span>Starter Code Fornecido ao Aluno</span>
+                                  <span>Template de Resolução</span>
+                                </div>
+                                <pre>{q.starter_code}</pre>
+                              </div>
+                            )}
+
+                            {/* Multiple Choice Alternatives */}
+                            {q.alternatives && q.alternatives.length > 0 && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-300">
+                                {q.alternatives.map((alt: string, aIdx: number) => {
+                                  const letter = alt.trim().charAt(0);
+                                  const isCorrect = letter === q.gabarito || alt.startsWith(`${q.gabarito})`);
+                                  return (
+                                    <div
+                                      key={aIdx}
+                                      className={`p-3 rounded-xl border text-xs leading-relaxed transition-all ${
+                                        isCorrect
+                                          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-200 font-semibold"
+                                          : "bg-slate-950/70 border-slate-850 text-slate-300"
+                                      }`}
+                                    >
+                                      {alt}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Test Cases for Hands-on */}
+                            {q.test_cases && q.test_cases.length > 0 && (
+                              <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-850 flex flex-col gap-2">
+                                <span className="text-[10px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+                                  Bateria de Casos de Teste Automatizados
+                                </span>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                  {q.test_cases.map((tc: any, tcIdx: number) => (
+                                    <div key={tcIdx} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono">
+                                      <div className="text-slate-400">Entrada: <span className="text-amber-300">{tc.input}</span></div>
+                                      <div className="text-slate-400">Esperado: <span className="text-emerald-400 font-bold">{tc.expected}</span></div>
+                                      {tc.explanation && <div className="text-[10px] text-slate-500 italic mt-1">{tc.explanation}</div>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Teacher Correction Guide & SENAI Rubric */}
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 text-xs text-slate-300 flex flex-col gap-3">
+                              {q.gabarito && (
+                                <div>
+                                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 block pb-1 border-b border-emerald-500/20 mb-1.5">
+                                    Gabarito e Justificativa Pedagógica
+                                  </span>
+                                  <span>
+                                    Opção Correta: <strong className="text-emerald-300">{q.gabarito}</strong> — {q.justification}
+                                  </span>
+                                </div>
+                              )}
+
+                              {q.rubric && (
+                                <div>
+                                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 block pb-1 border-b border-amber-500/20 mb-1.5">
+                                    Matriz de Correção & Rubricas Técnicas SENAI
+                                  </span>
+                                  <span className="font-mono text-[11px] text-amber-200/90 leading-relaxed">
+                                    {q.rubric}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </motion.div>
               )}

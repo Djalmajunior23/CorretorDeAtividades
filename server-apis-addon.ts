@@ -13,6 +13,9 @@ import { GoogleGenAI } from "@google/genai";
 import multer from "multer";
 import { StorageService, CATEGORY_DIRS } from "./src/services/storage_service";
 import { aiService } from "./src/ai/services/AIService";
+import { AssessmentAiService } from "./src/services/assessmentAiService";
+import { OllamaProvider } from "./src/ai/providers/OllamaProvider";
+import { ProviderFactory } from "./src/ai/factory/ProviderFactory";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -4324,47 +4327,313 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
+  // ==========================================
+  // SUPER MOTOR DE AVALIAÇÕES CONTEXTUAL & MULTI-LLM
+  // ==========================================
+
+  app.post("/api/assessments/test-ai-connection", async (req, res) => {
+    try {
+      const { provider = "ollama", baseUrl, apiKey, model } = req.body || {};
+      const targetProvider = provider.toLowerCase();
+
+      if (targetProvider === "ollama") {
+        const url = (baseUrl || process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434").replace(/\/$/, "");
+        const ollama = new OllamaProvider({
+          provider: "ollama",
+          baseUrl: url,
+          apiKey: apiKey || process.env.OLLAMA_PROXY_TOKEN,
+          model: model || "qwen2.5-coder:3b"
+        });
+        const isOnline = await ollama.isAvailable();
+        const models = await OllamaProvider.listModels(url, apiKey || process.env.OLLAMA_PROXY_TOKEN);
+
+        return res.json({
+          success: true,
+          provider: "ollama",
+          online: isOnline,
+          baseUrl: url,
+          models: models.length > 0 ? models : ["qwen2.5-coder:3b", "llama3.2:3b", "phi3:mini"],
+          message: isOnline ? `Ollama VPS online em ${url} com ${models.length} modelos detectados.` : `Não foi possível conectar ao Ollama em ${url}. Verifique se a porta 11434 está liberada no firewall.`
+        });
+      }
+
+      if (targetProvider === "gemini") {
+        const key = apiKey || process.env.GEMINI_API_KEY;
+        return res.json({
+          success: true,
+          provider: "gemini",
+          online: Boolean(key),
+          models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-pro"],
+          message: key ? "Provedor Google Gemini configurado e pronto para uso." : "Chave GEMINI_API_KEY não informada."
+        });
+      }
+
+      if (targetProvider === "openai" || targetProvider === "groq" || targetProvider === "deepseek") {
+        const key = apiKey || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.DEEPSEEK_API_KEY;
+        return res.json({
+          success: true,
+          provider: targetProvider,
+          online: Boolean(key),
+          models: targetProvider === "groq" ? ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"] : targetProvider === "deepseek" ? ["deepseek-chat", "deepseek-reasoner"] : ["gpt-4o", "gpt-4o-mini", "o3-mini"],
+          message: key ? `Provedor ${targetProvider.toUpperCase()} conectado com sucesso.` : `Chave de API para ${targetProvider.toUpperCase()} não configurada.`
+        });
+      }
+
+      return res.json({
+        success: true,
+        provider: "auto",
+        online: true,
+        models: ["qwen2.5-coder:3b", "llama3.2:3b", "gemini-2.5-flash", "gpt-4o-mini"],
+        message: "Modo híbrido ativo com fallback automático entre Ollama VPS e Cloud."
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/assessments/generate-contextual", async (req, res) => {
+    try {
+      const {
+        theme,
+        unitCurricular,
+        unit_curricular,
+        contextScenario,
+        context_scenario,
+        competencies,
+        difficulty,
+        language,
+        questionsCount,
+        questions_count,
+        questionTypes,
+        question_types,
+        generateVariants,
+        generate_variants,
+        providerConfig,
+        provider_config
+      } = req.body;
+
+      const assessment = await AssessmentAiService.generateContextualAssessment({
+        theme: theme || "Algoritmos e Estruturas de Dados",
+        unitCurricular: unitCurricular || unit_curricular || "Desenvolvimento de Sistemas",
+        contextScenario: contextScenario || context_scenario || "Sistema de Gestão Hospitalar & Triagem de Emergência",
+        competencies: competencies || ["COMP-01", "COMP-02", "COMP-03"],
+        difficulty: difficulty || "Média",
+        language: language || "python",
+        questionsCount: questionsCount || questions_count || 5,
+        questionTypes: questionTypes || question_types,
+        generateVariants: generateVariants ?? generate_variants ?? true,
+        providerConfig: providerConfig || provider_config
+      });
+
+      res.json({
+        success: true,
+        assessment
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/assessments/export-student-exam-pdf", async (req, res) => {
+    try {
+      const { assessment, variant = "A" } = req.body;
+      if (!assessment || !assessment.title) {
+        return res.status(400).json({ error: "Dados da avaliação não informados." });
+      }
+
+      const doc = new PDFDocument({ margin: 40, size: "A4" });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Caderno_Prova_${variant}_${Date.now()}.pdf"`);
+      doc.pipe(res);
+
+      // Header Institucional
+      doc.rect(40, 40, 515, 65).fillAndStroke("#0f172a", "#334155");
+      doc.font("Helvetica-Bold").fillColor("#10b981").fontSize(14).text("SENAI • CODECHECK AI - CADERNO OFICIAL DE AVALIAÇÃO", 55, 50);
+      doc.font("Helvetica").fillColor("#94a3b8").fontSize(9).text(`Unidade Curricular: ${assessment.unit_curricular || "Desenvolvimento de Sistemas"} | Variante: ${variant}`, 55, 68);
+      doc.font("Helvetica-Bold").fillColor("#f8fafc").fontSize(10).text(`Avaliação: ${assessment.title}`, 55, 82);
+
+      // Metadados do Estudante
+      doc.moveDown(3);
+      doc.rect(40, 115, 515, 55).stroke("#cbd5e1");
+      doc.font("Helvetica").fillColor("#334155").fontSize(9).text("Nome do Estudante: __________________________________________________", 50, 125);
+      doc.text("Matrícula / Turma: ____________________     Data: ___/___/2026     Nota: ______ / 100", 50, 145);
+
+      // Instruções
+      doc.moveDown(3);
+      doc.font("Helvetica-Bold").fillColor("#0f172a").fontSize(10).text("INSTRUÇÕES GERAIS AO CANDIDATO:", 40, 185, { underline: true });
+      doc.font("Helvetica").fontSize(8.5).fillColor("#475569")
+        .text(`1. Esta prova é composta por ${assessment.questions_count || assessment.questions?.length || 5} questões fundamentadas no cenário: "${assessment.context_scenario || 'Estudo de Caso'}".`, 40, 200)
+        .text("2. Duração máxima: 90 minutos. Proibida consulta a materiais não autorizados.", 40, 212)
+        .text("3. Para questões de código, atente-se à complexidade de tempo, indentação e validação de casos de borda.", 40, 224);
+
+      let currentY = 250;
+
+      const questionsList = variant === "B" && assessment.variants?.[1]?.questions 
+        ? assessment.variants[1].questions 
+        : variant === "C" && assessment.variants?.[2]?.questions 
+        ? assessment.variants[2].questions 
+        : assessment.questions;
+
+      (questionsList || []).forEach((q: any, idx: number) => {
+        if (currentY > 700) {
+          doc.addPage();
+          currentY = 40;
+        }
+
+        doc.font("Helvetica-Bold").fillColor("#0f172a").fontSize(10).text(`Questão ${idx + 1} (${q.points || 20} Pontos) • Competência: ${q.competency || 'Geral'}`, 40, currentY);
+        currentY += 16;
+
+        if (q.context_intro) {
+          doc.font("Helvetica-Oblique").fontSize(8.5).fillColor("#64748b").text(`Contexto: ${q.context_intro}`, 40, currentY, { width: 515 });
+          currentY += 24;
+        }
+
+        doc.font("Helvetica").fontSize(9).fillColor("#1e293b").text(q.enunciado, 40, currentY, { width: 515 });
+        currentY += 30;
+
+        if (q.code_snippet) {
+          doc.rect(40, currentY, 515, 45).fillAndStroke("#f1f5f9", "#cbd5e1");
+          doc.font("Courier").fontSize(8).fillColor("#0f172a").text(q.code_snippet, 48, currentY + 6, { width: 500 });
+          currentY += 55;
+        }
+
+        if (q.alternatives && q.alternatives.length > 0) {
+          q.alternatives.forEach((alt: string) => {
+            doc.font("Helvetica").fontSize(8.5).fillColor("#334155").text(`(   )  ${alt}`, 50, currentY);
+            currentY += 14;
+          });
+          currentY += 10;
+        } else {
+          doc.rect(40, currentY, 515, 60).stroke("#e2e8f0");
+          doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8").text("Espaço para resolução / código:", 45, currentY + 5);
+          currentY += 70;
+        }
+      });
+
+      doc.end();
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/assessments/export-teacher-guide-pdf", async (req, res) => {
+    try {
+      const { assessment } = req.body;
+      if (!assessment || !assessment.title) {
+        return res.status(400).json({ error: "Dados da avaliação não informados." });
+      }
+
+      const doc = new PDFDocument({ margin: 40, size: "A4" });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Guia_Docente_Gabarito_${Date.now()}.pdf"`);
+      doc.pipe(res);
+
+      // Header
+      doc.rect(40, 40, 515, 60).fillAndStroke("#4338ca", "#312e81");
+      doc.font("Helvetica-Bold").fillColor("#ffffff").fontSize(13).text("CODECHECK AI • GUIA DO DOCENTE & GABARITO COMENTADO", 55, 52);
+      doc.font("Helvetica").fillColor("#e0e7ff").fontSize(9).text(`Avaliação: ${assessment.title} | Cenário: ${assessment.context_scenario || 'Geral'}`, 55, 72);
+
+      let currentY = 115;
+      (assessment.questions || []).forEach((q: any, idx: number) => {
+        if (currentY > 680) {
+          doc.addPage();
+          currentY = 40;
+        }
+
+        doc.font("Helvetica-Bold").fillColor("#1e1b4b").fontSize(10).text(`Q${idx + 1}: ${q.title || `Questão ${idx + 1}`} (${q.points || 20} pts) • ${q.competency}`, 40, currentY);
+        currentY += 16;
+
+        if (q.gabarito) {
+          doc.font("Helvetica-Bold").fillColor("#059669").fontSize(9).text(`Gabarito Oficial: ${q.gabarito}`, 40, currentY);
+          currentY += 14;
+        }
+
+        if (q.justification) {
+          doc.font("Helvetica").fillColor("#334155").fontSize(8.5).text(`Justificativa Pedagógica: ${q.justification}`, 40, currentY, { width: 515 });
+          currentY += 26;
+        }
+
+        if (q.rubric) {
+          doc.font("Helvetica-Oblique").fillColor("#b45309").fontSize(8.5).text(`Rubrica SENAI: ${q.rubric}`, 40, currentY, { width: 515 });
+          currentY += 24;
+        }
+
+        if (q.solution_code) {
+          doc.rect(40, currentY, 515, 45).fillAndStroke("#f8fafc", "#e2e8f0");
+          doc.font("Courier").fillColor("#0f172a").fontSize(8).text(`Solução de Referência:\n${q.solution_code}`, 48, currentY + 4, { width: 500 });
+          currentY += 55;
+        }
+
+        currentY += 12;
+      });
+
+      doc.end();
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/exams/generate-variants", async (req, res) => {
     try {
-      const { basePrompt, base_prompt, topic = "Estruturas de Dados", language = "python" } = req.body;
-      const promptText = base_prompt || basePrompt || "Construa um algoritmo que processe uma lista de números inteiros.";
+      const { basePrompt, base_prompt, topic = "Estruturas de Dados", language = "python", context_scenario } = req.body;
+      const promptText = base_prompt || basePrompt || "Construa um algoritmo para processamento de coleções de dados.";
 
-      // Generates distinct variants A, B, and C to prevent cheating in computer labs
-      const variants = [
-        {
-          variant: "A",
-          variant_code: "A",
-          title: `Variante A • ${topic} (Foco: Filtragem Direta)`,
-          prompt: `${promptText} Encontre o primeiro elemento par maior que a média.`,
-          starter_code: language === "python" ? "def solucao_a(valores):\n    # Retorne o primeiro par > media\n    pass" : "function solucaoA(valores) {\n    // seu código\n}",
-          test_cases: [
-            { input: "[10, 15, 20, 25, 30]", expected: "20" },
-            { input: "[1, 3, 5, 8, 12]", expected: "8" }
-          ]
-        },
-        {
-          variant: "B",
-          variant_code: "B",
-          title: `Variante B • ${topic} (Foco: Contagem Cumulativa)`,
-          prompt: `${promptText} Conte quantos elementos pares são estritamente maiores que o valor limite (60).`,
-          starter_code: language === "python" ? "def solucao_b(valores, limite=60):\n    # Retorne a contagem de pares > limite\n    pass" : "function solucaoB(valores, limite = 60) {\n    // seu código\n}",
-          test_cases: [
-            { input: "[40, 62, 70, 85, 90], 60", expected: "3" },
-            { input: "[10, 20, 30], 60", expected: "0" }
-          ]
-        },
-        {
-          variant: "C",
-          variant_code: "C",
-          title: `Variante C • ${topic} (Foco: Mapeamento e Transformação)`,
-          prompt: `${promptText} Retorne uma nova lista contendo o dobro de cada número que for >= 60.`,
-          starter_code: language === "python" ? "def solucao_c(valores):\n    # Retorne lista com dobro dos valores >= 60\n    pass" : "function solucaoC(valores) {\n    // seu código\n}",
-          test_cases: [
-            { input: "[30, 60, 75, 50]", expected: "[120, 150]" },
-            { input: "[10, 20]", expected: "[]" }
-          ]
-        }
-      ];
+      // Gera variantes com o novo motor contextual da IA
+      const assessment = await AssessmentAiService.generateContextualAssessment({
+        theme: topic,
+        contextScenario: context_scenario || "Monitoramento de Linha de Produção Industrial 4.0",
+        language,
+        questionsCount: 3,
+        generateVariants: true
+      });
+
+      const variants = (assessment.variants && assessment.variants.length > 0)
+        ? assessment.variants.map((v, idx) => ({
+            variant: v.variant,
+            variant_code: v.variant,
+            title: v.variant_title,
+            prompt: v.questions[0]?.enunciado || `${promptText} (Versão ${v.variant})`,
+            starter_code: v.questions[0]?.starter_code || (language === "python" ? `def solucao_${v.variant.toLowerCase()}(valores):\n    pass` : `function solucao${v.variant}(valores) {}`),
+            test_cases: v.questions[0]?.test_cases || [
+              { input: "[10, 20, 30, 65, 80]", expected: "2" },
+              { input: "[5, 10, 15]", expected: "0" }
+            ]
+          }))
+        : [
+            {
+              variant: "A",
+              variant_code: "A",
+              title: `Variante A • ${topic} (Foco: Filtragem Direta)`,
+              prompt: `${promptText} Encontre o primeiro elemento par maior que a média.`,
+              starter_code: language === "python" ? "def solucao_a(valores):\n    # Retorne o primeiro par > media\n    pass" : "function solucaoA(valores) {\n    // seu código\n}",
+              test_cases: [
+                { input: "[10, 15, 20, 25, 30]", expected: "20" },
+                { input: "[1, 3, 5, 8, 12]", expected: "8" }
+              ]
+            },
+            {
+              variant: "B",
+              variant_code: "B",
+              title: `Variante B • ${topic} (Foco: Contagem Cumulativa)`,
+              prompt: `${promptText} Conte quantos elementos pares são estritamente maiores que o valor limite (60).`,
+              starter_code: language === "python" ? "def solucao_b(valores, limite=60):\n    # Retorne a contagem de pares > limite\n    pass" : "function solucaoB(valores, limite = 60) {\n    // seu código\n}",
+              test_cases: [
+                { input: "[40, 62, 70, 85, 90], 60", expected: "3" },
+                { input: "[10, 20, 30], 60", expected: "0" }
+              ]
+            },
+            {
+              variant: "C",
+              variant_code: "C",
+              title: `Variante C • ${topic} (Foco: Mapeamento e Transformação)`,
+              prompt: `${promptText} Retorne uma nova lista contendo o dobro de cada número que for >= 60.`,
+              starter_code: language === "python" ? "def solucao_c(valores):\n    # Retorne lista com dobro dos valores >= 60\n    pass" : "function solucaoC(valores) {\n    // seu código\n}",
+              test_cases: [
+                { input: "[30, 60, 75, 50]", expected: "[120, 150]" },
+                { input: "[10, 20]", expected: "[]" }
+              ]
+            }
+          ];
 
       res.json({
         success: true,

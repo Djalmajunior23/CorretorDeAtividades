@@ -9,13 +9,19 @@ export class OllamaProvider extends BaseProvider {
         this.baseUrl = baseUrl.replace(/\/$/, "");
     }
 
-    private async isAvailable(): Promise<boolean> {
+    public async isAvailable(): Promise<boolean> {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 7000);
             
+            const headers: Record<string, string> = {};
+            if (this.config.apiKey) {
+                headers["Authorization"] = `Bearer ${this.config.apiKey}`;
+            }
+
             const response = await fetch(`${this.baseUrl}/api/tags`, {
                 method: "GET",
+                headers,
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
@@ -25,9 +31,29 @@ export class OllamaProvider extends BaseProvider {
         }
     }
 
+    static async listModels(baseUrl?: string, apiKey?: string): Promise<string[]> {
+        const url = (baseUrl || process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434").replace(/\/$/, "");
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 7000);
+            const headers: Record<string, string> = {};
+            if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+            const response = await fetch(`${url}/api/tags`, { headers, signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (response.ok) {
+                const data = await response.json();
+                return (data.models || []).map((m: any) => m.name || m.model);
+            }
+        } catch (e) {
+            console.warn(`[OllamaProvider] Failed to list tags from ${url}:`, e);
+        }
+        return [];
+    }
+
     async generateContent(prompt: string, optConfig?: any, imageData?: { mimeType: string; base64: string }): Promise<string> {
         if (!(await this.isAvailable())) {
-             throw new Error("Servidor Ollama indisponível.");
+             throw new Error(`Servidor Ollama indisponível em ${this.baseUrl}. Verifique se a VPS está online.`);
         }
         
         let images: string[] = [];
@@ -36,7 +62,7 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const payload = {
-            model: this.config.model || "llama3",
+            model: this.config.model || "qwen2.5-coder:3b",
             prompt: prompt,
             images: images.length > 0 ? images : undefined,
             stream: false,
@@ -51,7 +77,8 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout for generation
+        const timeoutMs = optConfig?.timeout ?? 120000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
             const response = await fetch(`${this.baseUrl}/api/generate`, {
@@ -78,7 +105,7 @@ export class OllamaProvider extends BaseProvider {
 
     async generateStructured<T>(prompt: string, schema: any, optConfig?: any, imageData?: { mimeType: string; base64: string }): Promise<T> {
         if (!(await this.isAvailable())) {
-             throw new Error("Servidor Ollama indisponível.");
+             throw new Error(`Servidor Ollama indisponível em ${this.baseUrl}. Verifique se a VPS está online.`);
         }
         
         let images: string[] = [];
@@ -87,7 +114,7 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const payload = {
-            model: this.config.model || "llama3",
+            model: this.config.model || "qwen2.5-coder:3b",
             prompt: prompt,
             images: images.length > 0 ? images : undefined,
             stream: false,
@@ -103,7 +130,8 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout for generation
+        const timeoutMs = optConfig?.timeout ?? 120000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
             const response = await fetch(`${this.baseUrl}/api/generate`, {
@@ -121,10 +149,29 @@ export class OllamaProvider extends BaseProvider {
 
             const data = await response.json();
             if (!data.response) {
-                throw new Error("Empty response from OllamaProvider");
+                throw new Error("Resposta vazia do OllamaProvider");
             }
             
-            return JSON.parse(data.response) as T;
+            let rawText = data.response.trim();
+            // Clean reasoning tags (<think>...</think>) if present from DeepSeek-R1 models
+            rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+            
+            // Clean markdown codeblocks
+            if (rawText.startsWith("```json")) {
+                rawText = rawText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+            } else if (rawText.startsWith("```")) {
+                rawText = rawText.replace(/^```\s*/, "").replace(/\s*```$/, "");
+            }
+
+            try {
+                return JSON.parse(rawText) as T;
+            } catch (jsonErr) {
+                const jsonMatch = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    return JSON.parse(jsonMatch[0]) as T;
+                }
+                throw jsonErr;
+            }
         } catch (err: any) {
             clearTimeout(timeoutId);
             console.error(`[OllamaProvider] Structured extraction failed for model ${this.config.model} at ${this.baseUrl}:`, err.message);
