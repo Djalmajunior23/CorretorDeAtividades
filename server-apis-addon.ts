@@ -68,6 +68,11 @@ export async function initializeDatabase(pool: Pool | null): Promise<void> {
     `);
 
     await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_student_grades_key 
+      ON d_student_grades (student_id, class_id, activity_name);
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS correction_vault (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         student_key TEXT NOT NULL,
@@ -332,42 +337,52 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   
   app.post("/api/grades/update", async (req, res) => {
     try {
-      if (!pool) return res.json({ success: true });
+      if (!pool) return res.json({ success: true, results: [] });
       const { grades } = req.body; // Expect an array of grades
       
       if (!Array.isArray(grades)) {
         return res.status(400).json({ error: "O corpo da requisição deve conter um array 'grades'" });
       }
 
-      const results = [];
-      
-      for (const item of grades) {
-        const { student_id, class_id, activity_name, grade, feedback } = item;
-        
-        const check = await pool.query(
-          "SELECT id FROM d_student_grades WHERE student_id = $1 AND class_id = $2 AND activity_name = $3",
-          [student_id, class_id, activity_name]
-        );
-        
-        if (check.rows.length > 0) {
-          const id = check.rows[0].id;
-          await pool.query(
-            "UPDATE d_student_grades SET grade = $1, feedback = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-            [grade, feedback, id]
-          );
-          results.push({ id, updated: true });
-        } else {
-          const q = await pool.query(
-            "INSERT INTO d_student_grades (student_id, class_id, activity_name, grade, feedback) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-            [student_id, class_id, activity_name, grade, feedback]
-          );
-          results.push({ id: q.rows[0].id, inserted: true });
-        }
+      if (grades.length === 0) {
+        return res.json({ success: true, results: [] });
       }
-      
-      res.json({ success: true, results });
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const results = [];
+        for (const item of grades) {
+          const { student_id, class_id, activity_name, grade, feedback } = item;
+          if (!student_id || !class_id || !activity_name) continue;
+
+          const q = await client.query(
+            `INSERT INTO d_student_grades (student_id, class_id, activity_name, grade, feedback, updated_at)
+             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+             ON CONFLICT (student_id, class_id, activity_name)
+             DO UPDATE SET grade = EXCLUDED.grade, feedback = EXCLUDED.feedback, updated_at = CURRENT_TIMESTAMP
+             RETURNING id, (xmax = 0) AS inserted`,
+            [student_id, class_id, activity_name, grade != null ? Number(grade) : null, feedback || null]
+          );
+
+          if (q.rows.length > 0) {
+            results.push({ 
+              id: q.rows[0].id, 
+              inserted: q.rows[0].inserted === true,
+              updated: q.rows[0].inserted !== true 
+            });
+          }
+        }
+        await client.query("COMMIT");
+        res.json({ success: true, count: results.length, results });
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      } finally {
+        client.release();
+      }
     } catch (err: any) {
-      console.error(err);
+      console.error("Error in /api/grades/update:", err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -377,31 +392,28 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     try {
       if (!pool) return res.json({ success: true });
       const { student_id, class_id, activity_name, grade, feedback } = req.body;
+      if (!student_id || !class_id || !activity_name) {
+        return res.status(400).json({ error: "student_id, class_id e activity_name são obrigatórios." });
+      }
       
-      // Check if it exists
-      const check = await pool.query(
-        "SELECT id FROM d_student_grades WHERE student_id = $1 AND class_id = $2 AND activity_name = $3",
-        [student_id, class_id, activity_name]
+      const q = await pool.query(
+        `INSERT INTO d_student_grades (student_id, class_id, activity_name, grade, feedback, updated_at)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         ON CONFLICT (student_id, class_id, activity_name)
+         DO UPDATE SET grade = EXCLUDED.grade, feedback = EXCLUDED.feedback, updated_at = CURRENT_TIMESTAMP
+         RETURNING id, (xmax = 0) AS inserted`,
+        [student_id, class_id, activity_name, grade != null ? Number(grade) : null, feedback || null]
       );
       
-      if (check.rows.length > 0) {
-        // Update
-        const id = check.rows[0].id;
-        await pool.query(
-          "UPDATE d_student_grades SET grade = $1, feedback = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-          [grade, feedback, id]
-        );
-        res.json({ success: true, id, updated: true });
-      } else {
-        // Insert
-        const q = await pool.query(
-          "INSERT INTO d_student_grades (student_id, class_id, activity_name, grade, feedback) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-          [student_id, class_id, activity_name, grade, feedback]
-        );
-        res.json({ success: true, id: q.rows[0].id, inserted: true });
-      }
+      const isInserted = q.rows[0]?.inserted === true;
+      res.json({ 
+        success: true, 
+        id: q.rows[0]?.id, 
+        inserted: isInserted,
+        updated: !isInserted 
+      });
     } catch (err: any) {
-      console.error(err);
+      console.error("Error in /api/grades:", err);
       res.status(500).json({ error: err.message });
     }
   });

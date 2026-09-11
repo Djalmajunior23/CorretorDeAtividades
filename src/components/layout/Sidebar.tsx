@@ -51,6 +51,7 @@ interface SidebarProps {
   dbConnected?: boolean;
   featureFlags?: any;
   onOpenExportModal?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 export default function Sidebar({ 
@@ -58,7 +59,8 @@ export default function Sidebar({
   setTab = () => {}, 
   dbConnected = true,
   featureFlags = {},
-  onOpenExportModal = () => {}
+  onOpenExportModal = () => {},
+  onOpenCommandPalette = () => {}
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -203,8 +205,15 @@ export default function Sidebar({
               placeholder="Buscar ferramenta..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+              className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-2 pl-9 pr-14 text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all"
             />
+            <button
+              onClick={onOpenCommandPalette}
+              title="Abrir Command Palette (Ctrl+K)"
+              className="absolute right-2 top-2 px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[9px] font-mono text-slate-400 border border-slate-700/60 transition-colors cursor-pointer"
+            >
+              ⌘K
+            </button>
           </motion.div>
         )}
 

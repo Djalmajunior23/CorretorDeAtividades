@@ -155,6 +155,7 @@ import { AiPlaygroundModal } from "./components/AiPlaygroundModal";
 import { ConsolidatedPdfReportModal } from "./components/ConsolidatedPdfReportModal";
 import { StudentPortfolioExportModal } from "./components/StudentPortfolioExportModal";
 import { AdvancedVisionAssessmentModal } from "./components/AdvancedVisionAssessmentModal";
+import { CommandPaletteModal } from "./components/CommandPaletteModal";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -323,6 +324,18 @@ export default function App() {
   const [showCloudSyncModal, setShowCloudSyncModal] = useState(false);
   const [showStudentPortfolioModal, setShowStudentPortfolioModal] = useState(false);
   const [showAdvancedVisionModal, setShowAdvancedVisionModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
   const [refactoringAi, setRefactoringAi] = useState(false);
   const [showRefactorModal, setShowRefactorModal] = useState(false);
   const [suggestedRefactoredCode, setSuggestedRefactoredCode] = useState("");
@@ -2163,6 +2176,7 @@ export default function App() {
         dbConnected={dbConnected} 
         featureFlags={featureFlags} 
         onOpenExportModal={() => setShowExportModal(true)} 
+        onOpenCommandPalette={() => setShowCommandPalette(true)}
       />
 
       {/* Main Container */}
@@ -5645,6 +5659,13 @@ export default function App() {
           {showStudentPortfolioModal && (
             <StudentPortfolioExportModal submissions={submissions} onClose={() => setShowStudentPortfolioModal(false)} />
           )}
+
+          <CommandPaletteModal 
+            isOpen={showCommandPalette}
+            onClose={() => setShowCommandPalette(false)}
+            onNavigate={(tab) => setTab(tab)}
+            onOpenExportModal={() => setShowExportModal(true)}
+          />
 
           {showAdvancedVisionModal && (
             <AdvancedVisionAssessmentModal 
