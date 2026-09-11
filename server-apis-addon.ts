@@ -151,6 +151,9 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS class_id UUID;
       ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS deadline VARCHAR(100);
       ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255);
+      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 100;
+      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS sla_tolerance_hours INTEGER DEFAULT 12;
     `,
       )
       .catch((err) =>
@@ -4091,6 +4094,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const {
         title,
         description,
+        problem_description,
         type = "code",
         class_id,
         deadline,
@@ -4101,37 +4105,77 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         rubrics = []
       } = req.body;
 
-      if (!title || !description) {
+      const actDescription = description || problem_description || "";
+
+      if (!title || !actDescription.trim()) {
         return res.status(400).json({ error: "Título e descrição/enunciado da atividade são obrigatórios." });
       }
 
       const id = crypto.randomUUID();
+      const validClassId = (class_id && isValidUuid(class_id)) ? class_id : null;
+      const formattedDeadline = deadline
+        ? (typeof deadline === "string" ? deadline : new Date(deadline).toISOString())
+        : new Date(Date.now() + 86400000 * 7).toISOString();
+
       if (pool) {
-        await pool.query(`
-          INSERT INTO d_activities (
-            id, teacher_id, class_id, title, description, language, deadline, status, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [
-          id,
-          teacher_id,
-          class_id || null,
-          title,
-          description,
-          language,
-          deadline ? new Date(deadline) : new Date(Date.now() + 86400000 * 7)
-        ]);
+        try {
+          await pool.query(`
+            INSERT INTO d_activities (
+              id, teacher_id, class_id, title, problem_description, language, deadline, status, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [
+            id,
+            teacher_id,
+            validClassId,
+            title,
+            actDescription,
+            language,
+            formattedDeadline
+          ]);
+
+          // Save test cases if provided
+          if (Array.isArray(test_cases) && test_cases.length > 0) {
+            for (const tc of test_cases) {
+              const tcId = crypto.randomUUID();
+              await pool.query(`
+                INSERT INTO d_activity_test_cases (
+                  id, activity_id, input_data, expected_output, is_hidden, weight, created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+              `, [
+                tcId,
+                id,
+                tc.input || tc.input_data || "",
+                tc.expected || tc.expected_output || "",
+                tc.isPublic === false || tc.is_hidden === true,
+                tc.weight || 1
+              ]).catch((tcErr: any) => console.warn("[Activities] Warning saving test case:", tcErr.message));
+            }
+          }
+        } catch (dbErr: any) {
+          console.error("[Activities] DB insert error:", dbErr.message);
+          // Retry with minimal columns if table structure differs
+          try {
+            await pool.query(`
+              INSERT INTO d_activities (id, teacher_id, title, problem_description, language, status)
+              VALUES ($1, $2, $3, $4, $5, 'active')
+            `, [id, teacher_id, title, actDescription, language]);
+          } catch (retryErr: any) {
+            console.warn("[Activities] Fallback insert also failed:", retryErr.message);
+          }
+        }
       }
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         id,
         activity: {
           id,
           title,
-          description,
+          description: actDescription,
+          problem_description: actDescription,
           type,
-          class_id,
-          deadline,
+          class_id: validClassId,
+          deadline: formattedDeadline,
           language,
           points,
           sla_tolerance_hours,
@@ -4142,7 +4186,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       });
     } catch (e: any) {
       console.error("Manual activity creation error:", e);
-      res.status(500).json({ error: e.message });
+      return res.status(500).json({ error: e.message });
     }
   });
 
