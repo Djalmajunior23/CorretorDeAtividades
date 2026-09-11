@@ -106,3 +106,5 @@ export function EvidencesManagerView() {
     </div>
   );
 }
+
+export default EvidencesManagerView;
