@@ -3938,6 +3938,9 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
+  // Global Delivery Overrides Map (activityId_studentId -> state)
+  const inMemoryDeliveryOverrides = new Map<string, { delivery_status: string; submission_date: string | null; submitted_code: string | null; score?: number | null }>();
+
   // --- CENTRAL DE CONTROLE DE ATIVIDADES E ENTREGAS DOS ALUNOS ---
   app.get("/api/activities/submissions-status", async (req, res) => {
     try {
@@ -3993,6 +3996,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         };
       }
 
+      const actId = String(activityInfo.id || activity_id || "default");
       const deadlineDate = new Date(activityInfo.deadline || Date.now());
       const now = new Date();
       const isPastDeadline = now > deadlineDate;
@@ -4007,27 +4011,44 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       let approvedCount = 0;
 
       const studentRoster = studentsList.map((st, idx) => {
-        // Deterministic simulated distribution if fresh
-        const isDelivered = idx !== 3 && idx !== 6 && idx !== 9;
-        const isLate = idx === 2 || idx === 8;
-        const subDate = isDelivered
-          ? isLate
-            ? new Date(deadlineDate.getTime() + 14 * 3600000).toISOString()
-            : new Date(deadlineDate.getTime() - (idx + 2) * 3600000).toISOString()
-          : null;
+        const overrideKey = `${actId}_${st.id}`;
+        const manualOverride = inMemoryDeliveryOverrides.get(overrideKey);
 
-        const hoursOverdue = isLate ? 14 : !isDelivered && isPastDeadline ? Math.round((now.getTime() - deadlineDate.getTime()) / 3600000) : 0;
-        
         let deliveryStatus = "pending";
-        if (isDelivered) {
-          deliveryStatus = isLate ? "delivered_late" : "delivered_on_time";
-        } else if (isPastDeadline) {
-          deliveryStatus = "overdue";
+        let subDate: string | null = null;
+        let submittedCode: string | null = null;
+        let isDelivered = false;
+        let isLate = false;
+
+        if (manualOverride) {
+          deliveryStatus = manualOverride.delivery_status;
+          subDate = manualOverride.submission_date;
+          submittedCode = manualOverride.submitted_code;
+          isDelivered = deliveryStatus === "delivered_on_time" || deliveryStatus === "delivered_late";
+          isLate = deliveryStatus === "delivered_late";
+        } else {
+          // Deterministic baseline distribution
+          isDelivered = idx !== 3 && idx !== 6 && idx !== 9;
+          isLate = idx === 2 || idx === 8;
+          subDate = isDelivered
+            ? isLate
+              ? new Date(deadlineDate.getTime() + 14 * 3600000).toISOString()
+              : new Date(deadlineDate.getTime() - (idx + 2) * 3600000).toISOString()
+            : null;
+
+          if (isDelivered) {
+            deliveryStatus = isLate ? "delivered_late" : "delivered_on_time";
+          } else if (isPastDeadline) {
+            deliveryStatus = "overdue";
+          }
+          submittedCode = isDelivered ? `def processar_transacao(valor, saldo):\n    if valor <= 0:\n        return False, "Valor invalido"\n    if valor > saldo:\n        return False, "Saldo insuficiente"\n    return True, saldo - valor\n\n# Submissão de ${st.name}\nprint(processar_transacao(100, 250))` : null;
         }
 
+        const hoursOverdue = isLate ? 14 : !isDelivered && isPastDeadline ? Math.round((now.getTime() - deadlineDate.getTime()) / 3600000) : 0;
+
         // Scores calculation
-        const baseScore = idx === 0 ? 95 : idx === 1 ? 88 : idx === 2 ? 62 : idx === 4 ? 90 : idx === 5 ? 78 : idx === 7 ? 84 : idx === 8 ? 54 : null;
-        const score = isDelivered ? baseScore : null;
+        const baseScore = idx === 0 ? 95 : idx === 1 ? 88 : idx === 2 ? 62 : idx === 4 ? 90 : idx === 5 ? 78 : idx === 7 ? 84 : idx === 8 ? 54 : 80;
+        const score = isDelivered ? (manualOverride?.score !== undefined ? manualOverride.score : baseScore) : null;
         const isApproved = score !== null ? score >= 60 : null;
 
         if (isDelivered) {
@@ -4052,7 +4073,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           delivery_status: deliveryStatus,
           submission_date: subDate,
           hours_overdue: hoursOverdue,
-          submitted_code: isDelivered ? `def processar_transacao(valor, saldo):\n    if valor <= 0:\n        return False, "Valor invalido"\n    if valor > saldo:\n        return False, "Saldo insuficiente"\n    return True, saldo - valor\n\n# Submissão de ${st.name}\nprint(processar_transacao(100, 250))` : null,
+          submitted_code: submittedCode,
           correction_status: isDelivered ? (score !== null ? "corrected" : "pending_correction") : "not_submitted",
           score: score,
           is_approved: isApproved,
@@ -4085,6 +4106,77 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     } catch (e: any) {
       console.error("Submissions status error:", e);
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST: Marcar / Alternar Entrega de Atividade pelo Docente
+  app.post("/api/activities/toggle-delivery", async (req, res) => {
+    try {
+      const { student_id, activity_id, delivery_status, delivered } = req.body;
+      if (!student_id || !activity_id) {
+        return res.status(400).json({ error: "student_id e activity_id são obrigatórios." });
+      }
+
+      let statusToSet = delivery_status;
+      if (!statusToSet) {
+        statusToSet = delivered ? "delivered_on_time" : "pending";
+      }
+
+      const isDelivered = statusToSet === "delivered_on_time" || statusToSet === "delivered_late";
+      const key = `${activity_id}_${student_id}`;
+      const subDate = isDelivered ? new Date().toISOString() : null;
+
+      inMemoryDeliveryOverrides.set(key, {
+        delivery_status: statusToSet,
+        submission_date: subDate,
+        submitted_code: isDelivered ? `# Atividade marcada manualmente como entregue pelo professor em ${new Date().toLocaleString("pt-BR")}` : null
+      });
+
+      return res.json({
+        success: true,
+        student_id,
+        activity_id,
+        delivery_status: statusToSet,
+        submission_date: subDate,
+        message: `Status de entrega atualizado para: ${isDelivered ? "Entregue" : "Não Entregue"}`
+      });
+    } catch (e: any) {
+      console.error("Toggle delivery error:", e);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST: Marcar Em Lote Todas as Entregas de Uma Turma
+  app.post("/api/activities/bulk-delivery", async (req, res) => {
+    try {
+      const { activity_id, student_ids = [], delivery_status = "delivered_on_time", delivered } = req.body;
+      if (!activity_id) {
+        return res.status(400).json({ error: "activity_id é obrigatório." });
+      }
+
+      const finalStatus = delivery_status || (delivered ? "delivered_on_time" : "pending");
+      const isDelivered = finalStatus === "delivered_on_time" || finalStatus === "delivered_late";
+      const subDate = isDelivered ? new Date().toISOString() : null;
+
+      for (const stId of student_ids) {
+        const key = `${activity_id}_${stId}`;
+        inMemoryDeliveryOverrides.set(key, {
+          delivery_status: finalStatus,
+          submission_date: subDate,
+          submitted_code: isDelivered ? `# Atividade marcada em lote como entregue pelo professor em ${new Date().toLocaleString("pt-BR")}` : null
+        });
+      }
+
+      return res.json({
+        success: true,
+        activity_id,
+        count: student_ids.length,
+        delivery_status: finalStatus,
+        message: `Status em lote atualizado para ${student_ids.length} estudante(s).`
+      });
+    } catch (e: any) {
+      console.error("Bulk delivery error:", e);
+      return res.status(500).json({ error: e.message });
     }
   });
 

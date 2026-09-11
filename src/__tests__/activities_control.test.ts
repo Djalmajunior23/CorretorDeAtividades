@@ -159,6 +159,59 @@ describe("Módulo de Controle Central de Atividades e Entregas (Activities & Sub
     expect(data.dispatched_at).toBeDefined();
   });
 
+  it("POST /api/activities/toggle-delivery - Deve alternar status de entrega de estudante pelo docente", async () => {
+    // 1. Marcar como entregue no prazo
+    const resDeliver = await fetch(`${baseUrl}/api/activities/toggle-delivery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id: "std-1",
+        activity_id: "act-1",
+        delivery_status: "delivered_on_time"
+      })
+    });
+
+    expect(resDeliver.status).toBe(200);
+    const dataDeliver = await resDeliver.json();
+    expect(dataDeliver.success).toBe(true);
+    expect(dataDeliver.delivery_status).toBe("delivered_on_time");
+    expect(dataDeliver.submission_date).toBeDefined();
+
+    // 2. Marcar como não entregue (pendente)
+    const resPending = await fetch(`${baseUrl}/api/activities/toggle-delivery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id: "std-1",
+        activity_id: "act-1",
+        delivery_status: "pending"
+      })
+    });
+
+    expect(resPending.status).toBe(200);
+    const dataPending = await resPending.json();
+    expect(dataPending.success).toBe(true);
+    expect(dataPending.delivery_status).toBe("pending");
+  });
+
+  it("POST /api/activities/bulk-delivery - Deve marcar em lote todos os estudantes como entregues ou não entregues", async () => {
+    const resBulk = await fetch(`${baseUrl}/api/activities/bulk-delivery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        activity_id: "act-1",
+        student_ids: ["std-1", "std-2", "std-3"],
+        delivery_status: "delivered_on_time"
+      })
+    });
+
+    expect(resBulk.status).toBe(200);
+    const dataBulk = await resBulk.json();
+    expect(dataBulk.success).toBe(true);
+    expect(dataBulk.count).toBe(3);
+    expect(dataBulk.delivery_status).toBe("delivered_on_time");
+  });
+
   it("POST /api/activities/export-deliveries-pdf - Deve gerar PDF formal com ata e controle de entregas da turma", async () => {
     const res = await fetch(`${baseUrl}/api/activities/export-deliveries-pdf`, {
       method: "POST",

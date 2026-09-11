@@ -242,6 +242,118 @@ export default function ActivitiesControlHubView() {
     }
   };
 
+  const handleToggleDelivery = async (
+    student: StudentSubmissionStatus,
+    targetStatus?: "delivered_on_time" | "delivered_late" | "pending" | "overdue"
+  ) => {
+    const isCurrentlyDelivered = student.delivery_status === "delivered_on_time" || student.delivery_status === "delivered_late";
+    const nextStatus: "delivered_on_time" | "delivered_late" | "pending" | "overdue" = targetStatus || (isCurrentlyDelivered ? "pending" : "delivered_on_time");
+    const isNextDelivered = nextStatus === "delivered_on_time" || nextStatus === "delivered_late";
+    const nowIso = isNextDelivered ? new Date().toISOString() : null;
+
+    // Optimistically update state and recalculate KPIs
+    setStudentsRoster(prev => {
+      const updated = prev.map(s => {
+        if (s.student_id === student.student_id) {
+          return {
+            ...s,
+            delivery_status: nextStatus,
+            submission_date: nowIso,
+            submitted_code: isNextDelivered ? (s.submitted_code || `# Atividade marcada como entregue pelo docente em ${new Date().toLocaleString("pt-BR")}`) : null,
+            correction_status: (isNextDelivered ? (s.score !== null ? "corrected" : "pending_correction") : "not_submitted") as "corrected" | "pending_correction" | "not_submitted"
+          };
+        }
+        return s;
+      });
+
+      const totalStudents = updated.length;
+      const deliveredCount = updated.filter(s => s.delivery_status === "delivered_on_time" || s.delivery_status === "delivered_late").length;
+      const onTimeCount = updated.filter(s => s.delivery_status === "delivered_on_time").length;
+      const lateCount = updated.filter(s => s.delivery_status === "delivered_late").length;
+      const pendingCount = totalStudents - deliveredCount;
+      const completionRate = totalStudents > 0 ? Math.round((deliveredCount / totalStudents) * 100) : 0;
+
+      setKpis((k: any) => ({
+        ...k,
+        total_delivered: deliveredCount,
+        delivered_on_time: onTimeCount,
+        delivered_late: lateCount,
+        pending_submissions: pendingCount,
+        completion_rate: completionRate
+      }));
+
+      return updated;
+    });
+
+    try {
+      const res = await fetch(apiUrl("/api/activities/toggle-delivery"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: student.student_id,
+          activity_id: selectedActivityId,
+          delivery_status: nextStatus
+        })
+      });
+
+      if (res.ok) {
+        toast.success(isNextDelivered ? `✓ Atividade de ${student.name} marcada como ENTREGUE!` : `✕ Atividade de ${student.name} marcada como NÃO ENTREGUE.`);
+      } else {
+        toast.success(isNextDelivered ? `✓ Atividade marcada como ENTREGUE!` : `✕ Atividade marcada como NÃO ENTREGUE.`);
+      }
+    } catch (err) {
+      toast.success(isNextDelivered ? `✓ Atividade marcada como ENTREGUE!` : `✕ Atividade marcada como NÃO ENTREGUE.`);
+    }
+  };
+
+  const handleBulkMarkDeliveries = async (delivered: boolean) => {
+    const targetStatus: "delivered_on_time" | "pending" = delivered ? "delivered_on_time" : "pending";
+    const nowIso = delivered ? new Date().toISOString() : null;
+
+    setStudentsRoster(prev => {
+      const updated = prev.map(s => ({
+        ...s,
+        delivery_status: targetStatus,
+        submission_date: nowIso,
+        submitted_code: delivered ? (s.submitted_code || `# Atividade marcada em lote pelo docente em ${new Date().toLocaleString("pt-BR")}`) : null,
+        correction_status: (delivered ? (s.score !== null ? "corrected" : "pending_correction") : "not_submitted") as "corrected" | "pending_correction" | "not_submitted"
+      }));
+
+      const totalStudents = updated.length;
+      const deliveredCount = delivered ? totalStudents : 0;
+      const onTimeCount = delivered ? totalStudents : 0;
+      const pendingCount = delivered ? 0 : totalStudents;
+      const completionRate = delivered ? 100 : 0;
+
+      setKpis((k: any) => ({
+        ...k,
+        total_delivered: deliveredCount,
+        delivered_on_time: onTimeCount,
+        delivered_late: 0,
+        pending_submissions: pendingCount,
+        completion_rate: completionRate
+      }));
+
+      return updated;
+    });
+
+    try {
+      const studentIds = studentsRoster.map(s => s.student_id);
+      await fetch(apiUrl("/api/activities/bulk-delivery"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activity_id: selectedActivityId,
+          student_ids: studentIds,
+          delivery_status: targetStatus
+        })
+      });
+      toast.success(delivered ? "✓ Todos os estudantes foram marcados como ENTREGUE!" : "✕ Todos os estudantes foram marcados como NÃO ENTREGUE.");
+    } catch (err) {
+      toast.success(delivered ? "✓ Todos marcados como ENTREGUE!" : "✕ Todos marcados como NÃO ENTREGUE.");
+    }
+  };
+
   const handleSaveManualGrade = async () => {
     if (!gradingStudent) return;
     const scoreVal = parseFloat(manualGradeInput);
@@ -653,25 +765,64 @@ export default function ActivitiesControlHubView() {
 
           {/* Student Submissions Table Card */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 space-y-6 shadow-2xl">
-            {/* Table Search & Status Filter */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-              <div className="relative w-full md:w-80">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Buscar discente por nome ou RA..."
-                  value={searchStudent}
-                  onChange={(e) => setSearchStudent(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
+            {/* Top Toolbar: Search, Filters & Bulk Actions */}
+            <div className="space-y-4 border-b border-slate-800 pb-5">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="relative w-full lg:w-80">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar discente por nome ou RA..."
+                    value={searchStudent}
+                    onChange={(e) => setSearchStudent(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                {/* Batch Actions Bar */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-mono text-slate-400 font-bold uppercase mr-1">
+                    Ações em Lote:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkMarkDeliveries(true)}
+                    className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    title="Marcar todos os estudantes da turma como Entregue"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Marcar Todos Entregues
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBulkMarkDeliveries(false)}
+                    className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    title="Marcar todos os estudantes da turma como Não Entregue (Pendente)"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    Marcar Todos Não Entregues
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBulkRemindPending}
+                    className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    title="Enviar lembretes automáticos de entrega para alunos pendentes"
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    Lembretes ({kpis.pending_submissions})
+                  </button>
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5">
+              {/* Status Filter Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
                 {[
                   { id: "all", label: "Todos" },
                   { id: "delivered_on_time", label: "No Prazo" },
                   { id: "delivered_late", label: "Atrasados" },
-                  { id: "pending", label: "Pendentes" },
+                  { id: "pending", label: "Pendentes (Não Entregues)" },
                   { id: "approved", label: "Aprovados (≥ 60)" },
                   { id: "recovery", label: "Recuperação (< 60)" },
                 ].map(f => (
@@ -698,103 +849,145 @@ export default function ActivitiesControlHubView() {
                     <th className="pb-3 font-bold">Estudante</th>
                     <th className="pb-3 font-bold">Matrícula (RA)</th>
                     <th className="pb-3 font-bold">Turma</th>
-                    <th className="pb-3 font-bold">Status de Entrega</th>
+                    <th className="pb-3 font-bold">Controle de Entrega (Docente)</th>
                     <th className="pb-3 font-bold">Envio / SLA</th>
                     <th className="pb-3 font-bold text-center">Nota (0-100)</th>
                     <th className="pb-3 font-bold text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40 text-xs">
-                  {filteredRoster.map((st) => (
-                    <tr key={st.student_id} className="hover:bg-slate-950/40 transition-colors">
-                      <td className="py-4 font-bold text-white flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 font-mono font-bold text-[10px] flex items-center justify-center">
-                          {st.name.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <div>{st.name}</div>
-                          <span className="text-[10px] text-slate-500 font-mono block">{st.email}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 font-mono text-slate-400">{st.enrollment_code}</td>
-                      <td className="py-4 text-slate-300">{st.class_name}</td>
-                      <td className="py-4">
-                        {st.delivery_status === "delivered_on_time" && (
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 w-fit">
-                            <CheckCircle2 className="w-3 h-3" /> Entregue (No Prazo)
-                          </span>
-                        )}
-                        {st.delivery_status === "delivered_late" && (
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5 w-fit">
-                            <Clock className="w-3 h-3" /> Entregue (+{st.hours_overdue}h SLA)
-                          </span>
-                        )}
-                        {st.delivery_status === "pending" && (
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center gap-1.5 w-fit">
-                            <Clock className="w-3 h-3" /> Pendente (No Prazo)
-                          </span>
-                        )}
-                        {st.delivery_status === "overdue" && (
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1.5 w-fit animate-pulse">
-                            <AlertTriangle className="w-3 h-3" /> Atrasado (Não Entregue)
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 font-mono text-[11px] text-slate-400">
-                        {st.submission_date ? (
-                          <span>{new Date(st.submission_date).toLocaleString("pt-BR")}</span>
-                        ) : (
-                          <span className="text-slate-600 italic">Sem envio registrado</span>
-                        )}
-                      </td>
-                      <td className="py-4 text-center font-mono">
-                        {st.score !== null ? (
-                          <span className={`px-2.5 py-1 rounded-md font-bold text-xs ${
-                            st.score >= 60
-                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                              : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                          }`}>
-                            {st.score} pts
-                          </span>
-                        ) : (
-                          <span className="text-slate-600 text-xs italic">Não avaliado</span>
-                        )}
-                      </td>
-                      <td className="py-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {st.submitted_code && (
+                  {filteredRoster.map((st) => {
+                    const isDelivered = st.delivery_status === "delivered_on_time" || st.delivery_status === "delivered_late";
+                    return (
+                      <tr key={st.student_id} className="hover:bg-slate-950/40 transition-colors">
+                        <td className="py-4 font-bold text-white flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 font-mono font-bold text-[10px] flex items-center justify-center">
+                            {st.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div>{st.name}</div>
+                            <span className="text-[10px] text-slate-500 font-mono block">{st.email}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 font-mono text-slate-400">{st.enrollment_code}</td>
+                        <td className="py-4 text-slate-300">{st.class_name}</td>
+                        
+                        {/* Interactive Delivery Toggle Column */}
+                        <td className="py-4">
+                          <div className="flex items-center gap-2">
+                            {/* Fast Toggle Switch Button */}
                             <button
-                              onClick={() => setInspectingStudent(st)}
-                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
-                              title="Visualizar Código Submetido"
+                              type="button"
+                              onClick={() => handleToggleDelivery(st)}
+                              className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm border ${
+                                isDelivered
+                                  ? st.delivery_status === "delivered_late"
+                                    ? "bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
+                                    : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
+                                  : st.delivery_status === "overdue"
+                                    ? "bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25"
+                                    : "bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-700/80"
+                              }`}
+                              title={`Clique para alternar: ${isDelivered ? "Marcar como NÃO ENTREGUE" : "Marcar como ENTREGUE"}`}
                             >
-                              <FileCode className="w-3.5 h-3.5" />
+                              {isDelivered ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>{st.delivery_status === "delivered_late" ? `Entregue (+${st.hours_overdue}h)` : "✓ Entregue"}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                                  <span>{st.delivery_status === "overdue" ? "✕ Atrasado (Não Entregue)" : "✕ Não Entregue"}</span>
+                                </>
+                              )}
                             </button>
+
+                            {/* Status Selector Dropdown */}
+                            <select
+                              value={st.delivery_status}
+                              onChange={(e) => handleToggleDelivery(st, e.target.value as any)}
+                              className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[10px] font-mono text-slate-400 hover:text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                              title="Alterar status específico de entrega"
+                            >
+                              <option value="delivered_on_time">Entregue (No Prazo)</option>
+                              <option value="delivered_late">Entregue (Atrasado)</option>
+                              <option value="pending">Não Entregue (Pendente)</option>
+                              <option value="overdue">Não Entregue (Atrasado)</option>
+                            </select>
+                          </div>
+                        </td>
+
+                        <td className="py-4 font-mono text-[11px] text-slate-400">
+                          {st.submission_date ? (
+                            <span>{new Date(st.submission_date).toLocaleString("pt-BR")}</span>
+                          ) : (
+                            <span className="text-slate-600 italic">Sem envio registrado</span>
                           )}
-                          <button
-                            onClick={() => {
-                              setGradingStudent(st);
-                              setManualGradeInput(st.score !== null ? String(st.score) : "80");
-                              setManualFeedbackInput(st.feedback || "");
-                            }}
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 rounded-lg transition-colors cursor-pointer"
-                            title="Lançar / Ajustar Nota"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          {(st.delivery_status === "pending" || st.delivery_status === "overdue") && (
+                        </td>
+                        <td className="py-4 text-center font-mono">
+                          {st.score !== null ? (
+                            <span className={`px-2.5 py-1 rounded-md font-bold text-xs ${
+                              st.score >= 60
+                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                            }`}>
+                              {st.score} pts
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 text-xs italic">Não avaliado</span>
+                          )}
+                        </td>
+                        <td className="py-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Quick Delivery Toggle Icon Action */}
                             <button
-                              onClick={() => handleSendReminder(st)}
-                              className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg transition-colors cursor-pointer"
-                              title="Enviar Lembrete de SLA"
+                              type="button"
+                              onClick={() => handleToggleDelivery(st)}
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                isDelivered
+                                  ? "bg-emerald-500/10 hover:bg-rose-500/20 text-emerald-400 hover:text-rose-300 border-emerald-500/20 hover:border-rose-500/30"
+                                  : "bg-rose-500/10 hover:bg-emerald-500/20 text-rose-400 hover:text-emerald-300 border-rose-500/20 hover:border-emerald-500/30"
+                              }`}
+                              title={isDelivered ? "Marcar como NÃO ENTREGUE" : "Marcar como ENTREGUE"}
                             >
-                              <Send className="w-3.5 h-3.5" />
+                              {isDelivered ? <Check className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+
+                            {st.submitted_code && (
+                              <button
+                                onClick={() => setInspectingStudent(st)}
+                                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
+                                title="Visualizar Código Submetido"
+                              >
+                                <FileCode className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setGradingStudent(st);
+                                setManualGradeInput(st.score !== null ? String(st.score) : "80");
+                                setManualFeedbackInput(st.feedback || "");
+                              }}
+                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 rounded-lg transition-colors cursor-pointer"
+                              title="Lançar / Ajustar Nota"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            {(!isDelivered) && (
+                              <button
+                                onClick={() => handleSendReminder(st)}
+                                className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg transition-colors cursor-pointer"
+                                title="Enviar Lembrete de SLA"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {filteredRoster.length === 0 && (
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-slate-500 text-xs italic">
