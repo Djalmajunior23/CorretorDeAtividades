@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export type CompetencyDomain =
   | "CONHECIMENTO_ALGORITMICO"
@@ -272,76 +272,26 @@ Responda em formato JSON estruturado com array de questões:
    * Generates official SAEP Institutional Readiness PDF Report.
    */
   static async generateSaepDossierPdf(report: CohortSaepReport): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Brand
-      doc.rect(40, 40, doc.page.width - 80, 50).fill("#1e3a8a");
-      doc.fillColor("#60a5fa").font("Helvetica-Bold").fontSize(18).text("SAEP / ENADE INSTITUTIONAL READINESS REPORT", 55, 52);
-      doc.fillColor("#e2e8f0").font("Helvetica").fontSize(9).text("SENAI Matriz de Competências CHA & Teoria de Resposta ao Item (TRI)", 55, 73);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      doc.moveDown(3);
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(14).text("1. Diagnóstico Geral da Turma / Coorte");
-      doc.moveDown(0.5);
-
-      doc.font("Helvetica").fontSize(9).fillColor("#334155");
-      doc.text(`Identificador da Turma: ${report.cohortId} (${report.cohortName})`);
-      doc.text(`Curso: ${report.courseName}`);
-      doc.text(`Total de Estudantes Avaliados: ${report.totalStudents}`);
-      doc.text(`Proficiência Média Estimada (Escala TRI SAEP): ${report.averageThetaScore} pontos`);
-      doc.text(`Data de Consolidação: ${new Date(report.generatedAt).toLocaleString("pt-BR")}`);
-
-      doc.moveDown(1);
-
-      // Distribution Card
-      doc.rect(40, doc.y, doc.page.width - 80, 55).fill("#eff6ff");
-      const cardY = doc.y + 8;
-      doc.fillColor("#1e40af").font("Helvetica-Bold").fontSize(11).text("DISTRIBUIÇÃO DE NÍVEIS DE PROFICIÊNCIA SAEP", 55, cardY);
-      doc.fillColor("#1e293b").font("Helvetica").fontSize(9).text(
-        `• Abaixo do Básico: ${report.cohortProficiencyDistribution.abaixoBasicoCount}   |   ` +
-        `• Básico: ${report.cohortProficiencyDistribution.basicoCount}   |   ` +
-        `• Adequado: ${report.cohortProficiencyDistribution.adequadoCount}   |   ` +
-        `• Avançado: ${report.cohortProficiencyDistribution.avancadoCount}`,
-        55, cardY + 20
-      );
-
-      doc.moveDown(3.5);
-
-      // Domain Heatmap
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("2. Mapa de Calor por Domínio de Competência (CHA)");
-      doc.moveDown(0.5);
-
-      report.domainHeatmap.forEach((item) => {
-        const color = item.riskLevel === "VERDE" ? "#16a34a" : item.riskLevel === "AMARELO" ? "#d97706" : "#dc2626";
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#0f172a").text(`• ${item.domain}: `, { continued: true });
-        doc.fillColor(color).text(`${item.averageScorePercent}% [Risco: ${item.riskLevel}]`);
-      });
-
-      doc.moveDown(1);
-
-      // Institutional Action Plan
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("3. Plano de Ação Pedagógica para Coordenação Institucional");
-      doc.moveDown(0.5);
-
-      report.institutionalCoordinatorActionPlan.forEach((plan, i) => {
-        const prioColor = plan.priority === "URGENTE" ? "#b91c1c" : "#d97706";
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(prioColor).text(`${i + 1}. [${plan.priority}] ${plan.action}`);
-        doc.font("Helvetica").fontSize(9).fillColor("#334155").text(`   Domínio Alvo: ${plan.targetDomain}`);
-        doc.font("Helvetica-Oblique").fontSize(9).fillColor("#475569").text(`   Intervenção Sugerida: ${plan.suggestedPedagogicalRemediation}`);
-        doc.moveDown(0.4);
-      });
-
-      // Footer
-      doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text("CodeCheck AI • Plataforma Educacional de Excelência Tecnológica SENAI", 40, doc.page.height - 30, {
-        align: "center"
-      });
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 }

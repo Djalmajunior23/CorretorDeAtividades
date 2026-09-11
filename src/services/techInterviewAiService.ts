@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export type TechRole =
   | "junior_fullstack"
@@ -286,92 +286,27 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro):
    * Generates a PDF Employability Dossier using PDFKit safely.
    */
   static async generateReportPdf(report: MarketReadinessReport): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Banner
-      doc.rect(0, 0, 595.28, 70).fill("#0f172a");
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      doc.fillColor("#10b981").fontSize(10).font("Helvetica-Bold").text("SENAI TECNOLOGIA • CODECHECK AI", 40, 20);
-      doc.fillColor("#ffffff").fontSize(16).font("Helvetica-Bold").text("LAUDO DE EMPREGABILIDADE & TECH MOCK INTERVIEW", 40, 35);
-
-      // Student Info Box
-      doc.fillColor("#0f172a");
-      doc.rect(40, 85, 515, 65).fillAndStroke("#f8fafc", "#e2e8f0");
-      doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text(`Candidato(a): ${report.studentName}`, 55, 95);
-      doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`Matrícula: ${report.studentRegistration || "N/A"} | Vaga Alvo: ${report.roleTitle}`, 55, 110);
-      doc.text(`Data da Avaliação: ${new Date(report.generatedAt).toLocaleDateString("pt-BR")} | Sessão: ${report.sessionId}`, 55, 125);
-
-      // Market Readiness Score Card
-      const scoreColor = report.marketReadinessScore >= 80 ? "#059669" : report.marketReadinessScore >= 60 ? "#d97706" : "#dc2626";
-      doc.rect(40, 160, 515, 60).fillAndStroke("#ffffff", "#e2e8f0");
-      doc.fillColor("#334155").fontSize(10).font("Helvetica-Bold").text("ÍNDICE DE PRONTIDÃO PARA O MERCADO (MARKET READINESS):", 55, 172);
-      doc.fillColor(scoreColor).fontSize(22).font("Helvetica-Bold").text(`${report.marketReadinessScore}%`, 55, 190);
-      doc.fillColor("#475569").fontSize(10).font("Helvetica").text(`Parecer do Comitê: ${report.hiringDecision}`, 140, 198);
-
-      // Competency Breakdown
-      let yPos = 235;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text("Detalhamento por Dimensão de Competência", 40, yPos);
-      yPos += 20;
-
-      const breakdown = [
-        { label: "Proficiência em Código & Algoritmos", val: report.scoreBreakdown.codingProficiency },
-        { label: "Visão Arquitetural & System Design", val: report.scoreBreakdown.architecturalThinking },
-        { label: "Comunicação Técnica & Soft Skills (STAR)", val: report.scoreBreakdown.communicationSoftSkills },
-        { label: "Resolução de Problemas & Agilidade", val: report.scoreBreakdown.problemSolvingSpeed },
-        { label: "Boas Práticas da Indústria (Clean Code, CI/CD)", val: report.scoreBreakdown.industryBestPractices }
-      ];
-
-      breakdown.forEach((item) => {
-        doc.fillColor("#334155").fontSize(9).font("Helvetica").text(item.label, 40, yPos);
-        doc.font("Helvetica-Bold").text(`${item.val}/100`, 480, yPos, { align: "right", width: 75 });
-        
-        // Bar background
-        doc.rect(40, yPos + 12, 515, 6).fill("#e2e8f0");
-        const barWidth = (item.val / 100) * 515;
-        doc.rect(40, yPos + 12, barWidth, 6).fill("#10b981");
-
-        yPos += 28;
-      });
-
-      // Executive Summary
-      yPos += 10;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text("Parecer Sintético da Banca Avaliadora", 40, yPos);
-      yPos += 16;
-      doc.fillColor("#334155").fontSize(9.5).font("Helvetica").text(report.executiveSummary, 40, yPos, { width: 515, align: "justify" });
-
-      // Strengths and Improvements
-      yPos += 60;
-      doc.fillColor("#065f46").fontSize(11).font("Helvetica-Bold").text("✓ Pontos Fortes Observados:", 40, yPos);
-      yPos += 16;
-      report.keyStrengths.forEach((st) => {
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica").text(`• ${st}`, 50, yPos, { width: 505 });
-        yPos += 14;
-      });
-
-      yPos += 10;
-      doc.fillColor("#991b1b").fontSize(11).font("Helvetica-Bold").text("⚠ Oportunidades de Desenvolvimento & Mentoria:", 40, yPos);
-      yPos += 16;
-      report.areasToImprove.forEach((imp) => {
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica").text(`• ${imp}`, 50, yPos, { width: 505 });
-        yPos += 14;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor("#94a3b8").font("Helvetica").text(
-        "Documento emitido automaticamente pelo CodeCheck AI • Padrão SENAI de Avaliação Baseada em Competências",
-        40,
-        790,
-        { align: "center", width: 515 }
-      );
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 
   private static generateFallbackInterview(

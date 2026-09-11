@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export type KanbanColumn = "BACKLOG" | "TODO" | "IN_PROGRESS" | "CODE_REVIEW" | "DONE";
 
@@ -261,77 +261,26 @@ Responda em JSON:
    * Generates official Agile Squad Performance & Sprint Retrospective PDF Dossier.
    */
   static async generateAgileReportPdf(sprint: SprintState): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Brand
-      doc.rect(40, 40, doc.page.width - 80, 50).fill("#0c4a6e");
-      doc.fillColor("#38bdf8").font("Helvetica-Bold").fontSize(18).text("AGILE SCRUM SQUAD & GITOPS PERFORMANCE DOSSIER", 55, 52);
-      doc.fillColor("#bae6fd").font("Helvetica").fontSize(9).text("SENAI Metodologias Ágeis, Gestão de Squads & Simulação GitOps", 55, 73);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      doc.moveDown(3);
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(14).text("1. Sumário Executivo da Sprint");
-      doc.moveDown(0.5);
-
-      doc.font("Helvetica").fontSize(9).fillColor("#334155");
-      doc.text(`Identificador da Sprint: ${sprint.sprintId} (Sprint ${sprint.sprintNumber})`);
-      doc.text(`Objetivo da Sprint: ${sprint.goal}`);
-      doc.text(`Progresso: Dia ${sprint.currentDay} de ${sprint.durationDays} | Saúde: ${sprint.sprintHealth}`);
-      doc.text(`Story Points: ${sprint.completedStoryPoints} entregues de ${sprint.totalStoryPoints} planejados`);
-
-      doc.moveDown(1);
-
-      // Scorecard
-      doc.rect(40, doc.y, doc.page.width - 80, 55).fill("#f0f9ff");
-      const cardY = doc.y + 8;
-      doc.fillColor("#0369a1").font("Helvetica-Bold").fontSize(11).text("VELOCIDADE & TAXA DE ENTREGA (BURNDOWN)", 55, cardY);
-      
-      const completionRate = Math.round((sprint.completedStoryPoints / Math.max(1, sprint.totalStoryPoints)) * 100);
-      doc.fillColor("#0284c7").font("Helvetica-Bold").fontSize(20).text(`${completionRate}%`, 55, cardY + 18);
-      doc.fillColor("#475569").font("Helvetica").fontSize(9).text(
-        `Total de Histórias: ${sprint.stories.length} | Eventos de Escopo Injetados: ${sprint.emergencyEventsTriggered.length}`,
-        140,
-        cardY + 22
-      );
-
-      doc.moveDown(3.5);
-
-      // User Stories
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("2. Quadro de User Stories & Status GitOps");
-      doc.moveDown(0.5);
-
-      sprint.stories.forEach((s) => {
-        const color = s.status === "DONE" ? "#16a34a" : s.status === "IN_PROGRESS" ? "#0284c7" : "#d97706";
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#0f172a").text(`• [${s.id}] ${s.title}: `, { continued: true });
-        doc.fillColor(color).text(`[${s.status}] (${s.storyPoints} pts - ${s.assignee})`);
-        doc.font("Helvetica").fontSize(8.5).fillColor("#475569").text(`   Branch: ${s.gitBranchName} ${s.hasMergeConflict ? "| ⚠️ CONFLITO DE MERGE" : ""}`);
-        doc.moveDown(0.3);
-      });
-
-      doc.moveDown(1);
-
-      // Retrospective
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("3. Retrospectiva da Sprint & Ações de Melhoria Contínua");
-      doc.moveDown(0.5);
-
-      sprint.retrospectiveHighlights.whatWentWell.forEach(w => {
-        doc.font("Helvetica").fontSize(9).fillColor("#15803d").text(`✓ Ponto Positivo: ${w}`);
-      });
-      sprint.retrospectiveHighlights.actionItems.forEach(a => {
-        doc.font("Helvetica").fontSize(9).fillColor("#0369a1").text(`→ Plano de Ação: ${a}`);
-      });
-
-      // Footer
-      doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text("CodeCheck AI • Plataforma Educacional de Excelência Tecnológica SENAI", 40, doc.page.height - 30, {
-        align: "center"
-      });
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 }

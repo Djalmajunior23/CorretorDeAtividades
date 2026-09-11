@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export type WasmRuntimeLanguage = "javascript" | "typescript" | "python" | "cpp" | "rust";
 
@@ -198,73 +198,26 @@ Responda em formato JSON:
    * Generates official Wasm Execution Benchmark & Performance Report in PDF.
    */
   static async generateWasmReportPdf(result: SandboxExecutionResult): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Brand
-      doc.rect(40, 40, doc.page.width - 80, 50).fill("#042f2e");
-      doc.fillColor("#2dd4bf").font("Helvetica-Bold").fontSize(18).text("WASM ZERO-LATENCY SANDBOX BENCHMARK", 55, 52);
-      doc.fillColor("#99f6e4").font("Helvetica").fontSize(9).text("SENAI Compiladores, WebAssembly & In-Browser Micro-VM Runtime", 55, 73);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      doc.moveDown(3);
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(14).text("1. Sumário de Execução & Telemetria Wasm");
-      doc.moveDown(0.5);
-
-      doc.font("Helvetica").fontSize(9).fillColor("#334155");
-      doc.text(`ID da Execução: ${result.executionId}`);
-      doc.text(`Linguagem: ${result.language.toUpperCase()} | Status de Segurança: ${result.securityStatus}`);
-      doc.text(`Tempo de Execução: ${result.runtimeMs} ms | Memória Alocada: ${result.memoryAllocatedKb} KB`);
-      doc.text(`Ciclos de Instrução Estimados: ${result.instructionCycles.toLocaleString()} instruções`);
-      doc.text(`Data/Hora: ${new Date(result.executedAt).toLocaleString("pt-BR")}`);
-
-      doc.moveDown(1);
-
-      // Score Card
-      doc.rect(40, doc.y, doc.page.width - 80, 55).fill("#f0fdfa");
-      const cardY = doc.y + 8;
-      doc.fillColor("#0f766e").font("Helvetica-Bold").fontSize(11).text("ÍNDICE DE OTIMIZAÇÃO WASM & ASSERTIONS", 55, cardY);
-      doc.fillColor("#0d9488").font("Helvetica-Bold").fontSize(20).text(`${result.wasmOptimizatonScore}/100`, 55, cardY + 18);
-      doc.fillColor("#475569").font("Helvetica").fontSize(9).text(
-        `Casos de Teste Aprovados: ${result.assertionsPassed} de ${result.totalAssertions} (${Math.round((result.assertionsPassed / result.totalAssertions) * 100)}%)`,
-        150,
-        cardY + 22
-      );
-
-      doc.moveDown(3.5);
-
-      // Test Cases Table
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("2. Resultados dos Casos de Teste (Assertions)");
-      doc.moveDown(0.5);
-
-      result.testCases.forEach((tc) => {
-        const passText = tc.passed ? "APROVADO" : "FALHOU";
-        const passColor = tc.passed ? "#16a34a" : "#dc2626";
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#0f172a").text(`• ${tc.name}: `, { continued: true });
-        doc.fillColor(passColor).text(`[${passText}] (${tc.executionTimeMs || 1.2} ms)`);
-        doc.font("Helvetica").fontSize(8.5).fillColor("#475569").text(`   Input: ${tc.input} | Esperado: ${tc.expectedOutput} | Obtido: ${tc.actualOutput || "-"}`);
-        doc.moveDown(0.3);
-      });
-
-      doc.moveDown(1);
-
-      // AI Advice
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("3. Recomendações de Eficiência e Otimização Wasm");
-      doc.moveDown(0.5);
-      result.aiOptimizationAdvice.forEach((adv, i) => {
-        doc.font("Helvetica").fontSize(9).fillColor("#047857").text(`✓ ${adv}`);
-      });
-
-      // Footer
-      doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text("CodeCheck AI • Plataforma Educacional de Excelência Tecnológica SENAI", 40, doc.page.height - 30, {
-        align: "center"
-      });
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 }

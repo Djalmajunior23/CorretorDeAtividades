@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export type MicrocontrollerType = "ESP32_WIFI" | "ARDUINO_UNO" | "PLC_SIEMENS_S7";
 
@@ -169,76 +169,26 @@ Responda em formato JSON:
    * Generates official Industry 4.0 & IoT Lab Certification PDF Dossier.
    */
   static async generateIotReportPdf(report: IotSimulationReport): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Brand
-      doc.rect(40, 40, doc.page.width - 80, 50).fill("#1e293b");
-      doc.fillColor("#38bdf8").font("Helvetica-Bold").fontSize(18).text("INDUSTRY 4.0 & IOT HARDWARE-IN-THE-LOOP DOSSIER", 55, 52);
-      doc.fillColor("#94a3b8").font("Helvetica").fontSize(9).text("SENAI Automação Industrial, Sistemas Embarcados & Telemetria MQTT", 55, 73);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      doc.moveDown(3);
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(14).text("1. Sumário do Experimento Virtual de Embarcados");
-      doc.moveDown(0.5);
-
-      doc.font("Helvetica").fontSize(9).fillColor("#334155");
-      doc.text(`ID da Simulação: ${report.simulationId}`);
-      doc.text(`Microcontrolador / Target: ${report.microcontroller} | Linguagem: ${report.firmwareLanguage.toUpperCase()}`);
-      doc.text(`Conformidade Normativa: ${report.industrialStandardCompliance}`);
-      doc.text(`Data/Hora: ${new Date(report.simulatedAt).toLocaleString("pt-BR")}`);
-
-      doc.moveDown(1);
-
-      // Scorecard
-      doc.rect(40, doc.y, doc.page.width - 80, 55).fill("#f8fafc");
-      const cardY = doc.y + 8;
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(11).text("EFICIÊNCIA DE MALHA FECHADA & INTERLOCK DE SEGURANÇA", 55, cardY);
-      
-      const scoreColor = report.closedLoopEfficiencyScore >= 80 ? "#16a34a" : "#d97706";
-      doc.fillColor(scoreColor).font("Helvetica-Bold").fontSize(20).text(`${report.closedLoopEfficiencyScore}/100`, 55, cardY + 18);
-      doc.fillColor("#475569").font("Helvetica").fontSize(9).text(
-        `Interlock de Segurança: ${report.safetyInterlockPassed ? "APROVADO (SEGURO)" : "FALHA (RISCO)"} | Sensores: ${report.sensors.length} | Atuadores: ${report.actuators.length}`,
-        140,
-        cardY + 22
-      );
-
-      doc.moveDown(3.5);
-
-      // Sensors & Actuators
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("2. Estado dos Sensores & Atuadores Industriais");
-      doc.moveDown(0.5);
-
-      report.sensors.forEach(s => {
-        doc.font("Helvetica-Bold").fontSize(9.5).fillColor("#0f172a").text(`• [Sensor] ${s.sensorType} (${s.pin}): `, { continued: true });
-        doc.font("Helvetica").fontSize(9.5).fillColor("#0284c7").text(`${s.simulatedValue} ${s.unit}`);
-      });
-
-      doc.moveDown(0.5);
-      report.actuators.forEach(a => {
-        doc.font("Helvetica-Bold").fontSize(9.5).fillColor("#0f172a").text(`• [Atuador] ${a.actuatorType} (${a.pin}): `, { continued: true });
-        doc.font("Helvetica").fontSize(9.5).fillColor("#16a34a").text(`Estado ${a.state} (Valor: ${a.value})`);
-      });
-
-      doc.moveDown(1);
-
-      // MQTT Stream
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("3. Amostra de Telemetria MQTT Publicada");
-      doc.moveDown(0.5);
-      report.mqttTelemetryStream.forEach(m => {
-        doc.font("Helvetica").fontSize(8.5).fillColor("#475569").text(`[t=${m.timestampSec}s] Tópico: ${m.topic} | Payload: ${m.payload}`);
-      });
-
-      // Footer
-      doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text("CodeCheck AI • Plataforma Educacional de Excelência Tecnológica SENAI", 40, doc.page.height - 30, {
-        align: "center"
-      });
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 }

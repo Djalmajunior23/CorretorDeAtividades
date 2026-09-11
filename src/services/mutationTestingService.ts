@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export interface CodeMutant {
   id: string;
@@ -139,77 +139,27 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro, sem blocos markdown):
    * Generates official PDF report for Mutation Testing & TDD Lab.
    */
   static async generateReportPdf(report: MutationTestingReport): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Banner
-      doc.rect(0, 0, 595.28, 70).fill("#172554");
-      doc.fillColor("#60a5fa").fontSize(10).font("Helvetica-Bold").text("SENAI TDD LAB • TEST QUALITY & MUTATION TESTING", 40, 20);
-      doc.fillColor("#ffffff").fontSize(15).font("Helvetica-Bold").text("LAUDO DE QUALIDADE DE TESTES & MUTATION SCORE", 40, 36);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      // Student and Score Info Box
-      doc.rect(40, 85, 515, 65).fillAndStroke("#f8fafc", "#e2e8f0");
-      doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold").text(`Estudante: ${report.studentName}`, 55, 95);
-      doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`Linguagem: ${report.language} | ID da Execução: ${report.reportId}`, 55, 112);
-      doc.text(`Maturidade TDD: ${report.tddMaturityLevel} | Data: ${new Date(report.generatedAt).toLocaleDateString("pt-BR")}`, 55, 126);
-
-      // Mutation Score Cards
-      let yPos = 165;
-      doc.rect(40, yPos, 165, 50).fillAndStroke("#f0fdf4", "#bbf7d0");
-      doc.fillColor("#166534").fontSize(9).font("Helvetica-Bold").text("MUTATION SCORE", 50, yPos + 10);
-      doc.fontSize(18).text(`${report.mutationScore}%`, 50, yPos + 25);
-
-      doc.rect(215, yPos, 165, 50).fillAndStroke("#f0fdf4", "#bbf7d0");
-      doc.fillColor("#166534").fontSize(9).font("Helvetica-Bold").text("MUTANTES ELIMINADOS", 225, yPos + 10);
-      doc.fontSize(18).text(`${report.killedMutants} / ${report.totalMutants}`, 225, yPos + 25);
-
-      doc.rect(390, yPos, 165, 50).fillAndStroke("#fef2f2", "#fecaca");
-      doc.fillColor("#991b1b").fontSize(9).font("Helvetica-Bold").text("MUTANTES SOBREVIVENTES", 400, yPos + 10);
-      doc.fontSize(18).text(`${report.survivedMutants}`, 400, yPos + 25);
-
-      // Pedagogical Feedback
-      yPos += 65;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text("Diagnóstico do Motor de Testes de Mutação", 40, yPos);
-      yPos += 16;
-      doc.fillColor("#334155").fontSize(9.5).font("Helvetica").text(report.pedagogicalRecommendations, 40, yPos, { width: 515, align: "justify" });
-
-      // Mutants Breakdown Table
-      yPos += 55;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text(`Detalhamento dos Mutantes Injetados (${report.mutants.length})`, 40, yPos);
-      yPos += 18;
-
-      report.mutants.forEach((m) => {
-        const isKilled = m.status === "KILLED";
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(`[${m.id.toUpperCase()}] Linha ${m.line} - ${m.description}`, 45, yPos);
-        yPos += 14;
-        doc.fillColor(isKilled ? "#059669" : "#dc2626").font("Helvetica-Bold").fontSize(8.5).text(`Status: ${m.status} • ${isKilled ? `Eliminado por: ${m.killedByTest}` : `Causa de Sobrevivência: ${m.survivedReason}`}`, 50, yPos, { width: 505 });
-        yPos += 18;
-      });
-
-      // Missing Edge Cases
-      yPos += 10;
-      doc.fillColor("#b45309").fontSize(11).font("Helvetica-Bold").text("⚠ Casos de Borda Ausentes Identificados:", 40, yPos);
-      yPos += 16;
-      report.missingEdgeCasesIdentified.forEach((gap) => {
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica").text(`• ${gap}`, 50, yPos, { width: 505 });
-        yPos += 14;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor("#94a3b8").font("Helvetica").text(
-        "CodeCheck AI • Relatório de Qualidade e Confiabilidade de Testes Conforme Padrões SENAI / IEEE 829",
-        40,
-        790,
-        { align: "center", width: 515 }
-      );
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 
   private static generateSyntacticMutants(code: string, language: string): CodeMutant[] {

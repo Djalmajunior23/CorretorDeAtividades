@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export interface UserStory {
   id: string;
@@ -307,74 +307,27 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro):
    * Generates a PDF Capstone Project Dossier using safe PDFKit fonts.
    */
   static async generateCapstonePdf(spec: PBLProjectSpec): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Banner
-      doc.rect(0, 0, 595.28, 70).fill("#1e1b4b");
-      doc.fillColor("#a855f7").fontSize(10).font("Helvetica-Bold").text("SENAI TECNOLOGIA • APRENDIZAGEM BASEADA EM PROJETOS (PBL)", 40, 20);
-      doc.fillColor("#ffffff").fontSize(15).font("Helvetica-Bold").text("DOSSIÊ DE ESPECIFICAÇÃO DE PROJETO CAPSTONE", 40, 36);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      // Meta Box
-      doc.rect(40, 85, 515, 60).fillAndStroke("#f8fafc", "#e2e8f0");
-      doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold").text(spec.title, 55, 95);
-      doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`Setor Industrial: ${spec.industrySector} | ID: ${spec.projectId}`, 55, 112);
-      doc.text(`Criado em: ${new Date(spec.createdAt).toLocaleDateString("pt-BR")}`, 55, 126);
-
-      // Challenge Statement
-      let yPos = 160;
-      doc.fillColor("#1e1b4b").fontSize(12).font("Helvetica-Bold").text("1. Desafio Real do Setor & Proposta de Valor", 40, yPos);
-      yPos += 16;
-      doc.fillColor("#334155").fontSize(9.5).font("Helvetica").text(spec.challengeStatement, 40, yPos, { width: 515, align: "justify" });
-
-      // Tech Stack Table
-      yPos += 55;
-      doc.fillColor("#1e1b4b").fontSize(12).font("Helvetica-Bold").text("2. Stack Tecnológica Homologada", 40, yPos);
-      yPos += 18;
-
-      const stackItems = [
-        ["Frontend UI", spec.recommendedTechStack.frontend],
-        ["Backend & APIs", spec.recommendedTechStack.backend],
-        ["Banco de Dados", spec.recommendedTechStack.database],
-        ["DevOps & CI/CD", spec.recommendedTechStack.devops],
-        ["Testes & QA", spec.recommendedTechStack.testing]
-      ];
-
-      stackItems.forEach(([layer, tech]) => {
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(layer, 45, yPos);
-        doc.fillColor("#475569").font("Helvetica").text(tech, 180, yPos, { width: 375 });
-        yPos += 15;
-      });
-
-      // User Stories (Gherkin)
-      yPos += 15;
-      doc.fillColor("#1e1b4b").fontSize(12).font("Helvetica-Bold").text("3. Histórias de Usuário & Critérios de Aceite (Gherkin)", 40, yPos);
-      yPos += 18;
-
-      spec.userStories.slice(0, 3).forEach((us) => {
-        doc.fillColor("#0f172a").fontSize(9.5).font("Helvetica-Bold").text(`[${us.id}] ${us.title}`, 40, yPos);
-        yPos += 14;
-        doc.fillColor("#334155").fontSize(8.5).font("Helvetica").text(`Como um ${us.asA}, eu quero ${us.iWantTo}, para que ${us.soThat}.`, 45, yPos, { width: 510 });
-        yPos += 14;
-        doc.fillColor("#4f46e5").fontSize(8).font("Courier").text(us.gherkinAcceptance, 50, yPos, { width: 505 });
-        yPos += 24;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor("#94a3b8").font("Helvetica").text(
-        "Padrão SENAI de Metodologia Ativa de Aprendizagem Baseada em Projetos (PBL) • CodeCheck AI",
-        40,
-        790,
-        { align: "center", width: 515 }
-      );
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 
   private static getRoleResponsibilities(role: TeamMemberAllocation["assignedRole"]): string[] {

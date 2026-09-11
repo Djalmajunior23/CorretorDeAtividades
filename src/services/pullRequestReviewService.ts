@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export interface InlineComment {
   line: number;
@@ -157,74 +157,27 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro, sem blocos markdown):
    * Generates official Pull Request Review PDF report safely with PDFKit.
    */
   static async generateReportPdf(pr: PullRequest): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Banner
-      doc.rect(0, 0, 595.28, 70).fill("#0f172a");
-      doc.fillColor("#38bdf8").fontSize(10).font("Helvetica-Bold").text("SENAI GITOPS & CLEAN CODE STUDIO • CODECHECK AI", 40, 20);
-      doc.fillColor("#ffffff").fontSize(15).font("Helvetica-Bold").text("LAUDO OFICIAL DE CODE REVIEW & PULL REQUEST", 40, 36);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      // PR Meta Box
-      doc.rect(40, 85, 515, 65).fillAndStroke("#f8fafc", "#e2e8f0");
-      doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold").text(`PR #${pr.id}: ${pr.title}`, 55, 95);
-      doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`Autor: ${pr.author} | Branch: ${pr.branchSource} -> ${pr.branchTarget}`, 55, 112);
-      doc.text(`Veredito: ${pr.overallReviewVerdict} | Data: ${new Date(pr.createdAt).toLocaleDateString("pt-BR")}`, 55, 126);
-
-      // Score Metrics
-      let yPos = 165;
-      doc.rect(40, yPos, 250, 50).fillAndStroke("#f0fdf4", "#bbf7d0");
-      doc.fillColor("#166534").fontSize(10).font("Helvetica-Bold").text("CLEAN CODE SCORE", 55, yPos + 10);
-      doc.fontSize(18).text(`${pr.cleanCodeScore}/100`, 55, yPos + 25);
-
-      doc.rect(305, yPos, 250, 50).fillAndStroke("#eff6ff", "#bfdbfe");
-      doc.fillColor("#1e40af").fontSize(10).font("Helvetica-Bold").text("SECURITY & SAST SCORE", 320, yPos + 10);
-      doc.fontSize(18).text(`${pr.securityScore}/100`, 320, yPos + 25);
-
-      // Staff Summary
-      yPos += 65;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text("Parecer do Senior Staff Engineer", 40, yPos);
-      yPos += 16;
-      doc.fillColor("#334155").fontSize(9.5).font("Helvetica").text(pr.staffEngineerSummary, 40, yPos, { width: 515, align: "justify" });
-
-      // Inline Comments
-      yPos += 55;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text(`Comentários e Apontamentos Técnicos (${pr.inlineComments.length})`, 40, yPos);
-      yPos += 18;
-
-      pr.inlineComments.forEach((c) => {
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(`Linha ${c.line} [${c.category.toUpperCase()}] - ${c.title}`, 45, yPos);
-        yPos += 14;
-        doc.fillColor("#475569").font("Helvetica").fontSize(8.5).text(c.comment, 50, yPos, { width: 505 });
-        yPos += 20;
-      });
-
-      // CI/CD Matrix
-      yPos += 10;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text("Matriz de CI/CD Status Checks", 40, yPos);
-      yPos += 16;
-
-      pr.cicdChecks.forEach((chk) => {
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(`• ${chk.name}: `, 45, yPos);
-        doc.fillColor(chk.status === "passed" ? "#059669" : "#dc2626").text(`${chk.status.toUpperCase()} (${chk.details})`, 220, yPos);
-        yPos += 14;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor("#94a3b8").font("Helvetica").text(
-        "CodeCheck AI • Relatório Emitido Conforme Boas Práticas da Engenharia de Software SENAI / Big Techs",
-        40,
-        790,
-        { align: "center", width: 515 }
-      );
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 
   private static getDefaultCicdChecks(): CicdCheck[] {

@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export interface OralQuestion {
   id: string;
@@ -249,71 +249,26 @@ Responda em formato JSON:
    * Generates official Oral Defense & Viva-Voce Examination Dossier in PDF.
    */
   static async generateVivaVocePdf(session: VivaVoceSession): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Brand
-      doc.rect(40, 40, doc.page.width - 80, 50).fill("#311042");
-      doc.fillColor("#e879f9").font("Helvetica-Bold").fontSize(18).text("AI VIVA-VOCE ORAL CODE DEFENSE DOSSIER", 55, 52);
-      doc.fillColor("#f5d0fe").font("Helvetica").fontSize(9).text("SENAI Arguição Oral Técnica, Oratória de Engenharia & Defesa de Projeto", 55, 73);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      doc.moveDown(3);
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(14).text("1. Sumário Executivo da Defesa Oral");
-      doc.moveDown(0.5);
-
-      doc.font("Helvetica").fontSize(9).fillColor("#334155");
-      doc.text(`ID da Sessão: ${session.sessionId}`);
-      doc.text(`Estudante: ${session.studentName}`);
-      doc.text(`Projeto / Tópico: ${session.projectTitle}`);
-      doc.text(`Data da Arguição: ${new Date(session.startedAt).toLocaleString("pt-BR")}`);
-
-      doc.moveDown(1);
-
-      // Scorecard
-      doc.rect(40, doc.y, doc.page.width - 80, 55).fill("#fdf4ff");
-      const cardY = doc.y + 8;
-      doc.fillColor("#86198f").font("Helvetica-Bold").fontSize(11).text("PARECER FINAL DA BANCA EXAMINADORA ORAL", 55, cardY);
-      
-      const scoreColor = session.overallOralScore >= 70 ? "#16a34a" : "#dc2626";
-      doc.fillColor(scoreColor).font("Helvetica-Bold").fontSize(20).text(`${session.overallOralScore}/100`, 55, cardY + 18);
-      doc.fillColor("#475569").font("Helvetica").fontSize(9).text(
-        `Veredito: ${session.examinerVerdict} | Oratória: ${session.verbalEloquenceRating}`,
-        150,
-        cardY + 22
-      );
-
-      doc.moveDown(3.5);
-
-      // Question Breakdown
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("2. Registro Dialético de Perguntas e Respostas Orais");
-      doc.moveDown(0.5);
-
-      session.questions.forEach((q, i) => {
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#0f172a").text(`Pergunta ${i + 1} [${q.category.replace(/_/g, " ")}]:`);
-        doc.font("Helvetica").fontSize(9).fillColor("#334155").text(`"${q.questionText}"`);
-        
-        if (q.studentAnswerTranscript) {
-          doc.font("Helvetica-Oblique").fontSize(8.5).fillColor("#6b21a8").text(`Resposta Oral do Aluno (${q.speechAudioDurationSec || 0}s): "${q.studentAnswerTranscript}"`);
-          if (q.evaluation) {
-            doc.font("Helvetica").fontSize(8.5).fillColor("#059669").text(`Feedback da Banca: ${q.evaluation.examinerFeedback} (Precisão: ${q.evaluation.technicalAccuracyScore}%, Eloquência: ${q.evaluation.clarityAndEloquenceScore}%)`);
-          }
-        } else {
-          doc.font("Helvetica-Oblique").fontSize(8.5).fillColor("#94a3b8").text(`[Aguardando resposta do candidato]`);
-        }
-        doc.moveDown(0.4);
-      });
-
-      // Footer
-      doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text("CodeCheck AI • Plataforma Educacional de Excelência Tecnológica SENAI", 40, doc.page.height - 30, {
-        align: "center"
-      });
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 }

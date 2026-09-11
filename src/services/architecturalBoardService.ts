@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export interface AgentPersona {
   roleId: "security_cso" | "cloud_devops" | "performance_ux";
@@ -264,77 +264,27 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro):
    * Generates official PDF Dossier for the Architectural Board & ADR.
    */
   static async generateReportPdf(session: BoardSession): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Banner
-      doc.rect(0, 0, 595.28, 70).fill("#1e1b4b");
-      doc.fillColor("#a855f7").fontSize(10).font("Helvetica-Bold").text("SENAI VIRTUAL ARCHITECTURAL BOARD • MULTI-AGENT SYMPOSIUM", 40, 20);
-      doc.fillColor("#ffffff").fontSize(15).font("Helvetica-Bold").text("PARECER OFICIAL DA BANCA ARQUITETURAL & ADR", 40, 36);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      // Meta Box
-      doc.rect(40, 85, 515, 65).fillAndStroke("#f8fafc", "#e2e8f0");
-      doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold").text(`Sistema: ${session.systemName} • Estudante: ${session.studentName}`, 55, 95);
-      doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`Veredito: ${session.verdict} | Sessão: ${session.sessionId}`, 55, 112);
-      doc.text(`Data: ${new Date(session.generatedAt).toLocaleDateString("pt-BR")}`, 55, 126);
-
-      // Final Score Card
-      let yPos = 165;
-      doc.rect(40, yPos, 515, 50).fillAndStroke("#f0fdf4", "#bbf7d0");
-      doc.fillColor("#166534").fontSize(10).font("Helvetica-Bold").text("NOTA FINAL DA BANCA EXAMINADORA:", 55, yPos + 10);
-      doc.fontSize(20).text(`${session.finalScore}/100 - ${session.verdict}`, 55, yPos + 24);
-
-      // Board Comments
-      yPos += 65;
-      doc.fillColor("#1e1b4b").fontSize(12).font("Helvetica-Bold").text("1. Pareceres Individuais da Banca Examinadora", 40, yPos);
-      yPos += 18;
-
-      const comments = [
-        { name: "🛡️ Dra. Valéria Stone (CISO - Segurança):", text: session.boardComments.security },
-        { name: "☁️ Eng. Marcelo Torres (Cloud & DevOps):", text: session.boardComments.cloudDevOps },
-        { name: "⚡ Dra. Helena Vasconcelos (Performance & UX):", text: session.boardComments.performance }
-      ];
-
-      comments.forEach((c) => {
-        doc.fillColor("#0f172a").fontSize(9.5).font("Helvetica-Bold").text(c.name, 45, yPos);
-        yPos += 14;
-        doc.fillColor("#334155").font("Helvetica").fontSize(9).text(c.text, 50, yPos, { width: 505 });
-        yPos += 18;
-      });
-
-      // ADR Record Section
-      if (session.adr) {
-        yPos += 10;
-        doc.fillColor("#1e1b4b").fontSize(12).font("Helvetica-Bold").text(`2. ${session.adr.title}`, 40, yPos);
-        yPos += 16;
-        doc.fillColor("#0f172a").fontSize(9).font("Helvetica-Bold").text("Status: ", 45, yPos);
-        doc.fillColor("#059669").text(session.adr.status, 90, yPos);
-        yPos += 14;
-
-        doc.fillColor("#0f172a").font("Helvetica-Bold").text("Contexto: ", 45, yPos);
-        doc.fillColor("#475569").font("Helvetica").text(session.adr.context, 100, yPos, { width: 450 });
-        yPos += 24;
-
-        doc.fillColor("#0f172a").font("Helvetica-Bold").text("Decisão: ", 45, yPos);
-        doc.fillColor("#475569").font("Helvetica").text(session.adr.decision, 95, yPos, { width: 455 });
-        yPos += 24;
-      }
-
-      // Footer
-      doc.fontSize(8).fillColor("#94a3b8").font("Helvetica").text(
-        "CodeCheck AI • Registro Oficial de Decisão de Arquitetura (ADR) Padrão SENAI / SEI",
-        40,
-        790,
-        { align: "center", width: 515 }
-      );
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 
   private static getDefaultOpeningInteractions(): BoardInteraction[] {

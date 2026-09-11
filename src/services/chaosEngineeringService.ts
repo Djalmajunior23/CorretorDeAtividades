@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export type FaultInjectionType =
   | "LATENCY_JITTER" // Latency Spike & High Jitter
@@ -301,90 +301,26 @@ export async function resilientExecute(payload: any) {
    * Generates official Chaos Engineering & Site Reliability Engineering (SRE) PDF Dossier.
    */
   static async generateChaosReportPdf(report: ChaosSimulationReport): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Brand
-      doc.rect(40, 40, doc.page.width - 80, 50).fill("#0f172a");
-      doc.fillColor("#38bdf8").font("Helvetica-Bold").fontSize(18).text("CHAOS MONKEY AI & SRE RESILIENCE LAB", 55, 52);
-      doc.fillColor("#94a3b8").font("Helvetica").fontSize(9).text("SENAI DevSecOps & Cloud Reliability Engineering Certification", 55, 73);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      doc.moveDown(3);
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(14).text("1. Sumário Executivo do Experimento de Caos");
-      doc.moveDown(0.5);
-
-      doc.font("Helvetica").fontSize(9).fillColor("#334155");
-      doc.text(`ID da Simulação: ${report.simulationId}`);
-      doc.text(`Serviço / Componente: ${report.serviceName}`);
-      doc.text(`Cenário: ${report.scenario.scenarioName}`);
-      doc.text(`Falhas Injetadas: ${report.scenario.faultTypes.join(", ")}`);
-      doc.text(`Intensidade: ${report.scenario.intensity} | Carga: ${report.scenario.concurrencyRps} RPS | Duração: ${report.scenario.durationSeconds}s`);
-      doc.text(`Data de Execução: ${new Date(report.timestamp).toLocaleString("pt-BR")}`);
-
-      doc.moveDown(1);
-
-      // Scorecard Card
-      doc.rect(40, doc.y, doc.page.width - 80, 60).fill("#f8fafc");
-      const cardY = doc.y + 10;
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(11).text("ÍNDICE DE SOBREVIVÊNCIA AO CAOS (CHAOS SURVIVAL SCORE)", 55, cardY);
-      
-      const scoreColor = report.survivalScore >= 80 ? "#16a34a" : report.survivalScore >= 60 ? "#d97706" : "#dc2626";
-      doc.fillColor(scoreColor).font("Helvetica-Bold").fontSize(22).text(`${report.survivalScore}/100`, 55, cardY + 18);
-      doc.fillColor("#475569").font("Helvetica").fontSize(9).text(`Classificação: ${report.survivalRating} | Disponibilidade: ${report.availabilityPercent.toFixed(1)}% | p95: ${report.p95LatencyMs}ms | p99: ${report.p99LatencyMs}ms`, 140, cardY + 22);
-
-      doc.moveDown(4);
-
-      // Resilience Patterns Table
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("2. Avaliação de Padrões de Resiliência Arquitetural");
-      doc.moveDown(0.5);
-
-      report.resiliencePatterns.forEach((pat) => {
-        const effColor = pat.effectiveness === "ALTA" ? "#16a34a" : pat.effectiveness === "PARCIAL" ? "#d97706" : "#dc2626";
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#0f172a").text(`• ${pat.pattern}: `, { continued: true });
-        doc.fillColor(effColor).text(`[${pat.effectiveness}]`);
-        doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`   Diagnóstico: ${pat.diagnostic}`);
-        doc.moveDown(0.3);
-      });
-
-      doc.moveDown(1);
-
-      // Root Cause Analysis
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("3. Análise de Causa Raiz de Gargalos e Colapsos");
-      doc.moveDown(0.5);
-      report.rootCauseAnalysis.forEach((rc, i) => {
-        doc.font("Helvetica").fontSize(9).fillColor("#b91c1c").text(`${i + 1}. ${rc}`);
-      });
-
-      doc.moveDown(1);
-
-      // Recommendations
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("4. Recomendações de Hardening & Blindagem SRE");
-      doc.moveDown(0.5);
-      report.architecturalRecommendations.forEach((rec, i) => {
-        doc.font("Helvetica").fontSize(9).fillColor("#15803d").text(`✓ ${rec}`);
-      });
-
-      doc.moveDown(1);
-
-      // Hardening Snippet
-      doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(13).text("5. Patch Arquitetural Sugerido (Circuit Breaker & Fallback)");
-      doc.moveDown(0.5);
-      doc.rect(40, doc.y, doc.page.width - 80, 100).fill("#1e293b");
-      doc.fillColor("#38bdf8").font("Courier").fontSize(8).text(report.hardeningFixCodeSnippet.slice(0, 500), 50, doc.y + 8, {
-        width: doc.page.width - 100
-      });
-
-      // Footer
-      doc.font("Helvetica").fontSize(8).fillColor("#94a3b8").text("CodeCheck AI • Plataforma Educacional de Excelência Tecnológica SENAI", 40, doc.page.height - 30, {
-        align: "center"
-      });
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 }

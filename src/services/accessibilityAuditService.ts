@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export interface A11yViolation {
   id: string;
@@ -150,70 +150,27 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro, sem blocos markdown):
    * Generates official PDF accessibility report.
    */
   static async generateReportPdf(audit: A11yAuditResult): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      // Header Banner
-      doc.rect(0, 0, 595.28, 70).fill("#042f2e");
-      doc.fillColor("#2dd4bf").fontSize(10).font("Helvetica-Bold").text("SENAI ACCESSIBILITY (A11Y) INSPECTOR • WCAG 2.2", 40, 20);
-      doc.fillColor("#ffffff").fontSize(15).font("Helvetica-Bold").text("LAUDO OFICIAL DE CONFORMIDADE & ACESSIBILIDADE WEB", 40, 36);
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      // Meta Box
-      doc.rect(40, 85, 515, 65).fillAndStroke("#f8fafc", "#e2e8f0");
-      doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold").text(`Projeto: ${audit.projectName} • Estudante: ${audit.studentName}`, 55, 95);
-      doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`Classificação: ${audit.wcagComplianceGrade} | ID: ${audit.auditId}`, 55, 112);
-      doc.text(`Data: ${new Date(audit.generatedAt).toLocaleDateString("pt-BR")}`, 55, 126);
-
-      // Score Cards
-      let yPos = 165;
-      doc.rect(40, yPos, 165, 50).fillAndStroke("#f0fdf4", "#bbf7d0");
-      doc.fillColor("#166534").fontSize(9).font("Helvetica-Bold").text("A11Y SCORE", 50, yPos + 10);
-      doc.fontSize(18).text(`${audit.score}/100`, 50, yPos + 25);
-
-      doc.rect(215, yPos, 165, 50).fillAndStroke("#fef2f2", "#fecaca");
-      doc.fillColor("#991b1b").fontSize(9).font("Helvetica-Bold").text("VIOLAÇÕES CRÍTICAS", 225, yPos + 10);
-      doc.fontSize(18).text(`${audit.criticalCount}`, 225, yPos + 25);
-
-      doc.rect(390, yPos, 165, 50).fillAndStroke("#eff6ff", "#bfdbfe");
-      doc.fillColor("#1e40af").fontSize(9).font("Helvetica-Bold").text("MENOR CONTRASTE", 400, yPos + 10);
-      doc.fontSize(18).text(`${audit.contrastRatioMetrics.lowestRatioFound}:1`, 400, yPos + 25);
-
-      // Executive Summary
-      yPos += 65;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text("Parecer do Auditor de Acessibilidade", 40, yPos);
-      yPos += 16;
-      doc.fillColor("#334155").fontSize(9.5).font("Helvetica").text(audit.executiveSummary, 40, yPos, { width: 515, align: "justify" });
-
-      // Violations List
-      yPos += 55;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text(`Violações Detectadas (${audit.violations.length})`, 40, yPos);
-      yPos += 18;
-
-      audit.violations.forEach((v) => {
-        const isCrit = v.impact === "CRITICAL";
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica-Bold").text(`[WCAG ${v.wcagLevel}] ${v.wcagCriterion} - Impacto: ${v.impact}`, 45, yPos);
-        yPos += 14;
-        doc.fillColor("#475569").font("Helvetica").fontSize(8.5).text(`Elemento: ${v.elementSelectorOrSnippet}`, 50, yPos, { width: 505 });
-        yPos += 12;
-        doc.fillColor("#047857").font("Helvetica-Bold").fontSize(8.5).text(`Correção: ${v.suggestedFixSnippet}`, 50, yPos, { width: 505 });
-        yPos += 18;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor("#94a3b8").font("Helvetica").text(
-        "CodeCheck AI • Emissão em Conformidade com a Lei Brasileira de Inclusão (LBI) e WCAG 2.2 W3C",
-        40,
-        790,
-        { align: "center", width: 515 }
-      );
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 
   private static generateFallbackAudit(

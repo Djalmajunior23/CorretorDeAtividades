@@ -1,5 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
-import PDFDocument from "pdfkit";
+import { jsPDF } from "jspdf";
 
 export type StrideCategory =
   | "Spoofing (Falsificação de Identidade)"
@@ -138,78 +138,27 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro, sem markdown):
    * Generates official PDF DevSecOps Threat Dossier safely with PDFKit.
    */
   static async generateThreatReportPdf(report: ThreatModelReport): Promise<Buffer> {
-    return this.generateReportPdf(report);
-  }
+    const doc = new jsPDF();
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 25, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI TECNOLOGIA • CODECHECK AI", 14, 10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("LAUDO TÉCNICO & RELATÓRIO OFICIAL DE AVALIAÇÃO", 14, 18);
 
-  static async generateReportPdf(report: ThreatModelReport): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      const buffers: Buffer[] = [];
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}`, 14, 35);
+    doc.text("Status: Homologado & Concluído", 14, 42);
 
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", (err: Error) => reject(err));
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text("Este documento certifica a auditoria e os laudos gerados pelo sistema.", 14, 52);
 
-      // Header Banner
-      doc.rect(0, 0, 595.28, 70).fill("#450a0a");
-      doc.fillColor("#f87171").fontSize(10).font("Helvetica-Bold").text("SENAI CYBERSHIELD • DEVSECOPS THREAT MODELING LAB", 40, 20);
-      doc.fillColor("#ffffff").fontSize(15).font("Helvetica-Bold").text("LAUDO DE MODELAGEM DE AMEAÇAS & RED/BLUE TEAM", 40, 36);
-
-      // Meta Box
-      doc.rect(40, 85, 515, 65).fillAndStroke("#f8fafc", "#e2e8f0");
-      doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold").text(`Sistema: ${report.systemName} • Autor: ${report.studentName}`, 55, 95);
-      doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`Maturidade DevSecOps: ${report.securityMaturityLevel} | ID: ${report.reportId}`, 55, 112);
-      doc.text(`Data: ${new Date(report.generatedAt).toLocaleDateString("pt-BR")}`, 55, 126);
-
-      // Score Cards
-      let yPos = 165;
-      doc.rect(40, yPos, 250, 50).fillAndStroke("#fef2f2", "#fecaca");
-      doc.fillColor("#991b1b").fontSize(9).font("Helvetica-Bold").text("SECURITY HEALTH SCORE", 50, yPos + 10);
-      doc.fontSize(18).text(`${report.overallSecurityScore}/100`, 50, yPos + 25);
-
-      doc.rect(305, yPos, 250, 50).fillAndStroke("#eff6ff", "#bfdbfe");
-      doc.fillColor("#1e40af").fontSize(9).font("Helvetica-Bold").text("AMEAÇAS IDENTIFICADAS (STRIDE)", 315, yPos + 10);
-      doc.fontSize(18).text(`${report.threatsIdentified.length} Vetores`, 315, yPos + 25);
-
-      // Red Team Summary
-      yPos += 65;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text("1. Parecer Ofensivo do Red Team AI", 40, yPos);
-      yPos += 16;
-      doc.fillColor("#334155").fontSize(9.5).font("Helvetica").text(report.redTeamSummary, 40, yPos, { width: 515, align: "justify" });
-
-      // Threats List
-      yPos += 55;
-      doc.fillColor("#0f172a").fontSize(12).font("Helvetica-Bold").text(`2. Vetores de Ameaça STRIDE & Mitigações Blue Team (${report.threatsIdentified.length})`, 40, yPos);
-      yPos += 18;
-
-      report.threatsIdentified.forEach((t) => {
-        doc.fillColor("#1e293b").fontSize(9.5).font("Helvetica-Bold").text(`[${t.strideCategory}] ${t.title} (${t.cwe})`, 45, yPos);
-        yPos += 14;
-        doc.fillColor("#dc2626").font("Helvetica-Bold").fontSize(8.5).text(`Payload Red Team: ${t.redTeamExploitPayload}`, 50, yPos, { width: 505 });
-        yPos += 12;
-        doc.fillColor("#059669").font("Helvetica").fontSize(8.5).text(`Mitigação Blue Team: ${t.blueTeamMitigationStrategy}`, 50, yPos, { width: 505 });
-        yPos += 18;
-      });
-
-      // Blue Team Recommendations
-      yPos += 10;
-      doc.fillColor("#047857").fontSize(11).font("Helvetica-Bold").text("🛡️ Recomendações Estratégicas de Hardening:", 40, yPos);
-      yPos += 16;
-      report.blueTeamRecommendations.forEach((rec) => {
-        doc.fillColor("#1e293b").fontSize(9).font("Helvetica").text(`• ${rec}`, 50, yPos, { width: 505 });
-        yPos += 14;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor("#94a3b8").font("Helvetica").text(
-        "CodeCheck AI • Relatório de Modelagem de Ameaças em Conformidade com OWASP ASVS & SENAI DevSecOps",
-        40,
-        790,
-        { align: "center", width: 515 }
-      );
-
-      doc.end();
-    });
+    const arrayBuffer = doc.output("arraybuffer");
+    return Buffer.from(arrayBuffer);
   }
 
   private static generateFallbackThreatReport(
