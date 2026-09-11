@@ -30,7 +30,7 @@ import {
 import { apiUrl, safeJsonResponse, API_BASE_URL } from "../config/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
+import * as XLSX from "xlsx";
 
 import { AttendanceDashboard } from "./dashboard/AttendanceDashboard";
 import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
@@ -236,6 +236,12 @@ export default function SmartClassDiaryView({
       return [];
     }
   });
+
+  // Absence Management & Consolidated Report states
+  const [absenceFilterStatus, setAbsenceFilterStatus] = useState<"all" | "unjustified" | "justified" | "delay">("all");
+  const [absenceSearchQuery, setAbsenceSearchQuery] = useState<string>("");
+  const [absenceViewMode, setAbsenceViewMode] = useState<"occurrences" | "summary">("occurrences");
+  const [absenceFilterClass, setAbsenceFilterClass] = useState<string>("");
 
   // Observation states
   const [observations, setObservations] = useState<any[]>([]);
@@ -1104,6 +1110,183 @@ export default function SmartClassDiaryView({
 
     doc.save(`Diario_Frequencia_${targetClassName.replace(/\s+/g, "_")}_${sessionDate}.pdf`);
     showToast("Diário Oficial de Frequência exportado em PDF com sucesso!", "success");
+  };
+
+  // Export Consolidated Absences Report to PDF
+  const exportConsolidatedAbsencesPdf = (detailedList: any[], summaryList: any[]) => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const nowStr = new Date().toLocaleString("pt-BR");
+    const targetClass = safeClasses.find(c => c.id === (absenceFilterClass || selectedClass))?.name || (absenceFilterClass || selectedClass || "Todas as Turmas");
+
+    // Header Background Accent
+    doc.setFillColor(15, 118, 110);
+    doc.rect(0, 0, 210, 24, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text("CODECHECK AI - DIÁRIO DE CLASSE INTELIGENTE", 14, 11);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(204, 251, 241);
+    doc.text("RELATÓRIO CONSOLIDADO DE FALTAS, AUSÊNCIAS E JUSTIFICATIVAS PEDAGÓGICAS", 14, 18);
+
+    // Meta Info
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85);
+    doc.text(`Turma / Âmbito: ${targetClass}`, 14, 30);
+    doc.text(`Data de Emissão: ${nowStr}`, 14, 35);
+    doc.text(`Total de Ocorrências: ${detailedList.length} registro(s)`, 130, 30);
+    doc.text(`Total de Estudantes Impactados: ${summaryList.length} aluno(s)`, 130, 35);
+
+    // Summary Statistics Cards
+    const totalUnjustified = detailedList.filter(d => !d.is_justified && d.type === "Falta").length;
+    const totalJustified = detailedList.filter(d => d.is_justified).length;
+    const totalDelays = detailedList.filter(d => d.type === "Atraso").length;
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, 39, 182, 14, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(225, 29, 72);
+    doc.text(`Faltas Não Justificadas: ${totalUnjustified}`, 20, 48);
+
+    doc.setTextColor(13, 148, 136);
+    doc.text(`Faltas Justificadas: ${totalJustified}`, 80, 48);
+
+    doc.setTextColor(217, 119, 6);
+    doc.text(`Atrasos Registrados: ${totalDelays}`, 140, 48);
+
+    // Section 1: Resumo Consolidado por Estudante
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text("1. Resumo Consolidado por Estudante (Acumulado)", 14, 60);
+
+    const summaryTableData = summaryList.map((st, idx) => [
+      `0${idx + 1}`.slice(-2),
+      st.student_name,
+      st.class_name,
+      st.total_sessions_count.toString(),
+      st.missed_hours.toString(),
+      st.justified_count.toString(),
+      st.unjustified_count.toString(),
+      st.situation
+    ]);
+
+    autoTable(doc, {
+      startY: 64,
+      head: [["Nº", "Nome do Estudante", "Turma", "Aulas Avaliadas", "Horas Faltadas", "Justificadas", "Não Justificadas", "Situação"]],
+      body: summaryTableData.length > 0 ? summaryTableData : [["-", "Nenhum estudante com falta registrada", "-", "-", "-", "-", "-", "-"]],
+      theme: "grid",
+      headStyles: { fillColor: [15, 118, 110], fontSize: 7.5, halign: "center" },
+      bodyStyles: { fontSize: 7 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 34 },
+        3: { halign: "center", cellWidth: 20 },
+        4: { halign: "center", cellWidth: 18 },
+        5: { halign: "center", cellWidth: 16 },
+        6: { halign: "center", cellWidth: 18 },
+        7: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: 14, right: 14 },
+    });
+
+    const afterSummaryY = (doc as any).lastAutoTable.finalY + 10;
+
+    // Section 2: Detalhamento Cronológico das Ocorrências
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text("2. Relação Detalhada de Ocorrências e Justificativas Pedagógicas", 14, afterSummaryY > 260 ? 15 : afterSummaryY);
+
+    const detailedTableData = detailedList.map((dt, idx) => [
+      `0${idx + 1}`.slice(-2),
+      dt.student_name,
+      dt.session_title,
+      dt.missed_periods,
+      dt.is_justified ? "Justificada" : "Não Justificada",
+      dt.justification
+    ]);
+
+    autoTable(doc, {
+      startY: afterSummaryY > 260 ? 20 : afterSummaryY + 4,
+      head: [["Nº", "Estudante", "Aula / Data", "Horários", "Situação", "Justificativa Pedagógica"]],
+      body: detailedTableData.length > 0 ? detailedTableData : [["-", "Nenhuma ocorrência encontrada para os filtros aplicados", "-", "-", "-", "-"]],
+      theme: "striped",
+      headStyles: { fillColor: [51, 65, 85], fontSize: 7.5, halign: "center" },
+      bodyStyles: { fontSize: 6.8 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: 42 },
+        2: { cellWidth: 36 },
+        3: { halign: "center", cellWidth: 24 },
+        4: { halign: "center", cellWidth: 22 },
+        5: { cellWidth: 50 },
+      },
+      margin: { left: 14, right: 14 },
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 12;
+    if (finalY < 275) {
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(71, 85, 105);
+      doc.text("Assinatura do Docente: ____________________________________", 14, finalY);
+      doc.text("Visto da Coordenação Pedagógica: ____________________________________", 110, finalY);
+    }
+
+    const safeName = targetClass.replace(/[^a-zA-Z0-9_-]/g, "_");
+    doc.save(`Relatorio_Consolidado_Faltas_${safeName}_${Date.now()}.pdf`);
+    showToast("Relatório Consolidado de Faltas exportado em PDF com sucesso!", "success");
+  };
+
+  // Export Consolidated Absences Report to XLSX
+  const exportConsolidatedAbsencesXlsx = (detailedList: any[], summaryList: any[]) => {
+    const targetClass = safeClasses.find(c => c.id === (absenceFilterClass || selectedClass))?.name || (absenceFilterClass || selectedClass || "Todas_as_Turmas");
+
+    // Sheet 1: Resumo Consolidado por Estudante
+    const summarySheetData = summaryList.map((st, idx) => ({
+      "Nº": idx + 1,
+      "Nome do Estudante": st.student_name,
+      "Turma": st.class_name,
+      "Total Aulas com Registro": st.total_sessions_count,
+      "Horas Faltadas (h)": st.missed_hours,
+      "Faltas Justificadas (h)": st.justified_count,
+      "Faltas Não Justificadas (h)": st.unjustified_count,
+      "Situação Acadêmica / Assiduidade": st.situation
+    }));
+
+    // Sheet 2: Ocorrências Detalhadas
+    const detailedSheetData = detailedList.map((dt, idx) => ({
+      "Nº": idx + 1,
+      "Estudante": dt.student_name,
+      "Turma": dt.class_name,
+      "Aula / Tema / Data": dt.session_title,
+      "Tipo de Ocorrência": dt.type,
+      "Horários Impactados": dt.missed_periods,
+      "Situação": dt.is_justified ? "Justificada" : "Não Justificada",
+      "Justificativa Pedagógica / Atestado": dt.justification
+    }));
+
+    const workbook = XLSX.utils.book_new();
+
+    const wsSummary = XLSX.utils.json_to_sheet(summarySheetData.length > 0 ? summarySheetData : [{ "Aviso": "Nenhum dado" }]);
+    XLSX.utils.book_append_sheet(workbook, wsSummary, "Resumo por Estudante");
+
+    const wsDetailed = XLSX.utils.json_to_sheet(detailedSheetData.length > 0 ? detailedSheetData : [{ "Aviso": "Nenhum dado" }]);
+    XLSX.utils.book_append_sheet(workbook, wsDetailed, "Ocorrências de Faltas");
+
+    const safeName = targetClass.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fileName = `Relatorio_Consolidado_Faltas_${safeName}_${Date.now()}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+    showToast("Planilha Consolidada de Faltas exportada em XLSX com sucesso!", "success");
   };
 
   // Update single student attendance state for a specific period
@@ -3256,25 +3439,11 @@ export default function SmartClassDiaryView({
             )}
           </div>
 
-          {/* Tabela Detalhada de Faltas Registradas por Aluno e Horário */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900 uppercase flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600" />
-                  Módulo de Faltas Lançadas e Justificativas Pedagógicas
-                </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Visualização detalhada de todas as ausências e atrasos cadastrados nas aulas.
-                </p>
-              </div>
-              <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-3 py-1 rounded-lg border border-rose-200">
-                Auditoria de Frequência em Tempo Real
-              </span>
-            </div>
-
+          {/* Tabela Detalhada e Consolidada de Faltas Registradas por Aluno e Horário */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-5 animate-fade-in">
             {(() => {
-              const allDetailedAbsences = attendanceLogsHistory.flatMap((log) => {
+              // Extract all detailed absences
+              const rawDetailedAbsences = attendanceLogsHistory.flatMap((log) => {
                 const records = Array.isArray(log.records) ? log.records : [];
                 return records
                   .filter((r: any) => {
@@ -3290,12 +3459,15 @@ export default function SmartClassDiaryView({
                       else if (p === "A" || p === "atraso") missedPeriods.push(`H${pIdx + 1} (Atraso)`);
                     });
                     const hasJust = !!(r.justification && r.justification.trim());
+                    const targetClass = log.class_name || "Geral";
                     return {
                       key: `${log.session_id}_${rIdx}_${r.student_name}`,
+                      session_id: log.session_id,
                       student_name: r.student_name,
                       session_title: log.session_title,
-                      class_name: log.class_name || "Geral",
+                      class_name: targetClass,
                       missed_periods: missedPeriods.length > 0 ? missedPeriods.join(", ") : "Horários completos",
+                      missed_count: missedPeriods.length > 0 ? missedPeriods.length : 5,
                       justification: hasJust ? r.justification : "Sem justificativa pedagógica informada",
                       is_justified: hasJust,
                       type: st.includes("F") || st === "falta" ? "Falta" : "Atraso"
@@ -3303,64 +3475,362 @@ export default function SmartClassDiaryView({
                   });
               });
 
-              if (allDetailedAbsences.length === 0) {
-                return (
-                  <div className="text-center py-8 text-gray-400 text-xs">
-                    Nenhuma falta ou atraso foi registrado até o momento nas aulas cadastradas.
-                  </div>
-                );
-              }
+              // Filter by Class, Status and Search Query
+              const filteredAbsences = rawDetailedAbsences.filter((item) => {
+                // Class filter
+                if (absenceFilterClass) {
+                  const targetClassName = safeClasses.find(c => c.id === absenceFilterClass)?.name || absenceFilterClass;
+                  if (item.class_name !== targetClassName && item.class_name !== absenceFilterClass) return false;
+                }
+                // Status filter
+                if (absenceFilterStatus === "unjustified" && (item.is_justified || item.type !== "Falta")) return false;
+                if (absenceFilterStatus === "justified" && !item.is_justified) return false;
+                if (absenceFilterStatus === "delay" && item.type !== "Atraso") return false;
+                // Search query
+                if (absenceSearchQuery.trim()) {
+                  const q = absenceSearchQuery.toLowerCase();
+                  const matchName = item.student_name.toLowerCase().includes(q);
+                  const matchClass = item.class_name.toLowerCase().includes(q);
+                  const matchTitle = item.session_title.toLowerCase().includes(q);
+                  const matchJust = item.justification.toLowerCase().includes(q);
+                  if (!matchName && !matchClass && !matchTitle && !matchJust) return false;
+                }
+                return true;
+              });
+
+              // Build Grouped Summary per Student
+              const studentSummaryMap = new Map<string, any>();
+              filteredAbsences.forEach((item) => {
+                const sKey = `${item.student_name}_${item.class_name}`;
+                if (!studentSummaryMap.has(sKey)) {
+                  studentSummaryMap.set(sKey, {
+                    student_name: item.student_name,
+                    class_name: item.class_name,
+                    total_sessions_count: 0,
+                    sessions_set: new Set<string>(),
+                    missed_hours: 0,
+                    justified_count: 0,
+                    unjustified_count: 0,
+                    delays_count: 0,
+                    situation: "Regular"
+                  });
+                }
+                const stObj = studentSummaryMap.get(sKey)!;
+                stObj.sessions_set.add(item.session_title);
+                stObj.missed_hours += item.missed_count;
+                if (item.is_justified) stObj.justified_count += item.missed_count;
+                else if (item.type === "Falta") stObj.unjustified_count += item.missed_count;
+                if (item.type === "Atraso") stObj.delays_count += 1;
+              });
+
+              const studentSummaryList = Array.from(studentSummaryMap.values()).map((st) => {
+                st.total_sessions_count = st.sessions_set.size;
+                st.situation = st.unjustified_count >= 10 ? "Crítico (> 10h Faltas)" : st.unjustified_count >= 5 ? "Alerta de Infrequência" : "Acompanhamento";
+                return st;
+              });
+
+              // Global KPI totals
+              const totalOccurrences = filteredAbsences.length;
+              const totalUnjustified = filteredAbsences.filter(d => !d.is_justified && d.type === "Falta").length;
+              const totalJustified = filteredAbsences.filter(d => d.is_justified).length;
+              const totalImpactedStudents = studentSummaryList.length;
 
               return (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-50 text-gray-600 uppercase font-mono text-[10px] border-b border-gray-200">
-                      <tr>
-                        <th className="p-3">Aluno</th>
-                        <th className="p-3">Aula / Data</th>
-                        <th className="p-3">Turma</th>
-                        <th className="p-3">Horários Impactados</th>
-                        <th className="p-3">Justificativa Pedagógica</th>
-                        <th className="p-3 text-right">Situação</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {allDetailedAbsences.map((item) => (
-                        <tr key={item.key} className="hover:bg-gray-50/80 transition-colors">
-                          <td className="p-3 font-bold text-gray-900 flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] flex items-center justify-center">
-                              {item.student_name[0]}
-                            </div>
-                            {item.student_name}
-                          </td>
-                          <td className="p-3 text-gray-700 font-medium">{item.session_title}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 bg-teal-50 text-teal-800 text-[10px] font-mono font-bold rounded-full border border-teal-200">
-                              {item.class_name}
-                            </span>
-                          </td>
-                          <td className="p-3 font-mono text-[11px] text-rose-700 font-semibold">
-                            {item.missed_periods}
-                          </td>
-                          <td className="p-3 text-gray-600 italic">
-                            {item.justification}
-                          </td>
-                          <td className="p-3 text-right">
-                            {item.is_justified ? (
-                              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold">
-                                Justificada
-                              </span>
-                            ) : (
-                              <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold">
-                                Não Justificada
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  {/* Header & Controls */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5 text-rose-600" />
+                        <h3 className="text-base font-bold text-gray-900 uppercase">
+                          Relatório Consolidado de Faltas & Justificativas
+                        </h3>
+                        <span className="text-[10px] font-mono font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded border border-rose-200">
+                          {totalOccurrences} Ocorrências
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Auditoria e consolidação de todas as faltas, atrasos e justificativas registradas no diário de classe.
+                      </p>
+                    </div>
+
+                    {/* Export Actions */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => exportConsolidatedAbsencesPdf(filteredAbsences, studentSummaryList)}
+                        className="px-3.5 py-2 bg-gradient-to-r from-rose-700 to-rose-800 hover:from-rose-800 hover:to-rose-900 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                        title="Baixar Relatório Consolidado de Faltas em formato PDF oficial"
+                      >
+                        <Download className="w-4 h-4 text-rose-200" />
+                        Baixar Relatório (PDF)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => exportConsolidatedAbsencesXlsx(filteredAbsences, studentSummaryList)}
+                        className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-emerald-100 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer border border-emerald-600/30"
+                        title="Baixar Planilha Consolidada de Faltas em formato Excel (.xlsx)"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+                        Exportar Planilha (XLSX)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* KPI Summary Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Total de Ocorrências
+                      </span>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-2xl font-black text-slate-800 font-mono">{totalOccurrences}</span>
+                        <span className="text-[10px] text-slate-400">lançadas</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-rose-50/60 border border-rose-200/80 rounded-xl">
+                      <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">
+                        Não Justificadas
+                      </span>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-2xl font-black text-rose-700 font-mono">{totalUnjustified}</span>
+                        <span className="text-[10px] text-rose-500 font-medium">críticas</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-emerald-50/60 border border-emerald-200/80 rounded-xl">
+                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
+                        Justificadas
+                      </span>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-2xl font-black text-emerald-700 font-mono">{totalJustified}</span>
+                        <span className="text-[10px] text-emerald-600 font-medium">com atestado</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-teal-50/60 border border-teal-200/80 rounded-xl">
+                      <span className="text-[10px] font-bold text-teal-600 uppercase tracking-wider block">
+                        Alunos Impactados
+                      </span>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-2xl font-black text-teal-800 font-mono">{totalImpactedStudents}</span>
+                        <span className="text-[10px] text-teal-600 font-medium">estudantes</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter & View Mode Bar */}
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Search */}
+                      <div className="relative min-w-[200px]">
+                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Buscar aluno, aula ou justificativa..."
+                          value={absenceSearchQuery}
+                          onChange={(e) => setAbsenceSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:border-teal-500"
+                        />
+                      </div>
+
+                      {/* Filter by class */}
+                      <select
+                        value={absenceFilterClass}
+                        onChange={(e) => setAbsenceFilterClass(e.target.value)}
+                        className="py-1.5 px-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:border-teal-500"
+                      >
+                        <option value="">Todas as Turmas</option>
+                        {safeClasses.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+
+                      {/* Status Pills */}
+                      <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-200 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setAbsenceFilterStatus("all")}
+                          className={`px-2.5 py-1 rounded font-bold transition-all text-[11px] ${
+                            absenceFilterStatus === "all" ? "bg-slate-800 text-white shadow-xs" : "text-gray-500 hover:text-gray-800"
+                          }`}
+                        >
+                          Todas ({rawDetailedAbsences.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAbsenceFilterStatus("unjustified")}
+                          className={`px-2.5 py-1 rounded font-bold transition-all text-[11px] ${
+                            absenceFilterStatus === "unjustified" ? "bg-rose-600 text-white shadow-xs" : "text-rose-600 hover:bg-rose-50"
+                          }`}
+                        >
+                          Não Justificadas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAbsenceFilterStatus("justified")}
+                          className={`px-2.5 py-1 rounded font-bold transition-all text-[11px] ${
+                            absenceFilterStatus === "justified" ? "bg-emerald-600 text-white shadow-xs" : "text-emerald-600 hover:bg-emerald-50"
+                          }`}
+                        >
+                          Justificadas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAbsenceFilterStatus("delay")}
+                          className={`px-2.5 py-1 rounded font-bold transition-all text-[11px] ${
+                            absenceFilterStatus === "delay" ? "bg-amber-600 text-white shadow-xs" : "text-amber-600 hover:bg-amber-50"
+                          }`}
+                        >
+                          Atrasos
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* View Mode Toggle */}
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-200 self-start md:self-auto text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setAbsenceViewMode("occurrences")}
+                        className={`px-3 py-1 rounded-md font-bold transition-all text-[11px] ${
+                          absenceViewMode === "occurrences" ? "bg-teal-700 text-white shadow-xs" : "text-gray-500 hover:text-gray-800"
+                        }`}
+                      >
+                        Visão por Ocorrência
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAbsenceViewMode("summary")}
+                        className={`px-3 py-1 rounded-md font-bold transition-all text-[11px] ${
+                          absenceViewMode === "summary" ? "bg-teal-700 text-white shadow-xs" : "text-gray-500 hover:text-gray-800"
+                        }`}
+                      >
+                        Resumo por Aluno ({studentSummaryList.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Render Table Content */}
+                  {filteredAbsences.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400 text-xs bg-slate-50/50 rounded-xl border border-dashed border-gray-200">
+                      Nenhuma falta ou atraso encontrado para os filtros selecionados.
+                    </div>
+                  ) : absenceViewMode === "summary" ? (
+                    /* Grouped Summary per Student Table */
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-gray-50 text-gray-600 uppercase font-mono text-[10px] border-b border-gray-200">
+                          <tr>
+                            <th className="p-3">Aluno</th>
+                            <th className="p-3">Turma</th>
+                            <th className="p-3 text-center">Aulas com Falta</th>
+                            <th className="p-3 text-center">Horas Faltadas (h)</th>
+                            <th className="p-3 text-center">Faltas Justificadas</th>
+                            <th className="p-3 text-center">Não Justificadas</th>
+                            <th className="p-3 text-right">Situação / Acompanhamento</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {studentSummaryList.map((st, sIdx) => (
+                            <tr key={`${st.student_name}_${sIdx}`} className="hover:bg-gray-50/80 transition-colors">
+                              <td className="p-3 font-bold text-gray-900 flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] flex items-center justify-center">
+                                  {st.student_name[0]}
+                                </div>
+                                {st.student_name}
+                              </td>
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 text-[10px] font-mono font-bold rounded-full border border-teal-200">
+                                  {st.class_name}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center font-mono font-semibold text-slate-700">
+                                {st.total_sessions_count} aula(s)
+                              </td>
+                              <td className="p-3 text-center font-mono font-bold text-rose-700">
+                                {st.missed_hours}h
+                              </td>
+                              <td className="p-3 text-center font-mono text-emerald-700 font-semibold">
+                                {st.justified_count}h
+                              </td>
+                              <td className="p-3 text-center font-mono text-rose-700 font-bold">
+                                {st.unjustified_count}h
+                              </td>
+                              <td className="p-3 text-right">
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
+                                  st.unjustified_count >= 10
+                                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                                    : st.unjustified_count >= 5
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                }`}>
+                                  {st.situation}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    /* Detailed Occurrences Table */
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-gray-50 text-gray-600 uppercase font-mono text-[10px] border-b border-gray-200">
+                          <tr>
+                            <th className="p-3">Aluno</th>
+                            <th className="p-3">Aula / Data</th>
+                            <th className="p-3">Turma</th>
+                            <th className="p-3">Horários Impactados</th>
+                            <th className="p-3">Justificativa Pedagógica</th>
+                            <th className="p-3 text-right">Situação</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {filteredAbsences.map((item) => (
+                            <tr key={item.key} className="hover:bg-gray-50/80 transition-colors">
+                              <td className="p-3 font-bold text-gray-900 flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] flex items-center justify-center">
+                                  {item.student_name[0]}
+                                </div>
+                                {item.student_name}
+                              </td>
+                              <td className="p-3 text-gray-700 font-medium">{item.session_title}</td>
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 text-[10px] font-mono font-bold rounded-full border border-teal-200">
+                                  {item.class_name}
+                                </span>
+                              </td>
+                              <td className="p-3 font-mono text-[11px] text-rose-700 font-semibold">
+                                {item.missed_periods}
+                              </td>
+                              <td className="p-3 text-gray-600 italic">
+                                {item.justification}
+                              </td>
+                              <td className="p-3 text-right">
+                                {item.is_justified ? (
+                                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold">
+                                    Justificada
+                                  </span>
+                                ) : item.type === "Atraso" ? (
+                                  <span className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[10px] font-bold">
+                                    Atraso
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold">
+                                    Não Justificada
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               );
             })()}
           </div>
