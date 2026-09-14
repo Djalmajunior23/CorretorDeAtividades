@@ -61,6 +61,7 @@ const AdvancedAiHubView = React.lazy(() => import("./components/AdvancedAiHubVie
 const SlaRemindersSchedulerCard = React.lazy(() => import("./components/SlaRemindersSchedulerCard"));
 const DiagramAssessmentView = React.lazy(() => import("./components/DiagramAssessmentView"));
 const ActivitiesControlHubView = React.lazy(() => import("./components/ActivitiesControlHubView"));
+const StudentPortalView = React.lazy(() => import("./components/StudentPortalView"));
 const SkillTreePortfolioView = React.lazy(() => import("./components/SkillTreePortfolioView"));
 const TeacherAiPowerhouseView = React.lazy(() => import("./components/TeacherAiPowerhouseView"));
 const TechInterviewSimulatorView = React.lazy(() => import("./components/TechInterviewSimulatorView"));
@@ -79,6 +80,9 @@ const WasmSandboxRuntimeView = React.lazy(() => import("./components/WasmSandbox
 const VivaVoceExamView = React.lazy(() => import("./components/VivaVoceExamView"));
 const AgileSquadSimulatorView = React.lazy(() => import("./components/AgileSquadSimulatorView"));
 const IotIndustrySimulatorView = React.lazy(() => import("./components/IotIndustrySimulatorView"));
+const ParametricExamGeneratorView = React.lazy(() => import("./components/ParametricExamGeneratorView"));
+const GitAutoGradingStudioView = React.lazy(() => import("./components/GitAutoGradingStudioView"));
+const SocraticTutorScaffoldingView = React.lazy(() => import("./components/SocraticTutorScaffoldingView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2666,6 +2670,18 @@ export default function App() {
              <IotIndustrySimulatorView />
            )}
 
+           {currentTab === "parametric_exam" && (
+             <ParametricExamGeneratorView />
+           )}
+
+           {currentTab === "git_autograde" && (
+             <GitAutoGradingStudioView />
+           )}
+
+           {currentTab === "socratic_tutor" && (
+             <SocraticTutorScaffoldingView />
+           )}
+
           {currentTab === "avaliacoes" && (
             <AvaliacoesView />
           )}
@@ -2688,6 +2704,10 @@ export default function App() {
 
           {currentTab === "activities" && (
             <ActivitiesControlHubView />
+          )}
+
+          {currentTab === "student_portal" && (
+            <StudentPortalView />
           )}
 
           {currentTab === "generator" && featureFlags.ENABLE_ACTIVITY_GENERATOR && (

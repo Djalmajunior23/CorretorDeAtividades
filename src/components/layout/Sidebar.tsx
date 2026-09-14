@@ -41,7 +41,10 @@ import {
   Flame,
   GraduationCap,
   Volume2,
-  Radio
+  Radio,
+  ShieldCheck,
+  GitBranch,
+  Lightbulb
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -83,6 +86,7 @@ export default function Sidebar({
     { id: "notas", label: "Notas", icon: Award, desc: "Gestão de Avaliações e Médias", visible: true },
     { id: "evidences", label: "Evidências", icon: FileCheck, desc: "Histórico Pedagógico", visible: true },
     { id: "activities", label: "Atividades", icon: Zap, desc: "Controle de Entregas, IA & Autor", visible: true },
+    { id: "student_portal", label: "Portal do Aluno", icon: GraduationCap, desc: "Visão do Estudante & Submissão", visible: true },
     { id: "question_bank", label: "Banco de Questões", icon: Database, desc: "Questões e Desafios IA", visible: true },
     { id: "batch", label: "Correção em Lote", icon: Layers, desc: "Processamento Massivo ZIP", visible: true },
     { id: "similarity", label: "Similaridade", icon: FileSearch, desc: "Análise de Códigos", visible: true },
@@ -129,6 +133,9 @@ export default function Sidebar({
     { id: "viva_voce", label: "AI Viva-Voce Arguição Oral", icon: Volume2, desc: "Defesa Técnica & Oratória por Voz", visible: true },
     { id: "agile_squad", label: "Virtual Agile Scrum Squad", icon: Users, desc: "Scrum Master AI, PO & GitOps", visible: true },
     { id: "iot_industry", label: "Indústria 4.0 & IoT Lab", icon: Radio, desc: "Hardware-in-the-Loop & MQTT", visible: true },
+    { id: "parametric_exam", label: "Provas Paramétricas Anti-Cola", icon: ShieldCheck, desc: "Variantes A/B/C/D & Dossiê PDF", visible: true },
+    { id: "git_autograde", label: "GitHub & GitLab CI/CD", icon: GitBranch, desc: "Auto-Grading & Webhook Studio", visible: true },
+    { id: "socratic_tutor", label: "Tutor Socrático Adaptativo", icon: Lightbulb, desc: "Scaffolding em 4 Degraus & Radar", visible: true },
     { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
     { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
   ];

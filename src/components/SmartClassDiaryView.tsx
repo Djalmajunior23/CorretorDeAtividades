@@ -35,6 +35,7 @@ import * as XLSX from "xlsx";
 import { AttendanceDashboard } from "./dashboard/AttendanceDashboard";
 import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
 import { ExportClassConsolidatedXlsxModal } from "./ExportClassConsolidatedXlsxModal";
+import EarlyWarningRadarModal from "./EarlyWarningRadarModal";
 
 
 interface SmartClassDiaryViewProps {
@@ -124,6 +125,7 @@ export default function SmartClassDiaryView({
   const [students, setStudents] = useState<any[]>([]);
   const [showPdfReportModal, setShowPdfReportModal] = useState(false);
   const [showXlsxReportModal, setShowXlsxReportModal] = useState(false);
+  const [showRiskRadarModal, setShowRiskRadarModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState(() => {
     return localStorage.getItem("selectedClass") || "";
   });
@@ -3558,6 +3560,16 @@ export default function SmartClassDiaryView({
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
+                        onClick={() => setShowRiskRadarModal(true)}
+                        className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                        title="Abrir o Radar de Risco Pedagógico 360° (Faltas + Entregas + Notas)"
+                      >
+                        <Shield className="w-4 h-4 text-amber-200" />
+                        Radar de Risco 360°
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => exportConsolidatedAbsencesPdf(filteredAbsences, studentSummaryList)}
                         className="px-3.5 py-2 bg-gradient-to-r from-rose-700 to-rose-800 hover:from-rose-800 hover:to-rose-900 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
                         title="Baixar Relatório Consolidado de Faltas em formato PDF oficial"
@@ -5203,6 +5215,14 @@ export default function SmartClassDiaryView({
         <ConsolidatedPdfReportModal
           defaultClassId={selectedClass}
           onClose={() => setShowPdfReportModal(false)}
+        />
+      )}
+
+      {showRiskRadarModal && (
+        <EarlyWarningRadarModal
+          isOpen={showRiskRadarModal}
+          onClose={() => setShowRiskRadarModal(false)}
+          classNameTitle={classes.find(c => c.id === selectedClass)?.name || "Desenvolvimento de Sistemas 1A"}
         />
       )}
     </div>
