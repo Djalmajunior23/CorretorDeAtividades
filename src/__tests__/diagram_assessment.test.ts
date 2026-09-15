@@ -187,4 +187,113 @@ describe("Módulo de Correção de Diagramas e Modelagem de Sistemas", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("POST /api/diagrams/assess - Deve avaliar Modelo Lógico de Banco de Dados submetido por IMAGEM (Base64)", async () => {
+    const mockImageBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    const res = await fetch(`${baseUrl}/api/diagrams/assess`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        diagramType: "logical",
+        format: "image",
+        imageBase64: mockImageBase64,
+        scenario: "Sistema de E-commerce com Clientes, Pedidos e Produtos"
+      })
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.modelCategory).toBe("logical");
+    expect(data.inputFormat).toBe("image");
+    expect(data.totalGrade).toBeGreaterThanOrEqual(60);
+    expect(data.normalizationAudit.firstNormalForm).toBeDefined();
+    expect(data.generatedDdlSql).toContain("CREATE TABLE");
+    expect(data.suggestedCorrectedDiagram).toContain("erDiagram");
+  });
+
+  it("POST /api/diagrams/assess - Deve avaliar Modelo Físico com validação de tipos SGBD (PostgreSQL)", async () => {
+    const validPhysicalDdl = `
+      CREATE TABLE tb_usuario (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nome VARCHAR(150) NOT NULL,
+          email VARCHAR(150) NOT NULL UNIQUE
+      );
+
+      CREATE TABLE tb_conta (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          usuario_id UUID NOT NULL,
+          saldo NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (saldo >= 0),
+          CONSTRAINT fk_conta_usuario FOREIGN KEY (usuario_id) REFERENCES tb_usuario(id) ON DELETE RESTRICT
+      );
+    `;
+
+    const res = await fetch(`${baseUrl}/api/diagrams/assess`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        diagramType: "physical",
+        format: "code",
+        code: validPhysicalDdl,
+        targetSgbd: "postgresql",
+        scenario: "Módulo financeiro transacional"
+      })
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.modelCategory).toBe("physical");
+    expect(data.totalGrade).toBeGreaterThanOrEqual(70);
+    expect(data.physicalAudit).toBeDefined();
+    expect(data.physicalAudit.sgbdTarget).toBe("postgresql");
+    expect(data.physicalAudit.constraintsCheck.notNullCompliance).toBe(true);
+    expect(data.generatedDdlSql).toContain("CREATE TABLE");
+  });
+
+  it("POST /api/database-models/export-pdf - Deve exportar PDF completo com parecer técnico de modelagem", async () => {
+    const mockAssessment = {
+      assessmentId: "test_db_001",
+      modelCategory: "physical",
+      inputFormat: "image",
+      targetSgbd: "postgresql",
+      totalGrade: 92,
+      status: "Aprovado",
+      isApproved: true,
+      passingGrade: 60,
+      rubrics: [
+        { name: "Sintaxe DDL", score: 20, maxScore: 20, weight: 20, status: "EXCELENTE", feedback: "OK", pedagogicalRationale: "R1" },
+        { name: "Tipagem", score: 28, maxScore: 30, weight: 30, status: "EXCELENTE", feedback: "OK", pedagogicalRationale: "R2" }
+      ],
+      strengths: ["PKs e FKs completas"],
+      modelingIssues: [],
+      normalizationAudit: {
+        firstNormalForm: { compliant: true, issues: [], explanation: "1FN OK" },
+        secondNormalForm: { compliant: true, issues: [], explanation: "2FN OK" },
+        thirdNormalForm: { compliant: true, issues: [], explanation: "3FN OK" }
+      },
+      extractedTables: [],
+      pedagogicalRecommendations: ["Criar índices em colunas FK"],
+      extractedMermaidCode: "erDiagram",
+      suggestedCorrectedDiagram: "erDiagram",
+      generatedDdlSql: "CREATE TABLE tb_teste (id INT PRIMARY KEY);",
+      evaluatedAt: new Date().toISOString()
+    };
+
+    const res = await fetch(`${baseUrl}/api/database-models/export-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assessment: mockAssessment,
+        studentName: "Lucas de Castro",
+        className: "Turma TDS-2026"
+      })
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/pdf");
+    const arrayBuffer = await res.arrayBuffer();
+    expect(arrayBuffer.byteLength).toBeGreaterThan(1000);
+  });
 });

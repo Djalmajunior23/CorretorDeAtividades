@@ -35,6 +35,7 @@ import { IotIndustrySimulatorService } from "./src/services/iotIndustrySimulator
 import { ParametricExamService } from "./src/services/parametricExamService";
 import { GitAutoGradingService } from "./src/services/gitAutoGradingService";
 import { SocraticScaffoldingService } from "./src/services/socraticScaffoldingService";
+import { DatabaseModelAssessmentService } from "./src/services/databaseModelAssessmentService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -3688,7 +3689,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         code = "",
         imageBase64,
         scenario = "",
-        referenceDiagram = "",
+        targetSgbd = "postgresql",
         studentId,
         classId
       } = req.body;
@@ -3697,160 +3698,18 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         return res.status(400).json({ error: "Envie o código declarativo do diagrama ou a imagem para avaliação." });
       }
 
-      const rawCode = (code || "").trim();
-      let syntaxScore = 18;
-      let completenessScore = 26;
-      let relationshipsScore = 25;
-      let bestPracticesScore = 17;
-
-      const strengths: string[] = [];
-      const modelingIssues: string[] = [];
-      const normalizationNotes: string[] = [];
-      const pedagogicalRecommendations: string[] = [];
-
-      // Heuristics & Analysis for ERD / Database Diagrams
-      if (diagramType === "erDiagram" || rawCode.includes("erDiagram") || rawCode.includes("TABLE") || rawCode.includes("table")) {
-        const hasPK = rawCode.includes("PK") || rawCode.toLowerCase().includes("primary key") || rawCode.includes("id");
-        const hasFK = rawCode.includes("FK") || rawCode.toLowerCase().includes("foreign key") || rawCode.includes("_id");
-        const hasCardinality = rawCode.includes("||--") || rawCode.includes("}|--") || rawCode.includes("}|..") || rawCode.includes("o{");
-        const entityMatches = rawCode.match(/[A-Za-z0-9_]+\s*\{/g) || [];
-        const entityCount = entityMatches.length;
-
-        if (hasPK) {
-          strengths.push("Identificação correta e explícita de Chaves Primárias (PK) em entidades fortes e associativas.");
-          syntaxScore += 2;
-        } else {
-          modelingIssues.push("Ausência de chaves primárias (PK) explicitadas em algumas tabelas/entidades.");
-          syntaxScore -= 6;
-        }
-
-        if (hasFK) {
-          strengths.push("Mapeamento adequado de integridade referencial com Chaves Estrangeiras (FK).");
-          relationshipsScore += 3;
-        } else {
-          modelingIssues.push("Falta de indicação de chaves estrangeiras (FK) para materializar relacionamentos 1:N / N:N.");
-          relationshipsScore -= 7;
-        }
-
-        if (hasCardinality) {
-          strengths.push("Uso correto da notação Crow's Foot para cardinalidades mínima e máxima.");
-        } else {
-          modelingIssues.push("Cardinalidades não especificadas ou incompletas na definição dos relacionamentos.");
-          relationshipsScore -= 5;
-        }
-
-        if (entityCount >= 3) {
-          strengths.push(`Modularização adequada com ${entityCount} entidades/tabelas estruturadas.`);
-          completenessScore += 2;
-        } else {
-          modelingIssues.push("Modelo excessivamente simplificado; considere separar entidades com responsabilidades distintas.");
-          completenessScore -= 6;
-        }
-
-        // Normalization checks (1FN, 2FN, 3FN)
-        const hasMultivalued = /telefones|emails|enderecos/i.test(rawCode);
-        if (hasMultivalued) {
-          normalizationNotes.push("Atenção à 1FN: Atributos multivalorados (ex: telefones/emails) devem ser decompostos em tabelas associativas 1:N.");
-          bestPracticesScore -= 4;
-        } else {
-          normalizationNotes.push("1FN (Primeira Forma Normal): Conformidade aprovada. Atributos atômicos sem repetição.");
-        }
-
-        normalizationNotes.push("2FN (Segunda Forma Normal): Conformidade aprovada. Todos os atributos dependem totalmente da PK.");
-        normalizationNotes.push("3FN (Terceira Forma Normal): Ausência de dependências transitivas diretas detectadas.");
-
-        pedagogicalRecommendations.push("Garantir tipos de dados consistentes (ex: usar UUID/BigInt para identificadores e Decimal para valores monetários).");
-        pedagogicalRecommendations.push("Adicionar restrições NOT NULL e UNIQUE nas colunas de identificadores naturais (ex: CPF, E-mail, CNPJ).");
-      } 
-      // Heuristics for UML Class Diagram
-      else if (diagramType === "classDiagram" || rawCode.includes("classDiagram")) {
-        const hasVisibility = /[+\-#~]/.test(rawCode);
-        const hasInheritance = /<\|--|--\|>/.test(rawCode);
-        const hasComposition = /\*--|--\*/.test(rawCode);
-
-        if (hasVisibility) {
-          strengths.push("Encapsulamento rigoroso aplicando modificadores de visibilidade (+ público, - privado, # protegido).");
-        } else {
-          modelingIssues.push("Falta de modificadores de visibilidade nos atributos e métodos das classes.");
-          syntaxScore -= 5;
-        }
-
-        if (hasInheritance || hasComposition) {
-          strengths.push("Aplicação correta de relações de herança (<|--) e composição (*--) entre classes.");
-        } else {
-          pedagogicalRecommendations.push("Avaliar se há oportunidade de usar herança para classes comuns ou composição para partes indivisíveis.");
-        }
-
-        pedagogicalRecommendations.push("Observar os princípios SOLID: Alta coesão e baixo acoplamento entre as classes de domínio e serviços.");
-      } 
-      // Sequence & Other Diagrams
-      else {
-        strengths.push("Estrutura sequencial de mensagens clara entre os participantes do fluxo.");
-        strengths.push("Uso de numeração de passos para rastreabilidade de chamadas síncronas/assíncronas.");
-        pedagogicalRecommendations.push("Detalhar tratamento de fluxos alternativos e de exceção usando blocos 'alt' e 'opt'.");
-      }
-
-      // Normalization of scores
-      syntaxScore = Math.max(0, Math.min(20, syntaxScore));
-      completenessScore = Math.max(0, Math.min(30, completenessScore));
-      relationshipsScore = Math.max(0, Math.min(30, relationshipsScore));
-      bestPracticesScore = Math.max(0, Math.min(20, bestPracticesScore));
-
-      const totalGrade = syntaxScore + completenessScore + relationshipsScore + bestPracticesScore;
-      const status = totalGrade >= 60 ? "Aprovado" : totalGrade >= 40 ? "Recuperação" : "Reprovado";
-
-      let suggestedMermaid = rawCode;
-      if (!suggestedMermaid || format === "image") {
-        suggestedMermaid = `erDiagram
-    CLIENTE ||--o{ PEDIDO : "realiza"
-    PEDIDO ||--|{ ITEM_PEDIDO : "contem"
-    PRODUTO ||--o{ ITEM_PEDIDO : "pertence"
-
-    CLIENTE {
-        uuid id PK
-        string nome
-        string email UK
-    }
-    PEDIDO {
-        uuid id PK
-        uuid cliente_id FK
-        datetime data_pedido
-        decimal total
-    }
-    ITEM_PEDIDO {
-        uuid id PK
-        uuid pedido_id FK
-        uuid produto_id FK
-        int quantidade
-        decimal preco_unitario
-    }
-    PRODUTO {
-        uuid id PK
-        string nome
-        decimal preco
-    }`;
-      }
-
-      const assessmentResult = {
-        success: true,
-        diagramType,
-        totalGrade,
-        status,
-        passingGrade: 60,
-        isApproved: totalGrade >= 60,
-        rubrics: [
-          { name: "Sintaxe & Notação Padrão", score: syntaxScore, maxScore: 20, feedback: syntaxScore >= 16 ? "Excelente domínio da notação." : "Ajustar delimitadores e convenções da linguagem de modelagem." },
-          { name: "Entidades/Classes & Atributos", score: completenessScore, maxScore: 30, feedback: completenessScore >= 24 ? "Entidades completas e bem caracterizadas." : "Faltam atributos essenciais ou tipagem de campos." },
-          { name: "Cardinalidades & Relações", score: relationshipsScore, maxScore: 30, feedback: relationshipsScore >= 24 ? "Relações e chaves mapeadas com precisão." : "Revisar cardinalidades mínimas/máximas e chaves FK." },
-          { name: "Boas Práticas & Normalização (1FN/2FN/3FN)", score: bestPracticesScore, maxScore: 20, feedback: bestPracticesScore >= 16 ? "Excelente arquitetura sem redundâncias." : "Revisar possíveis anomalias de atualização ou violações de 1FN/3FN." }
-        ],
-        strengths: strengths.length > 0 ? strengths : ["Compreensão inicial dos requisitos do cenário proposto."],
-        modelingIssues: modelingIssues.length > 0 ? modelingIssues : ["Nenhuma inconsistência grave detectada no diagrama submetido."],
-        normalizationNotes,
-        pedagogicalRecommendations,
-        suggestedCorrectedDiagram: suggestedMermaid,
-        evaluatedAt: new Date().toISOString()
-      };
+      // Delegate to DatabaseModelAssessmentService for deep logical and physical evaluation
+      const modelCategory = diagramType === "physical" ? "physical" : diagramType === "classDiagram" ? "classDiagram" : "logical";
+      const assessmentResult = await DatabaseModelAssessmentService.assessDatabaseModel({
+        modelCategory,
+        inputFormat: format === "image" ? "image" : "code",
+        code,
+        imageBase64,
+        scenario,
+        targetSgbd,
+        studentId,
+        classId
+      });
 
       // Persist evidence if student is specified
       if (pool && studentId) {
@@ -3863,17 +3722,42 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
             evId,
             studentId,
             classId || null,
-            `Avaliação de Modelagem/Diagrama: ${diagramType.toUpperCase()}`,
-            `Nota obtida: ${totalGrade}/100 (${status}). Critérios: Sintaxe ${syntaxScore}/20, Entidades ${completenessScore}/30, Relações ${relationshipsScore}/30, Normalização ${bestPracticesScore}/20.`
+            `Avaliação de Modelagem/Diagrama: ${diagramType.toUpperCase()} (${format.toUpperCase()})`,
+            `Nota obtida: ${assessmentResult.totalGrade}/100 (${assessmentResult.status}). Categoria: ${modelCategory.toUpperCase()}.`
           ]);
         } catch (dbErr) {
           console.warn("Evidence log warning:", dbErr);
         }
       }
 
-      res.json(assessmentResult);
+      res.json({
+        success: true,
+        ...assessmentResult
+      });
     } catch (e: any) {
       console.error("Diagram assessment error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/database-models/assess", async (req, res) => {
+    try {
+      const result = await DatabaseModelAssessmentService.assessDatabaseModel(req.body);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/database-models/export-pdf", async (req, res) => {
+    try {
+      const { assessment, studentName, className } = req.body;
+      if (!assessment) return res.status(400).json({ error: "Assessment data is required" });
+      const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(assessment, studentName, className);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_modelagem_banco_${assessment.assessmentId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
