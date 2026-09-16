@@ -114,6 +114,27 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         const data = await res.json();
         if (data.student) setStudentProfile(data.student);
         if (data.attendance) setAttendance(data.attendance);
+        if (data.submissions && Array.isArray(data.submissions) && data.submissions.length > 0) {
+          setActivities(prev => {
+            // Keep template pending activities and merge in submissions from backend
+            const basePending = prev.filter(p => p.delivery_status === "pending" || p.delivery_status === "late_pending");
+            const mappedSubmissions = data.submissions.map((s: any) => ({
+              id: s.id,
+              title: s.title || `[Avaliação] ${s.language?.toUpperCase() || "Código"}`,
+              description: s.feedback || "Avaliação registrada no sistema",
+              language: s.language || "python",
+              points: 100,
+              deadline: s.submission_date || new Date().toISOString(),
+              delivery_status: "delivered_on_time",
+              submitted_code: s.submitted_code,
+              score: s.score,
+              feedback: s.feedback,
+              submission_date: s.submission_date,
+              source: s.source
+            }));
+            return [...basePending, ...mappedSubmissions];
+          });
+        }
       }
     } catch (e) {
       console.warn("Using default student profile data");

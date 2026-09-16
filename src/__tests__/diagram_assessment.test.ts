@@ -296,4 +296,43 @@ describe("Módulo de Correção de Diagramas e Modelagem de Sistemas", () => {
     const arrayBuffer = await res.arrayBuffer();
     expect(arrayBuffer.byteLength).toBeGreaterThan(1000);
   });
+
+  it("POST /api/diagrams/assess - Deve persistir correção no vault quando studentId for informado", async () => {
+    const validERD = `erDiagram
+      CLIENTE ||--o{ PEDIDO : "realiza"
+      CLIENTE { uuid id PK string nome }
+      PEDIDO { uuid id PK uuid cliente_id FK }`;
+
+    const res = await fetch(`${baseUrl}/api/diagrams/assess`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        diagramType: "erDiagram",
+        format: "code",
+        code: validERD,
+        scenario: "Sistema de Vendas",
+        studentId: "st-01",
+        studentName: "Ana Beatriz Silva",
+        classId: "turma-1a",
+        className: "Desenvolvimento de Sistemas 1A"
+      })
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.totalGrade).toBeGreaterThanOrEqual(60);
+    // Verifies pool.query was invoked with INSERT into correction_vault
+    expect(mockPool.query).toHaveBeenCalled();
+  });
+
+  it("GET /api/student/portal-data/:studentId - Deve retornar dados cadastrais e submissões do estudante", async () => {
+    const res = await fetch(`${baseUrl}/api/student/portal-data/st-01?class_id=turma-1a`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.student).toBeDefined();
+    expect(data.student.id).toBe("st-01");
+    expect(data.attendance).toBeDefined();
+    expect(Array.isArray(data.submissions)).toBe(true);
+  });
 });

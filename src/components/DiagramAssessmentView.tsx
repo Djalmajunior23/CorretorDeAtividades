@@ -47,6 +47,7 @@ import {
   DatabaseTargetSgbd,
   DatabaseInputFormat
 } from "../services/databaseModelAssessmentService";
+import { StudentProfileModal } from "./StudentProfileModal";
 
 // Initialize mermaid
 mermaid.initialize({
@@ -105,6 +106,7 @@ export default function DiagramAssessmentView() {
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [assessment, setAssessment] = useState<DatabaseModelAssessmentResult | null>(null);
   const [activeTab, setActiveTab] = useState<"feedback" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram">("feedback");
+  const [profileModalStudentId, setProfileModalStudentId] = useState<string | null>(null);
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -296,6 +298,9 @@ CREATE TABLE tb_item_pedido (
     );
 
     try {
+      const studentObj = students.find(s => s.id === selectedStudentId);
+      const classObj = classes.find(c => c.id === selectedClassId);
+
       const payload = {
         modelCategory,
         inputFormat: inputMode,
@@ -306,7 +311,9 @@ CREATE TABLE tb_item_pedido (
         scenario: scenarioPrompt,
         targetSgbd,
         studentId: selectedStudentId || undefined,
-        classId: selectedClassId || undefined
+        studentName: studentObj?.name || undefined,
+        classId: selectedClassId || undefined,
+        className: classObj?.name || undefined
       };
 
       const res = await fetch(apiUrl("/api/diagrams/assess"), {
@@ -679,7 +686,18 @@ CREATE TABLE tb_item_pedido (
                   <h2 className="text-lg font-bold text-white">Resultado da Auditoria do Banco de Dados</h2>
                 </div>
 
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
+                  {selectedStudentId && (
+                    <button
+                      onClick={() => setProfileModalStudentId(selectedStudentId)}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-mono font-bold transition-all border border-indigo-500/50 flex items-center gap-1.5 cursor-pointer shadow-md"
+                      title="Ver histórico e laudos no perfil completo do estudante"
+                    >
+                      <User className="w-3.5 h-3.5 text-indigo-300" />
+                      Ver no Perfil
+                    </button>
+                  )}
+
                   <button
                     onClick={handleExportPdf}
                     disabled={isExportingPdf}
@@ -941,6 +959,15 @@ CREATE TABLE tb_item_pedido (
         </div>
 
       </div>
+
+      {/* Student Profile Modal Linkage */}
+      {profileModalStudentId && (
+        <StudentProfileModal
+          studentId={profileModalStudentId}
+          isOpen={!!profileModalStudentId}
+          onClose={() => setProfileModalStudentId(null)}
+        />
+      )}
     </div>
   );
 }

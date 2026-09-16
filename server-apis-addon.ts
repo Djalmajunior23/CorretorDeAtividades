@@ -2140,20 +2140,34 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
         [student_id, student.enrollment_code || student_id],
       );
       
-      const crResults = newResultsQuery.rows.map(r => ({
-        id: r.id,
-        teacher_id: r.corrected_by || "teacher_1",
-        class_id: r.class_id,
-        student_id: r.student_id || r.student_key,
-        activity_id: r.activity_id,
-        code_content: r.submitted_code,
-        language: r.language,
-        score: r.score,
-        feedback: r.feedback,
-        correction_type: "sandbox",
-        created_at: r.created_at,
-        activity_title: r.question_title || r.activity_title || "Correção manual"
-      }));
+      const crResults = newResultsQuery.rows.map(r => {
+        let meta: any = {};
+        let raw: any = {};
+        try { meta = typeof r.metadata === "string" ? JSON.parse(r.metadata || "{}") : (r.metadata || {}); } catch (e) {}
+        try { raw = typeof r.raw_correction === "string" ? JSON.parse(r.raw_correction || "{}") : (r.raw_correction || {}); } catch (e) {}
+
+        return {
+          id: r.id,
+          teacher_id: r.corrected_by || "teacher_1",
+          class_id: r.class_id,
+          student_id: r.student_id || r.student_key,
+          activity_id: r.activity_id,
+          code_content: r.submitted_code || r.code_snippet,
+          language: r.language,
+          score: r.score,
+          feedback: r.feedback,
+          correction_type: r.source === "diagram_assessment" ? "diagram_assessment" : "sandbox",
+          source: r.source,
+          modelCategory: meta.modelCategory || raw.modelCategory,
+          targetSgbd: meta.targetSgbd || raw.targetSgbd,
+          inputFormat: meta.inputFormat || raw.inputFormat,
+          normalizationAudit: meta.normalizationAudit || raw.normalizationAudit,
+          raw_correction: raw,
+          metadata: meta,
+          created_at: r.created_at,
+          activity_title: r.question_title || r.activity_title || (r.source === "diagram_assessment" ? "Modelagem e Diagrama de Banco de Dados" : "Correção manual")
+        };
+      });
 
       // Also fetch from d_correction_submission / d_correction_result where student name matches
       const studentName = student.name;
@@ -3681,6 +3695,148 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
+  async function saveDiagramAssessmentToVault(params: {
+    assessment: any;
+    studentId?: string;
+    studentName?: string;
+    classId?: string;
+    className?: string;
+    code?: string;
+    imageBase64?: string;
+    scenario?: string;
+    targetSgbd?: string;
+    modelCategory?: string;
+    inputFormat?: string;
+  }) {
+    if (!pool) return null;
+    try {
+      const studentId = params.studentId;
+      if (!studentId && !params.studentName) return null;
+
+      let studentName = params.studentName || "Estudante";
+      let studentKey = studentId || "st_general";
+      let studentReg = "";
+      let classId = params.classId || "";
+      let className = params.className || "Turma Geral";
+
+      if (studentId) {
+        try {
+          const sRes = await pool.query(
+            "SELECT s.*, c.name as class_name FROM d_student_record s LEFT JOIN d_class_group c ON s.class_id = c.id WHERE s.id = $1 OR s.enrollment_code = $1",
+            [studentId]
+          );
+          if (sRes.rows.length > 0) {
+            const row = sRes.rows[0];
+            studentName = row.name || studentName;
+            studentKey = row.enrollment_code || row.id || studentId;
+            studentReg = row.enrollment_code || "";
+            classId = row.class_id || classId;
+            className = row.class_name || className;
+          }
+        } catch (err) {
+          // fallback
+        }
+      }
+
+      const assessment = params.assessment;
+      const modelCat = params.modelCategory || assessment.modelCategory || "logical";
+      const catLabel = modelCat === "physical"
+        ? `Modelo Físico / DDL (${(params.targetSgbd || assessment.targetSgbd || "POSTGRESQL").toUpperCase()})`
+        : modelCat === "classDiagram"
+        ? "Diagrama de Classes UML"
+        : "Modelo Lógico / Relacional (DER & 3FN)";
+
+      const submittedCode = params.code || assessment.generatedDdlSql || assessment.extractedMermaidCode || (params.imageBase64 ? "[Imagem do Diagrama Submetida]" : "/* Modelagem */");
+      const lang = modelCat === "physical" ? "sql" : modelCat === "classDiagram" ? "uml" : "erd";
+
+      const strengthsList = (assessment.strengths || []).map((s: string) => `✓ ${s}`).join("\n");
+      const issuesList = (assessment.modelingIssues || []).map((i: string) => `⚠ ${i}`).join("\n");
+      const recsList = (assessment.pedagogicalRecommendations || []).map((r: string) => `• ${r}`).join("\n");
+
+      const feedbackSummary = `[${catLabel.toUpperCase()}] — Nota: ${assessment.totalGrade}/100 (${assessment.status})\n${strengthsList}\n${issuesList}\n${recsList}`.trim();
+
+      const vaultId = crypto.randomUUID();
+      await pool.query(`
+        INSERT INTO correction_vault (
+          id, student_key, student_id, student_registration, student_name,
+          class_id, class_name,
+          question_id, question_title, activity_id, activity_title,
+          language, submitted_code,
+          score, max_score, percentage,
+          status, feedback, ai_feedback,
+          rubric_result, strengths, improvements, raw_correction, metadata,
+          source, saved_by, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7,
+          $8, $9, $10, $11,
+          $12, $13,
+          $14, $15, $16,
+          $17, $18, $19,
+          $20::jsonb, $21::jsonb, $22::jsonb, $23::jsonb, $24::jsonb,
+          $25, $26, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+      `, [
+        vaultId,
+        studentKey,
+        studentId || null,
+        studentReg || null,
+        studentName,
+        classId || null,
+        className || null,
+        assessment.assessmentId || `diagram_${Date.now()}`,
+        `Auditoria de ${catLabel}`,
+        assessment.assessmentId || `activity_${Date.now()}`,
+        `Modelagem de Banco de Dados: ${catLabel}`,
+        lang,
+        submittedCode,
+        assessment.totalGrade,
+        100,
+        assessment.totalGrade,
+        assessment.isApproved ? "approved" : "saved",
+        feedbackSummary,
+        JSON.stringify(assessment),
+        JSON.stringify(assessment.rubrics || []),
+        JSON.stringify(assessment.strengths || []),
+        JSON.stringify(assessment.modelingIssues || []),
+        JSON.stringify(assessment),
+        JSON.stringify({
+          assessmentId: assessment.assessmentId,
+          modelCategory: modelCat,
+          inputFormat: params.inputFormat || assessment.inputFormat || "code",
+          targetSgbd: params.targetSgbd || assessment.targetSgbd,
+          normalizationAudit: assessment.normalizationAudit,
+          physicalAudit: assessment.physicalAudit,
+          isApproved: assessment.isApproved
+        }),
+        "diagram_assessment",
+        "IA Pedagógica SENAI"
+      ]);
+
+      // Also persist into d_pedagogical_evidence
+      try {
+        const evId = crypto.randomUUID();
+        await pool.query(`
+          INSERT INTO d_pedagogical_evidence (id, student_id, class_id, title, description, created_at)
+          VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+        `, [
+          evId,
+          studentId || studentKey,
+          classId || null,
+          `Avaliação de Modelagem/Diagrama: ${catLabel}`,
+          `Nota: ${assessment.totalGrade}/100 (${assessment.status}). Formato: ${(params.inputFormat || "código").toUpperCase()}.`
+        ]);
+      } catch (evErr) {
+        console.warn("Evidence log warning:", evErr);
+      }
+
+      return vaultId;
+    } catch (dbErr: any) {
+      console.error("Error saving diagram assessment to vault:", dbErr);
+      return null;
+    }
+  }
+
   app.post("/api/diagrams/assess", async (req, res) => {
     try {
       const {
@@ -3691,7 +3847,9 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         scenario = "",
         targetSgbd = "postgresql",
         studentId,
-        classId
+        studentName,
+        classId,
+        className
       } = req.body;
 
       if (!code && !imageBase64) {
@@ -3711,27 +3869,28 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         classId
       });
 
-      // Persist evidence if student is specified
-      if (pool && studentId) {
-        try {
-          const evId = crypto.randomUUID();
-          await pool.query(`
-            INSERT INTO d_pedagogical_evidence (id, student_id, class_id, title, description, created_at)
-            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-          `, [
-            evId,
-            studentId,
-            classId || null,
-            `Avaliação de Modelagem/Diagrama: ${diagramType.toUpperCase()} (${format.toUpperCase()})`,
-            `Nota obtida: ${assessmentResult.totalGrade}/100 (${assessmentResult.status}). Categoria: ${modelCategory.toUpperCase()}.`
-          ]);
-        } catch (dbErr) {
-          console.warn("Evidence log warning:", dbErr);
-        }
+      // Automatically persist correction to student profile and vault
+      let vaultId = null;
+      if (studentId || studentName) {
+        vaultId = await saveDiagramAssessmentToVault({
+          assessment: assessmentResult,
+          studentId,
+          studentName,
+          classId,
+          className,
+          code,
+          imageBase64,
+          scenario,
+          targetSgbd,
+          modelCategory,
+          inputFormat: format
+        });
       }
 
       res.json({
         success: true,
+        savedToVault: !!vaultId,
+        vaultId,
         ...assessmentResult
       });
     } catch (e: any) {
@@ -3743,7 +3902,25 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   app.post("/api/database-models/assess", async (req, res) => {
     try {
       const result = await DatabaseModelAssessmentService.assessDatabaseModel(req.body);
-      res.json({ success: true, result });
+      
+      let vaultId = null;
+      if (req.body.studentId || req.body.studentName) {
+        vaultId = await saveDiagramAssessmentToVault({
+          assessment: result,
+          studentId: req.body.studentId,
+          studentName: req.body.studentName,
+          classId: req.body.classId,
+          className: req.body.className,
+          code: req.body.code,
+          imageBase64: req.body.imageBase64,
+          scenario: req.body.scenario,
+          targetSgbd: req.body.targetSgbd,
+          modelCategory: req.body.modelCategory,
+          inputFormat: req.body.inputFormat
+        });
+      }
+
+      res.json({ success: true, savedToVault: !!vaultId, vaultId, result });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -4462,8 +4639,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const { studentId } = req.params;
       const { class_id = "turma-1a" } = req.query;
 
-      // Mock student profile
-      const studentProfile = {
+      // Mock/Real student profile
+      let studentProfile = {
         id: studentId,
         name: studentId === "st-01" ? "Ana Beatriz Silva" : studentId === "st-02" ? "Carlos Eduardo Santos" : "Estudante CodeCheck",
         enrollment_code: "202601" + (studentId.replace(/\D/g, "") || "01"),
@@ -4472,14 +4649,34 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         course: "Técnico em Desenvolvimento de Sistemas - SENAI"
       };
 
-      // 1. Get student grades
+      // 1. Get student grades and correction vault history (Code + Diagrams)
       let studentGrades: any[] = [];
+      let studentCorrections: any[] = [];
       if (pool) {
         try {
+          const sRes = await pool.query("SELECT s.*, c.name as class_name FROM d_student_record s LEFT JOIN d_class_group c ON s.class_id = c.id WHERE s.id = $1 OR s.enrollment_code = $1", [studentId]);
+          if (sRes.rows.length > 0) {
+            const row = sRes.rows[0];
+            studentProfile = {
+              id: row.id,
+              name: row.name,
+              enrollment_code: row.enrollment_code || studentProfile.enrollment_code,
+              class_id: row.class_id || studentProfile.class_id,
+              class_name: row.class_name || studentProfile.class_name,
+              course: "Técnico em Desenvolvimento de Sistemas - SENAI"
+            };
+          }
+
           const gRes = await pool.query("SELECT * FROM d_student_grades WHERE student_id = $1 ORDER BY updated_at DESC", [studentId]);
           studentGrades = gRes.rows;
+
+          const cRes = await pool.query(
+            "SELECT * FROM correction_vault WHERE student_id = $1 OR student_key = $1 OR student_registration = $1 OR student_name = $2 ORDER BY created_at DESC",
+            [studentId, studentProfile.name]
+          );
+          studentCorrections = cRes.rows;
         } catch (dbErr) {
-          console.warn("[StudentPortal] Grades lookup warning:", dbErr);
+          console.warn("[StudentPortal] DB lookup warning:", dbErr);
         }
       }
 
@@ -4497,6 +4694,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         student: studentProfile,
         attendance: attendanceSummary,
         grades: studentGrades,
+        corrections: studentCorrections,
+        submissions: studentCorrections,
         message: "Dados do portal do aluno carregados com sucesso."
       });
     } catch (e: any) {
