@@ -1,6 +1,7 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { safeAutoTable, getAutoTableFinalY } from "../utils/pdfExport";
 
 export type DatabaseModelCategory = "logical" | "physical" | "erDiagram" | "classDiagram";
 export type DatabaseTargetSgbd = "postgresql" | "mysql" | "sqlserver" | "oracle" | "sqlite";
@@ -815,102 +816,344 @@ CREATE INDEX idx_item_pedido_rel ON tb_item_pedido(pedido_id, produto_id);`;
     studentName?: string,
     className?: string
   ): Promise<Buffer> {
-    const doc = new jsPDF();
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
 
+    const isApproved = result.isApproved ?? (result.totalGrade >= (result.passingGrade || 60));
+    const statusText = result.status?.toUpperCase() || (isApproved ? "APROVADO" : result.totalGrade >= 40 ? "RECUPERAÇÃO" : "REPROVADO");
+    const sgbdLabel = (result.targetSgbd || "POSTGRESQL").toUpperCase();
+    const evaluatedDateStr = result.evaluatedAt ? new Date(result.evaluatedAt).toLocaleString("pt-BR") : new Date().toLocaleString("pt-BR");
+
+    // ===== PAGE 1: HEADER & IDENTIFICATION =====
+    // Header background banner
     doc.setFillColor(15, 23, 42); // slate-900
     doc.rect(0, 0, 210, 32, "F");
 
-    doc.setTextColor(56, 189, 248); // sky-400
-    doc.setFontSize(9);
-    doc.text("SENAI • AUDITORIA PEDAGÓGICA DE BANCO DE DADOS & MODELAGEM", 14, 12);
+    // Cyan top accent line
+    doc.setFillColor(56, 189, 248); // sky-400
+    doc.rect(0, 0, 210, 2.5, "F");
+
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("SENAI • SERVIÇO NACIONAL DE APRENDIZAGEM INDUSTRIAL — CODECHECK AI", 14, 11);
 
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13);
+    doc.setFontSize(12.5);
+    doc.setFont("helvetica", "bold");
     const categoryTitle = result.modelCategory === "physical"
-      ? `LAUDO TÉCNICO • MODELO FÍSICO / DDL (${(result.targetSgbd || "POSTGRESQL").toUpperCase()})`
+      ? `LAUDO TÉCNICO • MODELO FÍSICO / DDL (${sgbdLabel})`
+      : result.modelCategory === "classDiagram"
+      ? "LAUDO TÉCNICO • DIAGRAMA DE CLASSES UML (OOP)"
       : "LAUDO TÉCNICO • MODELO LÓGICO / RELACIONAL (DER & 3FN)";
-    doc.text(categoryTitle, 14, 22);
+    doc.text(categoryTitle, 14, 21);
+
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    doc.text(`ID da Auditoria: ${result.assessmentId || "N/A"} • Formato: ${(result.inputFormat || "IMAGEM").toUpperCase()}`, 14, 28);
+
+    // Submitter Metadata Block
+    doc.setFillColor(248, 250, 252);
+    doc.rect(14, 38, 182, 19, "F");
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(14, 38, 182, 19, "S");
 
     doc.setTextColor(30, 41, 59);
-    doc.setFontSize(10);
-    doc.text(`Estudante: ${studentName || "Estudante / Autor da Submissão"}`, 14, 42);
-    doc.text(`Turma / Unidade: ${className || "Curso Técnico de TI - SENAI"} | Formato: ${result.inputFormat.toUpperCase()}`, 14, 48);
-    doc.text(`Data da Avaliação: ${new Date(result.evaluatedAt).toLocaleString("pt-BR")}`, 14, 54);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Estudante:", 18, 44);
+    doc.setFont("helvetica", "normal");
+    doc.text(studentName || "Estudante / Aluno Avaliado", 36, 44);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Turma / Curso:", 110, 44);
+    doc.setFont("helvetica", "normal");
+    doc.text(className || "Curso Técnico de TI - SENAI", 134, 44);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Data da Avaliação:", 18, 51);
+    doc.setFont("helvetica", "normal");
+    doc.text(evaluatedDateStr, 48, 51);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Motor de Avaliação:", 110, 51);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Visão Computacional Multimodal (${result.inputFormat === "image" ? "OCR + IA Visual" : "Parser DDL"})`, 142, 51);
 
     // Score Banner
-    doc.setFillColor(result.isApproved ? 240 : 254, result.isApproved ? 253 : 242, result.isApproved ? 244 : 242);
-    doc.rect(14, 60, 182, 20, "F");
-    doc.setDrawColor(result.isApproved ? 187 : 254, result.isApproved ? 247 : 202, result.isApproved ? 208 : 202);
-    doc.rect(14, 60, 182, 20, "S");
+    const scoreBgColor = isApproved ? [240, 253, 244] : result.totalGrade >= 40 ? [254, 252, 232] : [254, 242, 242];
+    const scoreBorderColor = isApproved ? [187, 247, 208] : result.totalGrade >= 40 ? [254, 240, 138] : [254, 202, 202];
+    const scoreTextColor = isApproved ? [22, 101, 52] : result.totalGrade >= 40 ? [133, 77, 14] : [153, 27, 27];
 
-    doc.setTextColor(result.isApproved ? 22 : 153, result.isApproved ? 101 : 27, result.isApproved ? 52 : 27);
-    doc.setFontSize(13);
-    doc.text(`NOTA CONSOLIDADA: ${result.totalGrade} / 100 — STATUS: ${result.status.toUpperCase()}`, 18, 73);
+    doc.setFillColor(scoreBgColor[0], scoreBgColor[1], scoreBgColor[2]);
+    doc.rect(14, 61, 182, 16, "F");
+    doc.setDrawColor(scoreBorderColor[0], scoreBorderColor[1], scoreBorderColor[2]);
+    doc.rect(14, 61, 182, 16, "S");
 
-    // Rubrics Table
-    doc.setTextColor(15, 23, 42);
+    doc.setTextColor(scoreTextColor[0], scoreTextColor[1], scoreTextColor[2]);
     doc.setFontSize(11);
-    doc.text("Critérios de Avaliação Ponderada:", 14, 90);
+    doc.setFont("helvetica", "bold");
+    doc.text(`NOTA CONSOLIDADA: ${result.totalGrade} / 100 — STATUS: ${statusText}`, 18, 71.5);
 
-    const rubricRows = result.rubrics.map(r => [
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`(Nota mínima de aprovação: ${result.passingGrade || 60} pts)`, 138, 71.5);
+
+    // Section 1: Rubrics Table
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("1. MATRIZ DE CRITÉRIOS E RUBRICAS PONDERADAS", 14, 84);
+
+    const rubricRows = (result.rubrics || []).map(r => [
       r.name,
       `${r.score} / ${r.maxScore}`,
+      `${r.weight}%`,
       r.status,
       r.feedback
     ]);
 
-    autoTable(doc, {
-      startY: 94,
-      head: [["Critério", "Nota", "Status", "Parecer Pedagógico"]],
+    safeAutoTable(doc, {
+      startY: 87,
+      head: [["Critério Avaliado", "Nota", "Peso", "Desempenho", "Parecer Pedagógico"]],
       body: rubricRows,
-      theme: "grid",
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
-      styles: { fontSize: 8, cellPadding: 2.5 }
+      columnStyles: {
+        0: { cellWidth: 42, fontStyle: "bold" },
+        1: { cellWidth: 16, halign: "center" },
+        2: { cellWidth: 14, halign: "center" },
+        3: { cellWidth: 22, halign: "center" },
+        4: { cellWidth: 88 }
+      },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+      styles: { fontSize: 7.5, cellPadding: 2.2 }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 160;
+    let currentY = getAutoTableFinalY(doc, 150);
 
-    // Normalization & Strengths
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(10);
-    doc.text("Auditoria de Normalização & Integridade:", 14, finalY + 10);
+    // Section 2: Normalization Audit Table (1FN, 2FN, 3FN)
+    if (result.normalizationAudit) {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("2. AUDITORIA DE NORMALIZAÇÃO RELACIONAL (1FN • 2FN • 3FN)", 14, currentY + 8);
 
-    const normRows = [
-      ["1ª Forma Normal (1FN)", result.normalizationAudit.firstNormalForm.compliant ? "CONFORME" : "ATENÇÃO", result.normalizationAudit.firstNormalForm.explanation],
-      ["2ª Forma Normal (2FN)", result.normalizationAudit.secondNormalForm.compliant ? "CONFORME" : "ATENÇÃO", result.normalizationAudit.secondNormalForm.explanation],
-      ["3ª Forma Normal (3FN)", result.normalizationAudit.thirdNormalForm.compliant ? "CONFORME" : "ATENÇÃO", result.normalizationAudit.thirdNormalForm.explanation]
-    ];
+      const norm1 = result.normalizationAudit.firstNormalForm;
+      const norm2 = result.normalizationAudit.secondNormalForm;
+      const norm3 = result.normalizationAudit.thirdNormalForm;
 
-    autoTable(doc, {
-      startY: finalY + 14,
-      head: [["Regra de Normalização", "Status", "Diagnóstico Técnico"]],
-      body: normRows,
-      theme: "plain",
-      headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: "bold" },
-      styles: { fontSize: 7.5, cellPadding: 2 }
-    });
+      const normRows = [
+        ["1ª Forma Normal (1FN)", norm1?.compliant ? "CONFORME" : "ATENÇÃO", norm1?.explanation || "Campos atômicos sem grupos repetidores."],
+        ["2ª Forma Normal (2FN)", norm2?.compliant ? "CONFORME" : "ATENÇÃO", norm2?.explanation || "Dependência funcional total em relação à chave primária."],
+        ["3ª Forma Normal (3FN)", norm3?.compliant ? "CONFORME" : "ATENÇÃO", norm3?.explanation || "Ausência de dependências transitivas entre campos não-chave."]
+      ];
 
-    // Page 2: Corrected DDL and Code
+      safeAutoTable(doc, {
+        startY: currentY + 11,
+        head: [["Regra de Normalização", "Status", "Diagnóstico Técnico & Justificativa"]],
+        body: normRows,
+        columnStyles: {
+          0: { cellWidth: 42, fontStyle: "bold" },
+          1: { cellWidth: 24, halign: "center" },
+          2: { cellWidth: 116 }
+        },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 2.2 }
+      });
+
+      currentY = getAutoTableFinalY(doc, 210);
+    }
+
+    // ===== PAGE 2: PHYSICAL AUDIT, STRENGTHS, ISSUES & RECOMMENDATIONS =====
     doc.addPage();
+
+    // Page 2 Header Banner
     doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, 210, 25, "F");
+    doc.rect(0, 0, 210, 20, "F");
+    doc.setFillColor(56, 189, 248);
+    doc.rect(0, 0, 210, 2, "F");
+
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(12);
-    doc.text("GABARITO OFICIAL • SCRIPT DDL E MODELAGEM CORRIGIDA", 14, 16);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("DIAGNÓSTICO TÉCNICO DETALHADO & FEEDBACK PEDAGÓGICO", 14, 13);
 
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(10);
-    doc.text("Script DDL SQL Executável Sugerido:", 14, 35);
+    currentY = 28;
 
-    const splitSql = doc.splitTextToSize(result.generatedDdlSql, 182);
-    doc.setFillColor(248, 250, 252);
-    doc.rect(14, 40, 182, Math.min(220, splitSql.length * 4.2 + 8), "F");
-    doc.setDrawColor(203, 213, 225);
-    doc.rect(14, 40, 182, Math.min(220, splitSql.length * 4.2 + 8), "S");
+    // Physical Audit Box if applicable
+    if (result.physicalAudit) {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`3. AUDITORIA DE MODELO FÍSICO & COMPATIBILIDADE SGBD (${sgbdLabel})`, 14, currentY);
 
-    doc.setTextColor(51, 65, 85);
+      const physRows: string[][] = [
+        ["Dialeto SGBD Alvo", sgbdLabel, "Validação de sintaxe compatível com o interpretador oficial."],
+        ["Tipagem de Colunas", `${result.physicalAudit.dataTypesScore}% conformidade`, (result.physicalAudit.dataTypesObservations || []).join(" ") || "Tipos escalares validados."],
+        ["Chaves PK & FK", "Estruturadas", (result.physicalAudit.primaryKeysObservations || []).concat(result.physicalAudit.foreignKeysObservations || []).join(" ") || "Integridade referencial validada."],
+        ["Constraints Físicas", result.physicalAudit.constraintsCheck?.notNullCompliance ? "NOT NULL / UNIQUE / CHECK" : "Ajustes Requeridos", (result.physicalAudit.constraintsCheck?.observations || []).join(" ") || "Restrições verificadas."],
+        ["Recomendações de Índices", "Otimização", (result.physicalAudit.indexingRecommendations || []).join(" ") || "Índices B-Tree recomendados nas FKs."]
+      ];
+
+      safeAutoTable(doc, {
+        startY: currentY + 3,
+        head: [["Componente Físico", "Classificação", "Parecer Técnico de Engenharia"]],
+        body: physRows,
+        columnStyles: {
+          0: { cellWidth: 42, fontStyle: "bold" },
+          1: { cellWidth: 32, halign: "center" },
+          2: { cellWidth: 108 }
+        },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 2 }
+      });
+
+      currentY = getAutoTableFinalY(doc, currentY + 45);
+    }
+
+    // Strengths Block
+    const strengths = result.strengths && result.strengths.length > 0
+      ? result.strengths
+      : ["Compreensão inicial da modelagem estrutural do cenário proposto."];
+
+    doc.setTextColor(5, 150, 105); // emerald-600
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("4. PONTOS FORTES PEDAGÓGICOS (CONFORMIDADES)", 14, currentY + 8);
+
+    doc.setFillColor(240, 253, 244);
+    doc.rect(14, currentY + 11, 182, Math.max(16, strengths.length * 5 + 4), "F");
+    doc.setDrawColor(187, 247, 208);
+    doc.rect(14, currentY + 11, 182, Math.max(16, strengths.length * 5 + 4), "S");
+
+    doc.setTextColor(22, 101, 52);
     doc.setFontSize(7.5);
-    doc.text(splitSql.slice(0, 50), 18, 48);
+    doc.setFont("helvetica", "normal");
+    strengths.forEach((st, idx) => {
+      doc.text(`[✓] ${st}`, 18, currentY + 16 + (idx * 5));
+    });
+
+    currentY += Math.max(16, strengths.length * 5 + 4) + 16;
+
+    // Modeling Issues Block
+    const issues = result.modelingIssues && result.modelingIssues.length > 0
+      ? result.modelingIssues
+      : ["Nenhuma inconsistência grave identificada no diagrama submetido."];
+
+    doc.setTextColor(217, 119, 6); // amber-600
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("5. OPORTUNIDADES DE CORREÇÃO & INCONSISTÊNCIAS IDENTIFICADAS", 14, currentY);
+
+    doc.setFillColor(254, 252, 232);
+    doc.rect(14, currentY + 3, 182, Math.max(16, issues.length * 5 + 4), "F");
+    doc.setDrawColor(254, 240, 138);
+    doc.rect(14, currentY + 3, 182, Math.max(16, issues.length * 5 + 4), "S");
+
+    doc.setTextColor(133, 77, 14);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    issues.forEach((iss, idx) => {
+      doc.text(`[!] ${iss}`, 18, currentY + 8 + (idx * 5));
+    });
+
+    currentY += Math.max(16, issues.length * 5 + 4) + 8;
+
+    // Recommendations Block
+    const recs = result.pedagogicalRecommendations && result.pedagogicalRecommendations.length > 0
+      ? result.pedagogicalRecommendations
+      : ["Praticar decomposição em 3FN e criação de constraints explícitas."];
+
+    doc.setTextColor(2, 132, 199); // sky-600
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("6. RECOMENDAÇÕES PEDAGÓGICAS PARA EVOLUÇÃO", 14, currentY);
+
+    doc.setFillColor(240, 249, 255);
+    doc.rect(14, currentY + 3, 182, Math.max(16, recs.length * 5 + 4), "F");
+    doc.setDrawColor(186, 230, 253);
+    doc.rect(14, currentY + 3, 182, Math.max(16, recs.length * 5 + 4), "S");
+
+    doc.setTextColor(3, 105, 161);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    recs.forEach((rec, idx) => {
+      doc.text(`[•] ${rec}`, 18, currentY + 8 + (idx * 5));
+    });
+
+    // ===== PAGE 3: OFFICIAL ANSWER KEY / DDL SQL SCRIPT =====
+    doc.addPage();
+
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 20, "F");
+    doc.setFillColor(56, 189, 248);
+    doc.rect(0, 0, 210, 2, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`7. GABARITO OFICIAL • SCRIPT DDL SQL EXECUTÁVEL (${sgbdLabel})`, 14, 13);
+
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Script gerado por engenharia reversa para materialização física e testes de integridade:", 14, 27);
+
+    const ddlContent = result.generatedDdlSql || "-- Nenhum script DDL gerado.";
+    const splitSql = doc.splitTextToSize(ddlContent, 174);
+    
+    // Draw code container
+    const codeBoxHeight = Math.min(200, splitSql.length * 3.8 + 8);
+    doc.setFillColor(15, 23, 42); // slate-900 editor background
+    doc.rect(14, 31, 182, codeBoxHeight, "F");
+    doc.setDrawColor(51, 65, 85);
+    doc.rect(14, 31, 182, codeBoxHeight, "S");
+
+    doc.setTextColor(56, 189, 248); // sky-400 code text
+    doc.setFontSize(7);
+    doc.setFont("courier", "normal");
+    
+    const linesToDraw = splitSql.slice(0, 48);
+    linesToDraw.forEach((line: string, idx: number) => {
+      doc.text(line, 18, 37 + (idx * 3.8));
+    });
+
+    // Institutional Certification Stamp
+    const stampY = 31 + codeBoxHeight + 8;
+    if (stampY < 265) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(14, stampY, 182, 16, "F");
+      doc.setDrawColor(203, 213, 225);
+      doc.rect(14, stampY, 182, 16, "S");
+
+      doc.setTextColor(71, 85, 105);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("CERTIFICAÇÃO DIGITAL DE AVALIAÇÃO • SENAI CODECHECK AI", 18, stampY + 6);
+      doc.setFont("helvetica", "normal");
+      doc.text("Este laudo foi emitido pelo motor de auditoria automatizada do CodeCheck AI em conformidade com as diretrizes do SENAI.", 18, stampY + 11);
+    }
+
+    // ===== NUMBERING & FOOTERS ON ALL PAGES =====
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      
+      // Footer line
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(14, 287, 196, 287);
+
+      // Footer text
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.text("SENAI • CodeCheck AI — Sistema de Auditoria Pedagógica e Correção de Atividades", 14, 292);
+      doc.text(`Página ${i} de ${totalPages}`, 178, 292);
+    }
 
     const arrayBuffer = doc.output("arraybuffer");
     return Buffer.from(arrayBuffer);

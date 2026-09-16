@@ -3765,6 +3765,12 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   app.post("/api/diagrams/export-pdf", async (req, res) => {
     try {
       const { title, studentName, className, assessment } = req.body;
+      if (assessment) {
+        const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(assessment, studentName, className);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename=parecer_modelagem_${Date.now()}.pdf`);
+        return res.send(pdfBuffer);
+      }
       const doc = new PDFDocument({ margin: 40 });
 
       res.setHeader("Content-Type", "application/pdf");

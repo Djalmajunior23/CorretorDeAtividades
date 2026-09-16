@@ -102,6 +102,7 @@ export default function DiagramAssessmentView() {
   // Assessment & AI Processing
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
   const [isGeneratingRef, setIsGeneratingRef] = useState<boolean>(false);
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [assessment, setAssessment] = useState<DatabaseModelAssessmentResult | null>(null);
   const [activeTab, setActiveTab] = useState<"feedback" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram">("feedback");
 
@@ -340,26 +341,58 @@ CREATE TABLE tb_item_pedido (
 
   const handleExportPdf = async () => {
     if (!assessment) return;
+    setIsExportingPdf(true);
+    const toastId = toast.loading("Gerando Laudo Técnico em PDF...");
     try {
       const studentObj = students.find(s => s.id === selectedStudentId);
       const classObj = classes.find(c => c.id === selectedClassId);
-      const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(
-        assessment,
-        studentObj?.name,
-        classObj?.name
-      );
-      const blob = new Blob([pdfBuffer as any], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
+      const studentName = studentObj?.name || "Estudante";
+      const className = classObj?.name || "Turma de Banco de Dados";
+
+      let pdfBlob: Blob | null = null;
+
+      // Try server endpoint first
+      try {
+        const res = await fetch("/api/database-models/export-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            assessment,
+            studentName,
+            className
+          })
+        });
+        if (res.ok) {
+          pdfBlob = await res.blob();
+        }
+      } catch (e) {
+        console.warn("Server PDF export endpoint unreachable, generating client-side:", e);
+      }
+
+      // Fallback to client-side generation
+      if (!pdfBlob) {
+        const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(
+          assessment,
+          studentName,
+          className
+        );
+        pdfBlob = new Blob([pdfBuffer as any], { type: "application/pdf" });
+      }
+
+      const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `laudo_modelagem_banco_${assessment.assessmentId}.pdf`;
+      a.download = `laudo_modelagem_banco_${assessment.assessmentId || Date.now()}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success("Laudo Técnico de Modelagem em PDF exportado com sucesso!");
+      toast.success("Laudo Técnico de Modelagem baixado com sucesso!", { id: toastId });
     } catch (err: any) {
-      toast.error("Erro ao exportar PDF: " + err.message);
+      console.error(err);
+      toast.error("Erro ao exportar PDF: " + err.message, { id: toastId });
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -385,10 +418,15 @@ CREATE TABLE tb_item_pedido (
             {assessment && (
               <button
                 onClick={handleExportPdf}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold font-mono transition-all border border-slate-700 flex items-center gap-2 cursor-pointer shadow-lg"
+                disabled={isExportingPdf}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold font-mono transition-all border border-slate-700 flex items-center gap-2 cursor-pointer shadow-lg disabled:opacity-50"
               >
-                <Download className="w-4 h-4 text-sky-400" />
-                Exportar Laudo PDF
+                {isExportingPdf ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
+                ) : (
+                  <Download className="w-4 h-4 text-sky-400" />
+                )}
+                {isExportingPdf ? "Gerando PDF..." : "Exportar Laudo PDF"}
               </button>
             )}
 
@@ -641,11 +679,26 @@ CREATE TABLE tb_item_pedido (
                   <h2 className="text-lg font-bold text-white">Resultado da Auditoria do Banco de Dados</h2>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <div className="text-3xl font-black font-mono text-white">
-                    {assessment.totalGrade}<span className="text-sm text-slate-500 font-normal">/100</span>
+                <div className="flex items-center gap-4 shrink-0">
+                  <button
+                    onClick={handleExportPdf}
+                    disabled={isExportingPdf}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                  >
+                    {isExportingPdf ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5 text-sky-400" />
+                    )}
+                    {isExportingPdf ? "Baixando..." : "Laudo PDF"}
+                  </button>
+
+                  <div className="text-right">
+                    <div className="text-3xl font-black font-mono text-white">
+                      {assessment.totalGrade}<span className="text-sm text-slate-500 font-normal">/100</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400">Nota Consolidada</span>
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400">Nota Consolidada</span>
                 </div>
               </div>
 
