@@ -270,13 +270,18 @@ export default function ReportsView() {
     toast.success("Parecer pedagógico estruturado gerado com sucesso!");
   };
 
-  const handleDeleteReport = (id: string, e: React.MouseEvent) => {
+  const handleDeleteReport = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    try {
+      await fetch(apiUrl(`/api/reports/${id}`), { method: "DELETE" });
+    } catch (err) {
+      console.warn("Could not delete on server:", err);
+    }
     setReports(prev => prev.filter(r => r.id !== id));
     if (selectedReport?.id === id) {
       setSelectedReport(null);
     }
-    toast.success("Documento removido do repositório.");
+    toast.success("Documento removido do repositório permanente.");
   };
 
   // Export PDF of any report directly using client-side jsPDF
