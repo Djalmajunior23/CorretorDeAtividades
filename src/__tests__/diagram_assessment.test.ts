@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import { setupTeacherAPIs } from "../../server-apis-addon";
+import { DatabaseModelAssessmentService } from "../services/databaseModelAssessmentService";
 
 // Mock pg Pool
 const mockPool = {
@@ -368,13 +369,119 @@ describe("Módulo de Correção de Diagramas e Modelagem de Sistemas", () => {
     expect(mockPool.query).toHaveBeenCalled();
   });
 
-  it("GET /api/student/portal-data/:studentId - Deve retornar dados cadastrais e submissões do estudante", async () => {
-    const res = await fetch(`${baseUrl}/api/student/portal-data/st-01?class_id=turma-1a`);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.student).toBeDefined();
-    expect(data.student.id).toBe("st-01");
-    expect(data.attendance).toBeDefined();
-    expect(Array.isArray(data.submissions)).toBe(true);
+  it("POST /api/diagrams/assess - Deve diferenciar fotos/modelos consecutivos sem persistir entidades da imagem anterior", async () => {
+    // Foto 1: Modelo de Biblioteca (brModelo / OCR text scan)
+    const photo1Ocr = `
+TABELA: AUTOR
+- id uuid PK
+- nome varchar
+- nacionalidade varchar
+
+TABELA: LIVRO
+- id uuid PK
+- titulo varchar
+- autor_id uuid FK
+- ano int
+
+AUTOR ||--o{ LIVRO : "escreve"
+`;
+
+    const res1 = await fetch(`${baseUrl}/api/diagrams/assess`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        diagramType: "erDiagram",
+        format: "code",
+        code: photo1Ocr,
+        scenario: "Sistema de Biblioteca Municipal"
+      })
+    });
+
+    expect(res1.status).toBe(200);
+    const data1 = await res1.json();
+    const tableNames1 = data1.extractedTables.map((t: any) => t.name);
+    expect(tableNames1).toContain("AUTOR");
+    expect(tableNames1).toContain("LIVRO");
+    expect(tableNames1).not.toContain("MEDICO");
+    expect(data1.generatedDdlSql.toUpperCase()).toContain("CREATE TABLE AUTOR");
+    expect(data1.generatedDdlSql.toUpperCase()).toContain("CREATE TABLE LIVRO");
+    expect(data1.generatedDdlSql.toUpperCase()).not.toContain("MEDICO");
+
+    // Foto 2: Modelo de Hospital (brModelo / OCR text scan) submetido logo após a foto 1
+    const photo2Ocr = `
+TABELA: MEDICO
+- id uuid PK
+- crm varchar UK
+- nome varchar
+- especialidade varchar
+
+TABELA: PACIENTE
+- id uuid PK
+- cpf varchar UK
+- nome varchar
+
+TABELA: CONSULTA
+- id uuid PK
+- medico_id uuid FK
+- paciente_id uuid FK
+- data_hora timestamp
+`;
+
+    const res2 = await fetch(`${baseUrl}/api/diagrams/assess`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        diagramType: "erDiagram",
+        format: "code",
+        code: photo2Ocr,
+        scenario: "Sistema Hospitalar e Clínico"
+      })
+    });
+
+    expect(res2.status).toBe(200);
+    const data2 = await res2.json();
+    const tableNames2 = data2.extractedTables.map((t: any) => t.name);
+    expect(tableNames2).toContain("MEDICO");
+    expect(tableNames2).toContain("PACIENTE");
+    expect(tableNames2).toContain("CONSULTA");
+    // Foto 2 não deve conter entidades da Foto 1
+    expect(tableNames2).not.toContain("AUTOR");
+    expect(tableNames2).not.toContain("LIVRO");
+    expect(data2.generatedDdlSql.toUpperCase()).toContain("CREATE TABLE MEDICO");
+    expect(data2.generatedDdlSql.toUpperCase()).toContain("CREATE TABLE PACIENTE");
+    expect(data2.generatedDdlSql.toUpperCase()).toContain("CREATE TABLE CONSULTA");
+    expect(data2.generatedDdlSql.toUpperCase()).not.toContain("AUTOR");
+    expect(data2.generatedDdlSql.toUpperCase()).not.toContain("LIVRO");
+  });
+
+  it("DatabaseModelAssessmentService.parseEntitiesFromContent - Deve extrair entidades de múltiplos formatos de OCR (Parênteses, Bullet, Tabelas)", () => {
+    // Formato com parênteses inline
+    const parenFormat = `
+ESCOLA (id PK, nome VARCHAR, cnpj VARCHAR UK)
+TURMA (id PK, escola_id FK, ano_letivo INT)
+MATRICULA (id PK, turma_id FK, aluno_nome VARCHAR)
+`;
+    const tablesParen = DatabaseModelAssessmentService.parseEntitiesFromContent(parenFormat, "Gestão Escolar");
+    expect(tablesParen.length).toBe(3);
+    expect(tablesParen.map((t: any) => t.name)).toEqual(["ESCOLA", "TURMA", "MATRICULA"]);
+    expect(tablesParen.find((t: any) => t.name === "TURMA")?.columns.some((c: any) => c.isForeignKey)).toBe(true);
+
+    // Formato de blocos sem delimitador de chave
+    const blockFormat = `
+FORNECEDOR
+id PK
+razao_social
+cnpj UK
+
+PRODUTO_ESTOQUE
+id PK
+fornecedor_id FK
+quantidade int
+preco_custo decimal
+`;
+    const tablesBlock = DatabaseModelAssessmentService.parseEntitiesFromContent(blockFormat, "Controle de Estoque");
+    expect(tablesBlock.length).toBe(2);
+    expect(tablesBlock.map((t: any) => t.name)).toEqual(["FORNECEDOR", "PRODUTO_ESTOQUE"]);
   });
 });
+

@@ -1,4 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
+import { OCRService } from "../ai/services/OCRService";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { safeAutoTable, getAutoTableFinalY } from "../utils/pdfExport";
@@ -121,14 +122,27 @@ export class DatabaseModelAssessmentService {
     const scenario = (params.scenario || "").trim() || "Modelagem de dados e integridade relacional.";
     const rawCode = (params.code || "").trim();
 
-    // 1. Multimodal AI Vision Analysis if Image or Code is provided
+    // 1. Multimodal AI Vision Analysis and Local OCR if Image or Code is provided
     let aiStructuredResult: DatabaseModelAssessmentResult | null = null;
     let extractedTextFromImage = "";
 
+    const isImage = format === "image" && !!params.imageBase64;
+    const imageData = isImage ? parseImageData(params.imageBase64!) : undefined;
+
+    // Run local OCR (Tesseract.js) to guarantee text extraction from the uploaded image
+    if (isImage && params.imageBase64) {
+      try {
+        const ocrResult = await OCRService.extractTextFromImage(params.imageBase64);
+        if (ocrResult && ocrResult.text && ocrResult.text.trim()) {
+          extractedTextFromImage = ocrResult.text.trim();
+        }
+      } catch (ocrErr: any) {
+        console.warn("[DatabaseModelAssessmentService] Local OCR extraction failed:", ocrErr.message);
+      }
+    }
+
     try {
       const provider = ProviderFactory.createCustomProvider(params.providerConfig);
-      const isImage = format === "image" && !!params.imageBase64;
-      const imageData = isImage ? parseImageData(params.imageBase64!) : undefined;
 
       const aiSystemPrompt = `
 Você é o Especialista Chefe em Bancos de Dados e Engenharia de Software do SENAI.
@@ -136,10 +150,11 @@ Sua missão é inspecionar minuciosamente o diagrama submetido pelo estudante ${
 
 ENUNCIADO / CENÁRIO INFORMADO:
 """${scenario}"""
+${extractedTextFromImage ? `\nTEXTO EXTRAÍDO DA IMAGEM ATUAL VIA OCR LOCAL:\n"""\n${extractedTextFromImage}\n"""\n` : ""}
 
 DIRETRIZES DE EXTRAÇÃO E AVALIAÇÃO:
-1. Extraia com máxima fidelidade TODAS as Entidades/Tabelas desenhadas ou declaradas no diagrama, com seus atributos, tipos de dados, chaves primárias (PK), chaves estrangeiras (FK) e cardinalidades.
-2. Não invente entidades não relacionadas ao desenho do aluno. Se o aluno modelou (por exemplo: "AUTOR", "LIVRO", "EMPRESTIMO"), o resultado DEVE conter exatamente essas tabelas!
+1. Extraia com máxima fidelidade TODAS as Entidades/Tabelas desenhadas ou declaradas no diagrama da imagem atual, com seus atributos, tipos de dados, chaves primárias (PK), chaves estrangeiras (FK) e cardinalidades.
+2. IMPORTANTE: Cada foto/diagrama submetido é ÚNICO e INDEPENDENTE. Não reutilize entidades genéricas ou de avaliações anteriores. Avalie rigorosamente apenas as tabelas e campos desta imagem específica!
 3. Formas Normais (1FN, 2FN, 3FN):
    - 1FN: atomicidade dos atributos e ausência de campos multivalorados na mesma coluna.
    - 2FN: ausência de dependências parciais em tabelas com chave composta.
@@ -392,29 +407,31 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
   }
 
   /**
-   * Dynamically extracts entities, columns, PKs, FKs, and relationships from text/code.
+   * Dynamically extracts entities, columns, PKs, FKs, and relationships from text, code, or OCR outputs.
    */
   public static parseEntitiesFromContent(content: string, scenario: string): ExtractedTableEntity[] {
     const raw = content || "";
     const extracted: ExtractedTableEntity[] = [];
 
-    // Parse relationship lines: TABLE1 ||--o{ TABLE2 : "label"
-    const relationRegex = /([A-Za-z0-9_]+)\s*(?:\|\||}\||\}\|..|--|o\{|\{)\s*(?:--|\.\.)\s*(?:\|\||\|\{|o\{|\{\||\{..|--)\s*([A-Za-z0-9_]+)/g;
+    // Parse relationship lines: TABLE1 ||--o{ TABLE2 : "label" or TABLE1 -> TABLE2
+    const relationRegex = /([A-Za-z0-9_]+)\s*(?:\|\||}\||\}\|..|--|o\{|\{|->|<-)\s*(?:--|\.\.|>|<)?\s*(?:\|\||\|\{|o\{|\{\||\{..|--|->|<-)?\s*([A-Za-z0-9_]+)/g;
     let relMatch;
     const relations: Array<{ parent: string; child: string }> = [];
     while ((relMatch = relationRegex.exec(raw)) !== null) {
       const parent = relMatch[1].trim();
       const child = relMatch[2].trim();
-      if (parent !== "erDiagram" && child !== "erDiagram") {
+      if (!["erdiagram", "classdiagram", "create", "table", "alter"].includes(parent.toLowerCase()) &&
+          !["erdiagram", "classdiagram", "create", "table", "alter"].includes(child.toLowerCase())) {
         relations.push({ parent, child });
       }
     }
 
-    // Match Mermaid ERD: Entity { type name PK/FK }
+    // 1. Match Mermaid ERD: Entity { type name PK/FK }
     const entityBlockRegex = /([A-Za-z0-9_]+)\s*\{([^}]*)\}/g;
     let match;
     while ((match = entityBlockRegex.exec(raw)) !== null) {
       const tableName = match[1].trim();
+      if (["erdiagram", "classdiagram"].includes(tableName.toLowerCase())) continue;
       const body = match[2];
       const lines = body.split("\n").map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith("//") && !l.startsWith("#"));
       const cols: ExtractedTableEntity["columns"] = [];
@@ -429,7 +446,6 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
           if (parts.length === 1) {
             colName = parts[0];
           } else if (parts.length === 2) {
-            // Check if first part looks like a type (string, int, uuid, datetime, decimal, etc.)
             const isFirstType = /^(string|varchar|int|integer|bigint|smallint|float|double|decimal|numeric|date|datetime|timestamp|timestamptz|uuid|boolean|bool|text|char)/i.test(parts[0]);
             if (isFirstType) {
               type = parts[0];
@@ -445,10 +461,9 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
           }
 
           const isPK = flags.includes("PK") || colName.toLowerCase() === "id" || (colName.toLowerCase() === `${tableName.toLowerCase()}_id` && lines.indexOf(line) === 0);
-          const isFK = flags.includes("FK") || (colName.toLowerCase().endsWith("_id") && !isPK) || colName.toLowerCase().startsWith("id_") && !isPK;
+          const isFK = flags.includes("FK") || (colName.toLowerCase().endsWith("_id") && !isPK) || (colName.toLowerCase().startsWith("id_") && !isPK);
           const isUK = flags.includes("UK") || flags.includes("UNIQUE");
 
-          // Infer referenced table if FK
           let references: { table: string; column: string } | undefined = undefined;
           if (isFK) {
             const cleanTarget = colName.toLowerCase().replace(/_id$/, "").replace(/^id_/, "");
@@ -472,13 +487,13 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
       }
 
       extracted.push({
-        name: tableName,
+        name: tableName.toUpperCase(),
         type: tableName.toLowerCase().includes("item") || tableName.toLowerCase().includes("rel") || tableName.includes("_") ? "associative_table" : "strong_entity",
         columns: cols
       });
     }
 
-    // Match SQL CREATE TABLE tbl ( ... )
+    // 2. Match SQL CREATE TABLE tbl ( ... )
     if (extracted.length === 0) {
       const createTableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_]+)\s*\(([\s\S]*?)\);/gi;
       let sqlMatch;
@@ -493,14 +508,17 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
           if (parts.length >= 2) {
             const colName = parts[0];
             const colType = parts[1];
-            const isPK = colLine.toUpperCase().includes("PRIMARY KEY");
-            const isFK = colLine.toUpperCase().includes("REFERENCES") || colName.toLowerCase().endsWith("_id");
+            const isPK = colLine.toUpperCase().includes("PRIMARY KEY") || colName.toLowerCase() === "id";
+            const isFK = colLine.toUpperCase().includes("REFERENCES") || (colName.toLowerCase().endsWith("_id") && !isPK);
             const isUK = colLine.toUpperCase().includes("UNIQUE");
 
             let references: { table: string; column: string } | undefined = undefined;
             const refMatch = colLine.match(/REFERENCES\s+([A-Za-z0-9_]+)\s*(?:\(([A-Za-z0-9_]+)\))?/i);
             if (refMatch) {
               references = { table: refMatch[1].toUpperCase(), column: refMatch[2] || "id" };
+            } else if (isFK) {
+              const cleanTarget = colName.toLowerCase().replace(/_id$/, "").replace(/^id_/, "");
+              references = { table: cleanTarget.toUpperCase(), column: "id" };
             }
 
             cols.push({
@@ -516,14 +534,137 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
         }
 
         extracted.push({
-          name: tblName,
+          name: tblName.toUpperCase(),
           type: "physical_table",
           columns: cols.length > 0 ? cols : [{ name: "id", dataType: "UUID", isPrimaryKey: true, isForeignKey: false, isNullable: false }]
         });
       }
     }
 
-    // Inject FKs from Mermaid relations if not yet explicit
+    // 3. Match Parenthesized format: ENTIDADE(col1, col2, ...) or TABELA (col1 PK, col2 FK, ...)
+    if (extracted.length === 0) {
+      const parenRegex = /(?:TABELA\s+|TABLE\s+|ENTIDADE\s+)?([A-Za-z0-9_]{2,30})\s*\(([^)]+)\)/gi;
+      let pMatch;
+      while ((pMatch = parenRegex.exec(raw)) !== null) {
+        const tblName = pMatch[1].trim();
+        if (["varchar", "numeric", "decimal", "check", "primary", "foreign"].includes(tblName.toLowerCase())) continue;
+        const inner = pMatch[2].trim();
+        const rawCols = inner.split(/[,;\n]+/).map(c => c.trim()).filter(c => c.length > 0);
+        const cols: ExtractedTableEntity["columns"] = [];
+
+        for (const rawCol of rawCols) {
+          const colParts = rawCol.split(/\s+/);
+          const colName = colParts[0].replace(/[:\-]/g, "").trim();
+          if (!colName) continue;
+
+          let type = colParts.length > 1 && !/^(pk|fk|uk|unique|not|null)/i.test(colParts[1]) ? colParts[1] : "string";
+          const isPK = /PK|PRIMARY/i.test(rawCol) || colName.toLowerCase() === "id" || colName.toLowerCase() === `${tblName.toLowerCase()}_id`;
+          const isFK = (/FK|FOREIGN|REFERENCES/i.test(rawCol) || colName.toLowerCase().endsWith("_id") || colName.toLowerCase().startsWith("id_")) && !isPK;
+          const isUK = /UK|UNIQUE/i.test(rawCol);
+
+          let references: { table: string; column: string } | undefined = undefined;
+          if (isFK) {
+            const cleanTarget = colName.toLowerCase().replace(/_id$/, "").replace(/^id_/, "");
+            references = { table: cleanTarget.toUpperCase(), column: "id" };
+          }
+
+          cols.push({
+            name: colName,
+            dataType: type,
+            isPrimaryKey: isPK,
+            isForeignKey: isFK,
+            isNullable: !isPK,
+            isUnique: isUK || isPK,
+            references
+          });
+        }
+
+        if (cols.length > 0) {
+          extracted.push({
+            name: tblName.toUpperCase(),
+            type: tblName.toLowerCase().includes("item") || tblName.includes("_") ? "associative_table" : "strong_entity",
+            columns: cols
+          });
+        }
+      }
+    }
+
+    // 4. Match OCR Text Blocks / Colon / Bullet Format / brModelo text lines
+    if (extracted.length === 0 && raw.trim().length > 0) {
+      const cleanLines = raw.split("\n").map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith("//") && !l.startsWith("#") && !l.startsWith("--"));
+      let currentTable: { name: string; columns: ExtractedTableEntity["columns"] } | null = null;
+
+      const ignoreKeywords = new Set([
+        "modelo", "logico", "conceitual", "fisico", "diagrama", "banco", "dados",
+        "senai", "atividade", "exercicio", "der", "mer", "aluno", "turma", "data",
+        "brmodelo", "workbench", "draw.io", "pgadmin", "tabela", "table", "entidade"
+      ]);
+
+      for (const line of cleanLines) {
+        // Detect table header lines: "TABELA: CLIENTE", "TB_CLIENTE", "LIVRO:", "AUTOR", etc.
+        const headerMatch = line.match(/^(?:TABELA:?|TABLE:?|ENTIDADE:?)\s*([A-Za-z0-9_]+)/i) ||
+                            line.match(/^([A-Z][A-Za-z0-9_]{1,30}):?$/);
+
+        const candidateName = headerMatch ? headerMatch[1].trim() : null;
+        const isCandidateAHeader = candidateName && !ignoreKeywords.has(candidateName.toLowerCase()) && !/^(pk|fk|id|int|varchar|string|uuid|date|datetime|float|decimal)$/i.test(candidateName);
+
+        if (isCandidateAHeader) {
+          if (currentTable && currentTable.columns.length > 0) {
+            extracted.push({
+              name: currentTable.name.toUpperCase(),
+              type: currentTable.name.toLowerCase().includes("item") || currentTable.name.includes("_") ? "associative_table" : "strong_entity",
+              columns: currentTable.columns
+            });
+          }
+          currentTable = {
+            name: candidateName!.toUpperCase(),
+            columns: []
+          };
+          continue;
+        }
+
+        // If inside a table block, parse attribute lines
+        if (currentTable) {
+          const stripped = line.replace(/^[\-*•\+]\s*/, "").replace(/[;,\(\)]/g, " ").trim();
+          const parts = stripped.split(/\s+/).filter(Boolean);
+          if (parts.length >= 1) {
+            const colName = parts[0].toLowerCase();
+            if (!ignoreKeywords.has(colName) && colName.length >= 1) {
+              let type = parts.length >= 2 && !/^(pk|fk|uk|unique|not|null)/i.test(parts[1]) ? parts[1] : "string";
+              const isPK = /PK|PRIMARY/i.test(line) || colName === "id" || colName === `${currentTable.name.toLowerCase()}_id`;
+              const isFK = (/FK|FOREIGN|REFERENCES/i.test(line) || colName.endsWith("_id") || colName.startsWith("id_")) && !isPK;
+              const isUK = /UK|UNIQUE/i.test(line);
+
+              let references: { table: string; column: string } | undefined = undefined;
+              if (isFK) {
+                const cleanTarget = colName.replace(/_id$/, "").replace(/^id_/, "");
+                references = { table: cleanTarget.toUpperCase(), column: "id" };
+              }
+
+              currentTable.columns.push({
+                name: colName,
+                dataType: type,
+                isPrimaryKey: isPK,
+                isForeignKey: isFK,
+                isNullable: !isPK,
+                isUnique: isUK || isPK,
+                references
+              });
+            }
+          }
+        }
+      }
+
+      if (currentTable && currentTable.columns.length > 0) {
+        extracted.push({
+          name: currentTable.name.toUpperCase(),
+          type: currentTable.name.toLowerCase().includes("item") || currentTable.name.includes("_") ? "associative_table" : "strong_entity",
+          columns: currentTable.columns
+        });
+      }
+    }
+
+    // Inject FKs from Mermaid / Text relations if not yet explicit
     for (const rel of relations) {
       const childTable = extracted.find(t => t.name.toLowerCase() === rel.child.toLowerCase());
       const parentTable = extracted.find(t => t.name.toLowerCase() === rel.parent.toLowerCase());
@@ -543,7 +684,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
       }
     }
 
-    // Fallback based on words in the scenario/code if nothing matched
+    // Fallback based on words in the scenario/code if absolutely nothing matched
     if (extracted.length === 0) {
       const scenarioTokens = scenario.match(/[A-Z][a-z0-9_]+|[a-z]{4,}/g) || [];
       const domainKeywords = scenarioTokens.filter(t => !["para", "sistema", "desenvolva", "modelo", "banco", "dados", "com", "uma", "integridade", "transacional", "regras", "negocio"].includes(t.toLowerCase())).slice(0, 3);

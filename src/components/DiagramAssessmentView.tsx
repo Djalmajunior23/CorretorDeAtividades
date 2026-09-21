@@ -253,10 +253,18 @@ CREATE TABLE tb_item_pedido (
       toast.error("Por favor, selecione um arquivo de imagem válido (PNG, JPG, WEBP, SVG).");
       return;
     }
+    // Clean previous evaluation states on new file upload
+    setAssessment(null);
+    setRenderedSvg("");
+    setRenderError(null);
+
     const reader = new FileReader();
     reader.onload = () => {
       setImagePreview(reader.result as string);
-      toast.success("Imagem do modelo de banco de dados carregada!");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      toast.success("Nova imagem do modelo de banco de dados carregada!");
     };
     reader.readAsDataURL(file);
   };
@@ -290,6 +298,10 @@ CREATE TABLE tb_item_pedido (
       return;
     }
 
+    // Reset previous assessment result during new evaluation
+    setAssessment(null);
+    setRenderedSvg("");
+    setRenderError(null);
     setIsEvaluating(true);
     const toastId = toast.loading(
       inputMode === "image"
@@ -611,7 +623,15 @@ CREATE TABLE tb_item_pedido (
                         <RefreshCw className="w-3.5 h-3.5" /> Trocar Imagem
                       </button>
                       <button
-                        onClick={() => setImagePreview(null)}
+                        onClick={() => {
+                          setImagePreview(null);
+                          setAssessment(null);
+                          setRenderedSvg("");
+                          setRenderError(null);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = "";
+                          }
+                        }}
                         className="px-3 py-2 rounded-xl bg-red-600/80 hover:bg-red-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-lg"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Remover
