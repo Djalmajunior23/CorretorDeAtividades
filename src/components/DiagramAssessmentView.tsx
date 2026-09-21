@@ -35,7 +35,8 @@ import {
   UploadCloud,
   Trash2,
   Zap,
-  Cpu
+  Cpu,
+  Key
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -86,6 +87,8 @@ export default function DiagramAssessmentView() {
   
   // Content states
   const [aiEngine, setAiEngine] = useState<string>("auto");
+  const [customApiKey, setCustomApiKey] = useState<string>(() => localStorage.getItem("codecheck_ai_api_key") || "");
+  const [showKeyInput, setShowKeyInput] = useState<boolean>(false);
   const [diagramCode, setDiagramCode] = useState<string>("");
   const [scenarioPrompt, setScenarioPrompt] = useState<string>("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -329,7 +332,10 @@ CREATE TABLE tb_item_pedido (
         studentName: studentObj?.name || undefined,
         classId: selectedClassId || undefined,
         className: classObj?.name || undefined,
-        providerConfig: aiEngine === "auto" ? undefined : { provider: aiEngine }
+        providerConfig: {
+          provider: aiEngine === "auto" ? undefined : aiEngine,
+          apiKey: customApiKey?.trim() || undefined
+        }
       };
 
       const res = await fetch(apiUrl("/api/diagrams/assess"), {
@@ -519,9 +525,24 @@ CREATE TABLE tb_item_pedido (
         </div>
 
         <div>
-          <label className="block text-xs font-mono font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" /> Motor de IA / Acelerador
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-mono font-bold text-slate-400 uppercase flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" /> Motor de IA
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowKeyInput(!showKeyInput)}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition-all flex items-center gap-1 cursor-pointer ${
+                customApiKey
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                  : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
+              }`}
+              title="Configurar chave de API própria (Gemini, Groq, OpenAI)"
+            >
+              <Key className="w-2.5 h-2.5" />
+              {customApiKey ? "Chave Ativa" : "+ Chave API"}
+            </button>
+          </div>
           <select
             value={aiEngine}
             onChange={(e) => setAiEngine(e.target.value)}
@@ -587,6 +608,36 @@ CREATE TABLE tb_item_pedido (
           </div>
         </div>
       </div>
+
+      {/* Optional Custom API Key input banner */}
+      {showKeyInput && (
+        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-amber-500/40 flex flex-col sm:flex-row items-center gap-3 animate-fade-in text-xs shadow-lg">
+          <div className="flex items-center gap-2 text-amber-400 font-mono font-bold shrink-0">
+            <Key className="w-4 h-4" /> Chave de API Própria:
+          </div>
+          <input
+            type="password"
+            value={customApiKey}
+            onChange={(e) => {
+              const val = e.target.value;
+              setCustomApiKey(val);
+              localStorage.setItem("codecheck_ai_api_key", val);
+            }}
+            placeholder="Cole sua chave (AIza... do Google Gemini, gsk_... do Groq, sk-... da OpenAI)"
+            className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-500 w-full"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              toast.success("Chave de API salva com sucesso no navegador!");
+              setShowKeyInput(false);
+            }}
+            className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shrink-0 cursor-pointer shadow-md"
+          >
+            Salvar Chave
+          </button>
+        </div>
+      )}
 
       {/* Main Workspace Grid: Left (Input/Image/Code) vs Right (Assessment Results & Canvas) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

@@ -68,8 +68,9 @@ export class ProviderFactory {
             apiKey: options?.apiKey || process.env.OLLAMA_PROXY_TOKEN
         });
 
-        // 2. Instancia Gemini Provider se chave existir
-        const geminiKey = (reqProvider === "gemini" ? options?.apiKey : undefined) || process.env.GEMINI_API_KEY;
+        // 2. Resolução flexível de chaves de API (direta ou autodetectada pelo prefixo)
+        const passedKey = options?.apiKey?.trim() || "";
+        const geminiKey = (reqProvider === "gemini" ? passedKey : (passedKey.startsWith("AIza") ? passedKey : undefined)) || process.env.GEMINI_API_KEY;
         const geminiProvider = geminiKey ? new GeminiProvider({
             provider: "gemini",
             model: reqModel?.includes("gemini") ? reqModel : (process.env.AI_ACTIVITY_MODEL || "gemini-2.5-flash"),
@@ -77,7 +78,7 @@ export class ProviderFactory {
         }) : null;
 
         // 3. Instancia Groq Provider (Ultra-rápido LPU)
-        const groqKey = (reqProvider === "groq" ? options?.apiKey : undefined) || process.env.GROQ_API_KEY;
+        const groqKey = (reqProvider === "groq" ? passedKey : (passedKey.startsWith("gsk_") ? passedKey : undefined)) || process.env.GROQ_API_KEY;
         const groqProvider = groqKey ? new OpenAICompatibleProvider({
             provider: "groq",
             model: reqModel || "llama-3.3-70b-versatile",
@@ -86,7 +87,7 @@ export class ProviderFactory {
         }) : null;
 
         // 4. Instancia DeepSeek Provider
-        const deepseekKey = (reqProvider === "deepseek" ? options?.apiKey : undefined) || process.env.DEEPSEEK_API_KEY;
+        const deepseekKey = (reqProvider === "deepseek" ? passedKey : undefined) || process.env.DEEPSEEK_API_KEY;
         const deepseekProvider = deepseekKey ? new OpenAICompatibleProvider({
             provider: "deepseek",
             model: reqModel || "deepseek-chat",
@@ -95,7 +96,7 @@ export class ProviderFactory {
         }) : null;
 
         // 5. Instancia OpenAI Provider
-        const openaiKey = (reqProvider === "openai" ? options?.apiKey : undefined) || process.env.OPENAI_API_KEY;
+        const openaiKey = (reqProvider === "openai" ? passedKey : (passedKey.startsWith("sk-") ? passedKey : undefined)) || process.env.OPENAI_API_KEY;
         const openaiProvider = openaiKey ? new OpenAICompatibleProvider({
             provider: "openai",
             model: reqModel || "gpt-4o-mini",
@@ -104,10 +105,22 @@ export class ProviderFactory {
         }) : null;
 
         // Roteamento explícito
-        if (reqProvider === "gemini" && geminiProvider) return geminiProvider;
-        if (reqProvider === "groq" && groqProvider) return groqProvider;
-        if (reqProvider === "deepseek" && deepseekProvider) return deepseekProvider;
-        if (reqProvider === "openai" && openaiProvider) return openaiProvider;
+        if (reqProvider === "gemini") {
+            if (geminiProvider) return geminiProvider;
+            throw new Error("Provedor Google Gemini selecionado, mas nenhuma chave GEMINI_API_KEY foi informada ou configurada.");
+        }
+        if (reqProvider === "groq") {
+            if (groqProvider) return groqProvider;
+            throw new Error("Provedor Groq selecionado, mas nenhuma chave GROQ_API_KEY foi informada ou configurada.");
+        }
+        if (reqProvider === "deepseek") {
+            if (deepseekProvider) return deepseekProvider;
+            throw new Error("Provedor DeepSeek selecionado, mas nenhuma chave DEEPSEEK_API_KEY foi informada ou configurada.");
+        }
+        if (reqProvider === "openai") {
+            if (openaiProvider) return openaiProvider;
+            throw new Error("Provedor OpenAI selecionado, mas nenhuma chave OPENAI_API_KEY foi informada ou configurada.");
+        }
         if (reqProvider === "ollama") {
             const chain: BaseProvider[] = [ollamaProvider];
             if (geminiProvider) chain.push(geminiProvider);

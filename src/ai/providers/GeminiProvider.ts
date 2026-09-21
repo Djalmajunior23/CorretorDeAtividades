@@ -49,13 +49,20 @@ export class GeminiProvider extends BaseProvider {
             "gemini-1.5-pro"
         ]));
 
+        const geminiConfig: any = {};
+        if (optConfig?.temperature !== undefined) geminiConfig.temperature = optConfig.temperature;
+        if (optConfig?.maxOutputTokens || optConfig?.max_tokens) geminiConfig.maxOutputTokens = optConfig.maxOutputTokens || optConfig.max_tokens;
+        if (optConfig?.topP !== undefined) geminiConfig.topP = optConfig.topP;
+        if (optConfig?.topK !== undefined) geminiConfig.topK = optConfig.topK;
+        if (optConfig?.systemInstruction) geminiConfig.systemInstruction = optConfig.systemInstruction;
+
         let lastError: any = null;
         for (const modelName of modelsToTry) {
             try {
                 const response = await this.client.models.generateContent({
                     model: modelName,
                     contents: contents,
-                    config: optConfig
+                    config: geminiConfig
                 });
                 return response.text || "";
             } catch (err: any) {
@@ -116,12 +123,14 @@ export class GeminiProvider extends BaseProvider {
         for (const modelName of modelsToTry) {
             try {
                 const geminiConfig: any = {
-                    ...optConfig,
                     responseMimeType: "application/json"
                 };
-                if (schema) {
-                    geminiConfig.responseSchema = schema;
-                }
+                if (optConfig?.temperature !== undefined) geminiConfig.temperature = optConfig.temperature;
+                if (optConfig?.maxOutputTokens || optConfig?.max_tokens) geminiConfig.maxOutputTokens = optConfig.maxOutputTokens || optConfig.max_tokens;
+                if (optConfig?.topP !== undefined) geminiConfig.topP = optConfig.topP;
+                if (optConfig?.topK !== undefined) geminiConfig.topK = optConfig.topK;
+                if (optConfig?.systemInstruction) geminiConfig.systemInstruction = optConfig.systemInstruction;
+                if (schema) geminiConfig.responseSchema = schema;
 
                 const response = await this.client.models.generateContent({
                     model: modelName,
