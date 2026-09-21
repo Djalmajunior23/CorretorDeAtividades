@@ -84,7 +84,7 @@ export default function DiagramAssessmentView() {
   
   // Content states
   const [diagramCode, setDiagramCode] = useState<string>("");
-  const [scenarioPrompt, setScenarioPrompt] = useState<string>("Desenvolva o modelo de banco de dados para um sistema de e-commerce contendo clientes, pedidos, produtos e itens de pedido com integridade referencial.");
+  const [scenarioPrompt, setScenarioPrompt] = useState<string>("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
   
@@ -480,7 +480,18 @@ CREATE TABLE tb_item_pedido (
           </label>
           <select
             value={targetSgbd}
-            onChange={(e) => setTargetSgbd(e.target.value as DatabaseTargetSgbd)}
+            onChange={(e) => {
+              const sgbd = e.target.value as DatabaseTargetSgbd;
+              setTargetSgbd(sgbd);
+              if (assessment && assessment.extractedTables && assessment.extractedTables.length > 0) {
+                const newDdl = DatabaseModelAssessmentService.generateSqlDdlFromTables(assessment.extractedTables, sgbd);
+                setAssessment({
+                  ...assessment,
+                  targetSgbd: sgbd,
+                  generatedDdlSql: newDdl
+                });
+              }
+            }}
             className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-sky-500 font-mono text-xs"
           >
             <option value="postgresql">PostgreSQL (Recomendado SENAI)</option>

@@ -118,10 +118,10 @@ export class DatabaseModelAssessmentService {
     const category = params.modelCategory || "logical";
     const format = params.inputFormat || (params.imageBase64 ? "image" : "code");
     const sgbd: DatabaseTargetSgbd = params.targetSgbd || "postgresql";
-    const scenario = params.scenario || "Modelagem de dados para sistema transacional corporativo.";
+    const scenario = (params.scenario || "").trim() || "Modelagem de dados e integridade relacional.";
     const rawCode = (params.code || "").trim();
 
-    // 1. Multimodal AI Vision Analysis if Image is provided
+    // 1. Multimodal AI Vision Analysis if Image or Code is provided
     let aiStructuredResult: DatabaseModelAssessmentResult | null = null;
     let extractedTextFromImage = "";
 
@@ -131,45 +131,64 @@ export class DatabaseModelAssessmentService {
       const imageData = isImage ? parseImageData(params.imageBase64!) : undefined;
 
       const aiSystemPrompt = `
-Você é o Especialista Chefe em Engenharia de Software, Bancos de Dados e Modelagem de Sistemas (Relacional, Conceitual, Lógico, Físico e UML) do SENAI.
-Sua missão é avaliar com rigor técnico e didático o diagrama submetido pelo estudante ${isImage ? "na imagem digitalizada fornecida" : "no código/DDL fornecido"}.
+Você é o Especialista Chefe em Bancos de Dados e Engenharia de Software do SENAI.
+Sua missão é inspecionar minuciosamente o diagrama submetido pelo estudante ${isImage ? "na imagem digitalizada fornecida" : "no código/DDL fornecido"} e gerar uma avaliação técnica rigorosa e o script DDL SQL correspondente.
 
-ENUNCIADO DA ATIVIDADE / CENÁRIO:
+ENUNCIADO / CENÁRIO INFORMADO:
 """${scenario}"""
 
-CATEGORIA: ${category.toUpperCase()}
-SGBD ALVO: ${sgbd.toUpperCase()}
-${isImage ? "FONTE: IMAGEM DIGITALIZADA (diagrama manuscrito, brModelo, Workbench, Draw.io ou prova em papel)." : "FONTE: CÓDIGO DECLARATIVO / DDL."}
-${!isImage && rawCode ? `CÓDIGO/TEXTO SUBMETIDO:\n"""${rawCode}"""` : ""}
-
-DIRETRIZES DE AVALIAÇÃO:
-1. Extraia todas as Entidades/Tabelas reais desenhadas ou escritas pelo estudante, incluindo seus atributos, chaves primárias (PK), chaves estrangeiras (FK) e tipos de dados.
-2. Identifique cardinalidades (1:1, 1:N, N:N) e relacionamentos mapeados.
-3. Compare criticamente o modelo do aluno com os requisitos do ENUNCIADO.
-4. Avalie as Formas Normais (1FN, 2FN, 3FN):
-   - 1FN: atomicidade dos atributos e ausência de campos multivalorados.
-   - 2FN: dependência total da chave primária inteira em chaves compostas.
+DIRETRIZES DE EXTRAÇÃO E AVALIAÇÃO:
+1. Extraia com máxima fidelidade TODAS as Entidades/Tabelas desenhadas ou declaradas no diagrama, com seus atributos, tipos de dados, chaves primárias (PK), chaves estrangeiras (FK) e cardinalidades.
+2. Não invente entidades não relacionadas ao desenho do aluno. Se o aluno modelou (por exemplo: "AUTOR", "LIVRO", "EMPRESTIMO"), o resultado DEVE conter exatamente essas tabelas!
+3. Formas Normais (1FN, 2FN, 3FN):
+   - 1FN: atomicidade dos atributos e ausência de campos multivalorados na mesma coluna.
+   - 2FN: ausência de dependências parciais em tabelas com chave composta.
    - 3FN: ausência de dependências transitivas entre atributos não-chave.
-5. Calcule a nota total (0 a 100) distribuída nas 4 rubricas:
-   - "Sintaxe & Notação Padrão" (peso 20)
-   - "Entidades/Classes & Atributos" (peso 30)
-   - "Cardinalidades & Relações" (peso 30)
-   - "Boas Práticas & Normalização (1FN/2FN/3FN)" (peso 20)
-6. Forneça pontos fortes reais (conformidades encontradas no desenho), inconsistências/erros reais e recomendações pedagógicas.
-7. Gere o diagrama Mermaid ERD (ou classDiagram para UML) CORRIGIDO e o Script SQL DDL executável correspondentes EXATAMENTE ao cenário da atividade e às entidades corrigidas para o SGBD ${sgbd.toUpperCase()}.
+4. Geração do Script SQL DDL (${sgbd.toUpperCase()}):
+   - O campo "generatedDdlSql" DEVE conter o script SQL DDL COMPLETO, EXECUTÁVEL e 100% FIEL às entidades e atributos do modelo corrigido.
+   - Inclua CREATE TABLE para cada entidade, com colunas, tipos compatíveis (${sgbd.toUpperCase()}), PRIMARY KEY, restrições NOT NULL e FOREIGN KEY correspondentes.
+5. Geração do Diagrama Mermaid Corrigido:
+   - O campo "suggestedCorrectedDiagram" DEVE conter o código Mermaid (erDiagram para BD ou classDiagram para UML) representando o modelo corrigido.
 
-Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON) com a estrutura:
+Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
 {
-  "totalGrade": number,
+  "totalGrade": number (0 a 100),
   "status": "Aprovado" | "Recuperação" | "Reprovado",
   "isApproved": boolean,
   "passingGrade": 60,
   "rubrics": [
     {
-      "name": string,
-      "score": number,
-      "maxScore": number,
-      "weight": number,
+      "name": "Sintaxe & Notação Padrão",
+      "score": number (0 a 20),
+      "maxScore": 20,
+      "weight": 20,
+      "status": "EXCELENTE" | "ADEQUADO" | "ATENCAO" | "CRITICO",
+      "feedback": string,
+      "pedagogicalRationale": string
+    },
+    {
+      "name": "Entidades/Classes & Atributos",
+      "score": number (0 a 30),
+      "maxScore": 30,
+      "weight": 30,
+      "status": "EXCELENTE" | "ADEQUADO" | "ATENCAO" | "CRITICO",
+      "feedback": string,
+      "pedagogicalRationale": string
+    },
+    {
+      "name": "Cardinalidades & Relações",
+      "score": number (0 a 30),
+      "maxScore": 30,
+      "weight": 30,
+      "status": "EXCELENTE" | "ADEQUADO" | "ATENCAO" | "CRITICO",
+      "feedback": string,
+      "pedagogicalRationale": string
+    },
+    {
+      "name": "Boas Práticas & Normalização (1FN/2FN/3FN)",
+      "score": number (0 a 20),
+      "maxScore": 20,
+      "weight": 20,
       "status": "EXCELENTE" | "ADEQUADO" | "ATENCAO" | "CRITICO",
       "feedback": string,
       "pedagogicalRationale": string
@@ -218,6 +237,15 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
         const totalGrade = Math.max(0, Math.min(100, Math.round(Number(aiResponse.totalGrade) || 0)));
         const status = totalGrade >= 60 ? "Aprovado" : totalGrade >= 40 ? "Recuperação" : "Reprovado";
         const isApproved = totalGrade >= 60;
+        const tables: ExtractedTableEntity[] = Array.isArray(aiResponse.extractedTables) ? aiResponse.extractedTables : [];
+
+        // Ensure SQL DDL is generated directly from tables if AI provided empty or generic string
+        let ddl = (aiResponse.generatedDdlSql || "").trim();
+        if (!ddl || ddl.length < 20 || !ddl.includes("CREATE TABLE")) {
+          if (tables.length > 0) {
+            ddl = this.generateSqlDdlFromTables(tables, sgbd);
+          }
+        }
 
         aiStructuredResult = {
           assessmentId,
@@ -233,7 +261,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
             : this.buildDefaultRubrics(totalGrade),
           strengths: Array.isArray(aiResponse.strengths) && aiResponse.strengths.length > 0
             ? aiResponse.strengths
-            : ["Identificação de entidades principais."],
+            : ["Identificação de entidades principais e atributos."],
           modelingIssues: Array.isArray(aiResponse.modelingIssues) && aiResponse.modelingIssues.length > 0
             ? aiResponse.modelingIssues
             : ["Nenhuma inconsistência crítica detectada."],
@@ -257,21 +285,21 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
               checkConstraintsDetected: 1,
               observations: ["Restrições de integridade mapeadas."]
             },
-            indexingRecommendations: ["Criar índices B-Tree nas FKs."],
+            indexingRecommendations: ["Criar índices B-Tree nas colunas de FK."],
             ddlExecutionTest: {
               success: true,
               simulatedDialect: sgbd.toUpperCase(),
-              tablesCreatedCount: (aiResponse.extractedTables || []).length || 2,
+              tablesCreatedCount: tables.length || 2,
               compileErrors: []
             }
           } : undefined,
-          extractedTables: Array.isArray(aiResponse.extractedTables) ? aiResponse.extractedTables : [],
+          extractedTables: tables,
           pedagogicalRecommendations: Array.isArray(aiResponse.pedagogicalRecommendations) && aiResponse.pedagogicalRecommendations.length > 0
             ? aiResponse.pedagogicalRecommendations
-            : ["Praticar normalização e constraints explícitas."],
-          extractedMermaidCode: aiResponse.extractedMermaidCode || aiResponse.suggestedCorrectedDiagram || "erDiagram",
-          suggestedCorrectedDiagram: aiResponse.suggestedCorrectedDiagram || aiResponse.extractedMermaidCode || "erDiagram",
-          generatedDdlSql: aiResponse.generatedDdlSql || "-- Script DDL gerado",
+            : ["Praticar normalização e criação de constraints explícitas."],
+          extractedMermaidCode: aiResponse.extractedMermaidCode || aiResponse.suggestedCorrectedDiagram || this.generateDynamicMermaid(tables),
+          suggestedCorrectedDiagram: aiResponse.suggestedCorrectedDiagram || aiResponse.extractedMermaidCode || this.generateDynamicMermaid(tables),
+          generatedDdlSql: ddl || this.generateSqlDdlFromTables(tables, sgbd),
           evaluatedAt: new Date().toISOString()
         };
       }
@@ -364,11 +392,23 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
   }
 
   /**
-   * Dynamically extracts entities and columns from text/code.
+   * Dynamically extracts entities, columns, PKs, FKs, and relationships from text/code.
    */
-  private static parseEntitiesFromContent(content: string, scenario: string): ExtractedTableEntity[] {
+  public static parseEntitiesFromContent(content: string, scenario: string): ExtractedTableEntity[] {
     const raw = content || "";
     const extracted: ExtractedTableEntity[] = [];
+
+    // Parse relationship lines: TABLE1 ||--o{ TABLE2 : "label"
+    const relationRegex = /([A-Za-z0-9_]+)\s*(?:\|\||}\||\}\|..|--|o\{|\{)\s*(?:--|\.\.)\s*(?:\|\||\|\{|o\{|\{\||\{..|--)\s*([A-Za-z0-9_]+)/g;
+    let relMatch;
+    const relations: Array<{ parent: string; child: string }> = [];
+    while ((relMatch = relationRegex.exec(raw)) !== null) {
+      const parent = relMatch[1].trim();
+      const child = relMatch[2].trim();
+      if (parent !== "erDiagram" && child !== "erDiagram") {
+        relations.push({ parent, child });
+      }
+    }
 
     // Match Mermaid ERD: Entity { type name PK/FK }
     const entityBlockRegex = /([A-Za-z0-9_]+)\s*\{([^}]*)\}/g;
@@ -376,18 +416,44 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
     while ((match = entityBlockRegex.exec(raw)) !== null) {
       const tableName = match[1].trim();
       const body = match[2];
-      const lines = body.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      const lines = body.split("\n").map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith("//") && !l.startsWith("#"));
       const cols: ExtractedTableEntity["columns"] = [];
 
       for (const line of lines) {
         const parts = line.split(/\s+/);
         if (parts.length >= 1) {
-          const type = parts.length > 1 ? parts[0] : "string";
-          const colName = parts.length > 1 ? parts[1] : parts[0];
-          const flags = parts.slice(2).join(" ").toUpperCase();
-          const isPK = flags.includes("PK") || colName.toLowerCase() === "id" || colName.toLowerCase().endsWith("_id") && lines.indexOf(line) === 0;
-          const isFK = flags.includes("FK") || colName.toLowerCase().endsWith("_id") && !isPK;
+          let type = "string";
+          let colName = parts[0];
+          let flags = "";
+
+          if (parts.length === 1) {
+            colName = parts[0];
+          } else if (parts.length === 2) {
+            // Check if first part looks like a type (string, int, uuid, datetime, decimal, etc.)
+            const isFirstType = /^(string|varchar|int|integer|bigint|smallint|float|double|decimal|numeric|date|datetime|timestamp|timestamptz|uuid|boolean|bool|text|char)/i.test(parts[0]);
+            if (isFirstType) {
+              type = parts[0];
+              colName = parts[1];
+            } else {
+              colName = parts[0];
+              type = parts[1];
+            }
+          } else {
+            type = parts[0];
+            colName = parts[1];
+            flags = parts.slice(2).join(" ").toUpperCase();
+          }
+
+          const isPK = flags.includes("PK") || colName.toLowerCase() === "id" || (colName.toLowerCase() === `${tableName.toLowerCase()}_id` && lines.indexOf(line) === 0);
+          const isFK = flags.includes("FK") || (colName.toLowerCase().endsWith("_id") && !isPK) || colName.toLowerCase().startsWith("id_") && !isPK;
           const isUK = flags.includes("UK") || flags.includes("UNIQUE");
+
+          // Infer referenced table if FK
+          let references: { table: string; column: string } | undefined = undefined;
+          if (isFK) {
+            const cleanTarget = colName.toLowerCase().replace(/_id$/, "").replace(/^id_/, "");
+            references = { table: cleanTarget.toUpperCase(), column: "id" };
+          }
 
           cols.push({
             name: colName,
@@ -395,7 +461,8 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
             isPrimaryKey: isPK,
             isForeignKey: isFK,
             isNullable: !isPK,
-            isUnique: isUK || isPK
+            isUnique: isUK || isPK,
+            references
           });
         }
       }
@@ -430,13 +497,20 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
             const isFK = colLine.toUpperCase().includes("REFERENCES") || colName.toLowerCase().endsWith("_id");
             const isUK = colLine.toUpperCase().includes("UNIQUE");
 
+            let references: { table: string; column: string } | undefined = undefined;
+            const refMatch = colLine.match(/REFERENCES\s+([A-Za-z0-9_]+)\s*(?:\(([A-Za-z0-9_]+)\))?/i);
+            if (refMatch) {
+              references = { table: refMatch[1].toUpperCase(), column: refMatch[2] || "id" };
+            }
+
             cols.push({
               name: colName,
               dataType: colType,
               isPrimaryKey: isPK,
               isForeignKey: isFK,
               isNullable: !isPK && !colLine.toUpperCase().includes("NOT NULL"),
-              isUnique: isUK || isPK
+              isUnique: isUK || isPK,
+              references
             });
           }
         }
@@ -449,11 +523,30 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
       }
     }
 
+    // Inject FKs from Mermaid relations if not yet explicit
+    for (const rel of relations) {
+      const childTable = extracted.find(t => t.name.toLowerCase() === rel.child.toLowerCase());
+      const parentTable = extracted.find(t => t.name.toLowerCase() === rel.parent.toLowerCase());
+      if (childTable && parentTable) {
+        const fkColName = `${parentTable.name.toLowerCase()}_id`;
+        const existingFk = childTable.columns.find(c => c.name.toLowerCase() === fkColName || c.references?.table?.toLowerCase() === parentTable.name.toLowerCase());
+        if (!existingFk) {
+          childTable.columns.push({
+            name: fkColName,
+            dataType: "uuid",
+            isPrimaryKey: false,
+            isForeignKey: true,
+            isNullable: false,
+            references: { table: parentTable.name, column: "id" }
+          });
+        }
+      }
+    }
+
     // Fallback based on words in the scenario/code if nothing matched
     if (extracted.length === 0) {
-      // Find candidate words in scenario
       const scenarioTokens = scenario.match(/[A-Z][a-z0-9_]+|[a-z]{4,}/g) || [];
-      const domainKeywords = scenarioTokens.filter(t => !["para", "sistema", "desenvolva", "modelo", "banco", "dados", "com", "uma", "integridade"].includes(t.toLowerCase())).slice(0, 3);
+      const domainKeywords = scenarioTokens.filter(t => !["para", "sistema", "desenvolva", "modelo", "banco", "dados", "com", "uma", "integridade", "transacional", "regras", "negocio"].includes(t.toLowerCase())).slice(0, 3);
       
       const defaultNames = domainKeywords.length >= 2 ? domainKeywords : ["ENTIDADE_PRINCIPAL", "ENTIDADE_SECUNDARIA"];
       defaultNames.forEach((n, idx) => {
@@ -476,7 +569,9 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
   /**
    * Generates dynamic Mermaid ERD from extracted tables.
    */
-  private static generateDynamicMermaid(tables: ExtractedTableEntity[]): string {
+  public static generateDynamicMermaid(tables: ExtractedTableEntity[]): string {
+    if (!tables || tables.length === 0) return "erDiagram\n";
+
     let mermaid = "erDiagram\n";
 
     // Generate relationships
@@ -484,8 +579,8 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
       for (let j = i + 1; j < tables.length; j++) {
         const t1 = tables[i];
         const t2 = tables[j];
-        const hasFKInT2 = t2.columns.some(c => c.isForeignKey && (c.references?.table === t1.name || c.name.toLowerCase().includes(t1.name.toLowerCase())));
-        const hasFKInT1 = t1.columns.some(c => c.isForeignKey && (c.references?.table === t2.name || c.name.toLowerCase().includes(t2.name.toLowerCase())));
+        const hasFKInT2 = t2.columns.some(c => c.isForeignKey && (c.references?.table?.toLowerCase() === t1.name.toLowerCase() || c.name.toLowerCase().includes(t1.name.toLowerCase())));
+        const hasFKInT1 = t1.columns.some(c => c.isForeignKey && (c.references?.table?.toLowerCase() === t2.name.toLowerCase() || c.name.toLowerCase().includes(t2.name.toLowerCase())));
 
         if (hasFKInT2) {
           mermaid += `    ${t1.name} ||--o{ ${t2.name} : "possui"\n`;
@@ -512,57 +607,260 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
   }
 
   /**
-   * Generates dynamic SQL DDL from extracted tables.
+   * Generates clean, robust, dialect-specific SQL DDL from extracted table entities.
+   * Ensures exact fidelity with attributes, types, PKs, and FKs.
    */
-  private static generateDynamicSqlDdl(tables: ExtractedTableEntity[], sgbd: DatabaseTargetSgbd): string {
+  public static generateSqlDdlFromTables(tables: ExtractedTableEntity[], sgbd: DatabaseTargetSgbd = "postgresql"): string {
+    if (!tables || tables.length === 0) {
+      return `-- Nenhum modelo de tabela disponível para geração do script SQL.`;
+    }
+
+    const sgbdUpper = sgbd.toUpperCase();
     let sql = `-- =========================================================================\n`;
-    sql += `-- SCRIPT DDL CORRIGIDO PARA ${sgbd.toUpperCase()}\n`;
+    sql += `-- CODECHECK AI: SCRIPT DDL SQL GERADO A PARTIR DO MODELO (${sgbdUpper})\n`;
+    sql += `-- Data de Emissão: ${new Date().toLocaleString("pt-BR")}\n`;
     sql += `-- =========================================================================\n\n`;
 
-    const idType = sgbd === "postgresql" ? "UUID PRIMARY KEY DEFAULT gen_random_uuid()" : sgbd === "mysql" ? "VARCHAR(36) PRIMARY KEY" : "INT PRIMARY KEY IDENTITY(1,1)";
-    const strType = "VARCHAR(150)";
-    const numType = "NUMERIC(12, 2)";
+    // 1. Topologically order tables (parent tables first, child tables with FKs after)
+    const sortedTables = this.sortTablesTopologically(tables);
 
-    for (const t of tables) {
-      const tblName = t.name.toLowerCase();
+    const fkConstraints: Array<{ table: string; constraintName: string; column: string; refTable: string; refCol: string }> = [];
+    const indexStatements: string[] = [];
+
+    // Helper for data type conversion
+    const mapType = (rawType: string | undefined, isPK: boolean, isFK: boolean, colName: string): string => {
+      const typeStr = (rawType || "").toLowerCase().trim();
+      const colLower = colName.toLowerCase();
+
+      // Check if rawType already has precision like varchar(100), numeric(10,2), char(2)
+      if (/^[a-zA-Z]+\s*\(\s*\d+(?:\s*,\s*\d+)?\s*\)$/.test(typeStr)) {
+        return typeStr.toUpperCase();
+      }
+
+      // UUID
+      if (typeStr.includes("uuid") || (isPK && colLower === "id" && sgbd === "postgresql")) {
+        switch (sgbd) {
+          case "postgresql": return "UUID";
+          case "mysql": return "VARCHAR(36)";
+          case "sqlserver": return "UNIQUEIDENTIFIER";
+          case "oracle": return "RAW(16)";
+          case "sqlite": return "TEXT";
+        }
+      }
+
+      // Integers
+      if (typeStr.includes("bigint") || typeStr === "long") {
+        return "BIGINT";
+      }
+      if (typeStr.includes("smallint") || typeStr === "short") {
+        return "SMALLINT";
+      }
+      if (typeStr.includes("int") || typeStr === "integer" || typeStr === "number" && !typeStr.includes(".")) {
+        return "INT";
+      }
+
+      // Decimals / Money
+      if (typeStr.includes("decimal") || typeStr.includes("numeric") || typeStr.includes("money") || typeStr.includes("moeda") || colLower.includes("preco") || colLower.includes("valor") || colLower.includes("salario") || colLower.includes("saldo") || colLower.includes("total")) {
+        return "NUMERIC(12, 2)";
+      }
+
+      // Floats / Doubles
+      if (typeStr.includes("float") || typeStr.includes("real")) {
+        return sgbd === "postgresql" ? "REAL" : "FLOAT";
+      }
+      if (typeStr.includes("double")) {
+        return sgbd === "postgresql" ? "DOUBLE PRECISION" : "DOUBLE";
+      }
+
+      // Boolean
+      if (typeStr.includes("bool") || typeStr.includes("boolean") || colLower.startsWith("is_") || colLower.startsWith("tem_") || colLower.startsWith("ativo")) {
+        switch (sgbd) {
+          case "postgresql":
+          case "mysql":
+          case "sqlite": return "BOOLEAN";
+          case "sqlserver": return "BIT";
+          case "oracle": return "NUMBER(1)";
+        }
+      }
+
+      // Dates / Timestamps
+      if (typeStr === "date" || typeStr === "data") {
+        return "DATE";
+      }
+      if (typeStr.includes("time") || typeStr.includes("timestamp") || colLower.includes("data_") || colLower.includes("created_at") || colLower.includes("updated_at")) {
+        switch (sgbd) {
+          case "postgresql": return "TIMESTAMP WITH TIME ZONE";
+          case "mysql": return "DATETIME";
+          case "sqlserver": return "DATETIME2";
+          case "oracle": return "TIMESTAMP WITH TIME ZONE";
+          case "sqlite": return "TEXT";
+        }
+      }
+
+      // Text / Strings
+      if (typeStr === "text" || typeStr === "longtext" || typeStr === "clob" || colLower.includes("descricao") || colLower.includes("observacao") || colLower.includes("conteudo")) {
+        switch (sgbd) {
+          case "postgresql":
+          case "mysql":
+          case "sqlite": return "TEXT";
+          case "sqlserver": return "NVARCHAR(MAX)";
+          case "oracle": return "CLOB";
+        }
+      }
+
+      if (typeStr.includes("cpf") || colLower.includes("cpf")) {
+        return "VARCHAR(14)";
+      }
+      if (typeStr.includes("cnpj") || colLower.includes("cnpj")) {
+        return "VARCHAR(18)";
+      }
+      if (typeStr.includes("email") || colLower.includes("email")) {
+        return "VARCHAR(150)";
+      }
+      if (typeStr.includes("telefone") || typeStr.includes("fone") || colLower.includes("telefone") || colLower.includes("celular")) {
+        return "VARCHAR(20)";
+      }
+      if (typeStr.includes("char_") || typeStr.includes("varchar_")) {
+        const size = typeStr.replace(/[^0-9]/g, "");
+        return size ? `VARCHAR(${size})` : "VARCHAR(150)";
+      }
+
+      if (isFK) {
+        return sgbd === "postgresql" ? "UUID" : sgbd === "mysql" ? "VARCHAR(36)" : "INT";
+      }
+
+      return "VARCHAR(150)";
+    };
+
+    // 2. Generate CREATE TABLE statements
+    for (const table of sortedTables) {
+      const tblName = table.name.toLowerCase();
       sql += `CREATE TABLE ${tblName} (\n`;
-      const colDefs: string[] = [];
+      const colLines: string[] = [];
 
-      for (const col of t.columns) {
-        const cName = col.name.toLowerCase();
+      for (const col of table.columns) {
+        const colName = col.name.toLowerCase();
+        const mappedType = mapType(col.dataType, col.isPrimaryKey, col.isForeignKey, col.name);
+
+        let colDef = `    ${colName} ${mappedType}`;
+
         if (col.isPrimaryKey) {
-          colDefs.push(`    ${cName} ${idType}`);
+          if (sgbd === "postgresql" && mappedType === "UUID") {
+            colDef += " PRIMARY KEY DEFAULT gen_random_uuid()";
+          } else if (sgbd === "mysql" && mappedType === "INT") {
+            colDef += " PRIMARY KEY AUTO_INCREMENT";
+          } else if (sgbd === "sqlserver" && mappedType === "INT") {
+            colDef += " PRIMARY KEY IDENTITY(1,1)";
+          } else if (sgbd === "sqlite" && mappedType === "INT") {
+            colDef += " PRIMARY KEY AUTOINCREMENT";
+          } else {
+            colDef += " PRIMARY KEY";
+          }
         } else {
-          let cType = strType;
-          if (cName.includes("preco") || cName.includes("valor") || cName.includes("total") || cName.includes("saldo")) {
-            cType = numType;
-          } else if (cName.includes("data") || cName.includes("created")) {
-            cType = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP";
-          } else if (cName.includes("quantidade") || cName.includes("numero") || cName.includes("ano")) {
-            cType = "INT";
-          } else if (col.isForeignKey) {
-            cType = sgbd === "postgresql" ? "UUID" : "VARCHAR(36)";
+          if (!col.isNullable) {
+            colDef += " NOT NULL";
+          }
+          if (col.isUnique) {
+            colDef += " UNIQUE";
+          }
+          if (mappedType.includes("TIMESTAMP") || mappedType === "DATETIME") {
+            if (colName.includes("created") || colName.includes("data_criacao") || colName.includes("data_cadastro")) {
+              colDef += " DEFAULT CURRENT_TIMESTAMP";
+            }
+          }
+        }
+
+        colLines.push(colDef);
+
+        // Collect Foreign Keys
+        if (col.isForeignKey && !col.isPrimaryKey) {
+          let refTable = col.references?.table?.toLowerCase();
+          let refCol = col.references?.column?.toLowerCase() || "id";
+
+          if (!refTable) {
+            const inferred = colName.replace(/_id$/, "").replace(/^id_/, "");
+            const matchTable = tables.find(t => t.name.toLowerCase() === inferred || t.name.toLowerCase() === `tb_${inferred}` || t.name.toLowerCase() === `${inferred}s`);
+            refTable = matchTable ? matchTable.name.toLowerCase() : inferred;
           }
 
-          const notNull = col.isNullable ? "" : " NOT NULL";
-          const unique = col.isUnique && !col.isPrimaryKey ? " UNIQUE" : "";
-          colDefs.push(`    ${cName} ${cType}${notNull}${unique}`);
+          const constraintName = `fk_${tblName}_${colName}`;
+          fkConstraints.push({
+            table: tblName,
+            constraintName,
+            column: colName,
+            refTable,
+            refCol
+          });
+
+          indexStatements.push(`CREATE INDEX idx_${tblName}_${colName} ON ${tblName}(${colName});`);
         }
       }
 
-      // Add FK constraints
-      for (const col of t.columns) {
-        if (col.isForeignKey && !col.isPrimaryKey) {
-          const targetTable = col.references?.table ? col.references.table.toLowerCase() : tables.find(other => other.name !== t.name)?.name.toLowerCase() || "parent_table";
-          colDefs.push(`    CONSTRAINT fk_${tblName}_${col.name.toLowerCase()} FOREIGN KEY (${col.name.toLowerCase()}) REFERENCES ${targetTable}(id) ON DELETE RESTRICT`);
-        }
-      }
-
-      sql += colDefs.join(",\n");
+      sql += colLines.join(",\n");
       sql += `\n);\n\n`;
     }
 
+    // 3. Append FOREIGN KEY constraints via ALTER TABLE
+    if (fkConstraints.length > 0 && sgbd !== "sqlite") {
+      sql += `-- -------------------------------------------------------------------------\n`;
+      sql += `-- INTEGRIDADE REFERENCIAL (CHAVES ESTRANGEIRAS)\n`;
+      sql += `-- -------------------------------------------------------------------------\n`;
+      for (const fk of fkConstraints) {
+        sql += `ALTER TABLE ${fk.table} ADD CONSTRAINT ${fk.constraintName} FOREIGN KEY (${fk.column}) REFERENCES ${fk.refTable}(${fk.refCol}) ON DELETE RESTRICT;\n`;
+      }
+      sql += `\n`;
+    }
+
+    // 4. Append Performance Indexes
+    if (indexStatements.length > 0) {
+      sql += `-- -------------------------------------------------------------------------\n`;
+      sql += `-- ÍNDICES DE OTIMIZAÇÃO DE PERFORMANCE (BUSCAS E JOINS)\n`;
+      sql += `-- -------------------------------------------------------------------------\n`;
+      sql += indexStatements.join("\n") + "\n";
+    }
+
     return sql.trim();
+  }
+
+  /**
+   * Sorts tables topologically so parent tables come before dependent child tables.
+   */
+  private static sortTablesTopologically(tables: ExtractedTableEntity[]): ExtractedTableEntity[] {
+    const tableMap = new Map<string, ExtractedTableEntity>();
+    tables.forEach(t => tableMap.set(t.name.toLowerCase(), t));
+
+    const visited = new Set<string>();
+    const result: ExtractedTableEntity[] = [];
+
+    const visit = (tbl: ExtractedTableEntity, ancestors = new Set<string>()) => {
+      const name = tbl.name.toLowerCase();
+      if (visited.has(name)) return;
+      if (ancestors.has(name)) {
+        visited.add(name);
+        result.push(tbl);
+        return;
+      }
+
+      ancestors.add(name);
+
+      for (const col of tbl.columns) {
+        if (col.isForeignKey && col.references?.table) {
+          const parent = tableMap.get(col.references.table.toLowerCase());
+          if (parent && parent.name.toLowerCase() !== name) {
+            visit(parent, new Set(ancestors));
+          }
+        }
+      }
+
+      visited.add(name);
+      result.push(tbl);
+    };
+
+    for (const t of tables) {
+      visit(t);
+    }
+
+    return result;
   }
 
   /**
@@ -661,7 +959,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
     const status = totalGrade >= 60 ? "Aprovado" : totalGrade >= 40 ? "Recuperação" : "Reprovado";
 
     const extractedMermaid = this.generateDynamicMermaid(tables);
-    const generatedSql = this.generateDynamicSqlDdl(tables, sgbd);
+    const generatedSql = this.generateSqlDdlFromTables(tables, sgbd);
 
     const normalizationAudit: DatabaseNormalizationAudit = {
       firstNormalForm: {
@@ -872,7 +1170,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem texto adicional fora do JSON)
     const status = totalGrade >= 60 ? "Aprovado" : totalGrade >= 40 ? "Recuperação" : "Reprovado";
 
     const extractedMermaid = this.generateDynamicMermaid(tables);
-    const correctedDdl = this.generateDynamicSqlDdl(tables, sgbd);
+    const correctedDdl = this.generateSqlDdlFromTables(tables, sgbd);
 
     const normalizationAudit: DatabaseNormalizationAudit = {
       firstNormalForm: { compliant: true, issues: [], explanation: "1FN: Colunas atômicas e estruturadas em tabelas relacionais." },
