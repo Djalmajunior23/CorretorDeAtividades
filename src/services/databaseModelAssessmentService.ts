@@ -122,24 +122,12 @@ export class DatabaseModelAssessmentService {
     const scenario = (params.scenario || "").trim() || "Modelagem de dados e integridade relacional.";
     const rawCode = (params.code || "").trim();
 
-    // 1. Multimodal AI Vision Analysis and Local OCR if Image or Code is provided
+    // 1. Multimodal AI Vision Analysis and Structured Evaluation
     let aiStructuredResult: DatabaseModelAssessmentResult | null = null;
     let extractedTextFromImage = "";
 
     const isImage = format === "image" && !!params.imageBase64;
     const imageData = isImage ? parseImageData(params.imageBase64!) : undefined;
-
-    // Run local OCR (Tesseract.js) to guarantee text extraction from the uploaded image
-    if (isImage && params.imageBase64) {
-      try {
-        const ocrResult = await OCRService.extractTextFromImage(params.imageBase64, true);
-        if (ocrResult && ocrResult.text && ocrResult.text.trim()) {
-          extractedTextFromImage = ocrResult.text.trim();
-        }
-      } catch (ocrErr: any) {
-        console.warn("[DatabaseModelAssessmentService] Local OCR extraction failed:", ocrErr.message);
-      }
-    }
 
     try {
       const provider = ProviderFactory.createCustomProvider(params.providerConfig);
@@ -327,6 +315,17 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
     }
 
     // 2. Dynamic Fallback Evaluation when AI provider is unavailable
+    if (isImage && params.imageBase64 && !extractedTextFromImage) {
+      try {
+        const ocrResult = await OCRService.extractTextFromImage(params.imageBase64, true);
+        if (ocrResult && ocrResult.text && ocrResult.text.trim()) {
+          extractedTextFromImage = ocrResult.text.trim();
+        }
+      } catch (ocrErr: any) {
+        console.warn("[DatabaseModelAssessmentService] Fallback OCR extraction failed:", ocrErr.message);
+      }
+    }
+
     const effectiveContent = (format === "image" ? extractedTextFromImage : rawCode) || rawCode;
 
     if (category === "classDiagram" || effectiveContent.includes("classDiagram")) {

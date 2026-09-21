@@ -46,7 +46,7 @@ class MultiFallbackProvider extends BaseProvider {
 
 export class ProviderFactory {
     static createProvider(task?: string): BaseProvider {
-        const providerName = (process.env.AI_PROVIDER || "ollama").toLowerCase();
+        const providerName = (process.env.AI_PROVIDER || "auto").toLowerCase();
         const modelName = getModelForTask(task);
 
         return this.createCustomProvider({
