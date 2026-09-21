@@ -59,11 +59,15 @@ export class GeminiProvider extends BaseProvider {
         let lastError: any = null;
         for (const modelName of modelsToTry) {
             try {
-                const response = await this.client.models.generateContent({
+                const genPromise = this.client.models.generateContent({
                     model: modelName,
                     contents: contents,
                     config: geminiConfig
                 });
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error(`Timeout na chamada do modelo ${modelName}`)), optConfig?.timeout ?? 4000)
+                );
+                const response = await Promise.race([genPromise, timeoutPromise]) as any;
                 return response.text || "";
             } catch (err: any) {
                 lastError = err;
@@ -132,11 +136,15 @@ export class GeminiProvider extends BaseProvider {
                 if (optConfig?.systemInstruction) geminiConfig.systemInstruction = optConfig.systemInstruction;
                 if (schema) geminiConfig.responseSchema = schema;
 
-                const response = await this.client.models.generateContent({
+                const genPromise = this.client.models.generateContent({
                     model: modelName,
                     contents: contents,
                     config: geminiConfig
                 });
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error(`Timeout na extração estruturada do modelo ${modelName}`)), optConfig?.timeout ?? 4000)
+                );
+                const response = await Promise.race([genPromise, timeoutPromise]) as any;
 
                 if (!response.text) {
                     throw new Error("Empty structured response from GeminiProvider");

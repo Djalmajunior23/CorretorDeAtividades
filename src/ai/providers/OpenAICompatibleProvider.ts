@@ -69,7 +69,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
 
         const controller = new AbortController();
-        const timeoutMs = optConfig?.timeout ?? 20000;
+        const timeoutMs = optConfig?.timeout ?? 5000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {

@@ -12,15 +12,23 @@ export class OllamaProvider extends BaseProvider {
     private static availabilityCache = new Map<string, { available: boolean; timestamp: number }>();
 
     public async isAvailable(): Promise<boolean> {
+        // Fast-fail em ambientes serverless (Vercel/AWS Lambda) quando aponta para host interno inacessível
+        const isServerless = !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
+        const isInternalHost = this.baseUrl.includes("host.docker.internal") || this.baseUrl.includes("localhost") || this.baseUrl.includes("127.0.0.1");
+        
+        if (isServerless && isInternalHost) {
+            return false;
+        }
+
         const now = Date.now();
         const cached = OllamaProvider.availabilityCache.get(this.baseUrl);
-        if (cached && (now - cached.timestamp < 20000)) {
+        if (cached && (now - cached.timestamp < 30000)) {
             return cached.available;
         }
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 1500);
+            const timeoutId = setTimeout(() => controller.abort(), 800);
             
             const headers: Record<string, string> = {};
             if (this.config.apiKey) {
@@ -88,7 +96,7 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const controller = new AbortController();
-        const timeoutMs = optConfig?.timeout ?? 15000;
+        const timeoutMs = optConfig?.timeout ?? 4000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
@@ -141,7 +149,7 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const controller = new AbortController();
-        const timeoutMs = optConfig?.timeout ?? 15000;
+        const timeoutMs = optConfig?.timeout ?? 4000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {

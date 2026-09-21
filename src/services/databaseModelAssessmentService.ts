@@ -232,11 +232,11 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
       const aiResponsePromise = provider.generateStructured<any>(
         aiSystemPrompt,
         null,
-        { temperature: 0.1, max_tokens: 3500, timeout: 15000 },
+        { temperature: 0.1, max_tokens: 3500, timeout: 5000 },
         imageData
       );
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout limite de 15s na IA")), 15000)
+        setTimeout(() => reject(new Error("Timeout limite de 5s na IA")), 5000)
       );
 
       const aiResponse = await Promise.race([aiResponsePromise, timeoutPromise]) as any;
@@ -322,7 +322,11 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
     // 2. Dynamic Fallback Evaluation when AI provider is unavailable
     if (isImage && params.imageBase64 && !extractedTextFromImage) {
       try {
-        const ocrResult = await OCRService.extractTextFromImage(params.imageBase64, true);
+        const ocrPromise = OCRService.extractTextFromImage(params.imageBase64, true);
+        const ocrTimeout = new Promise<{ text: string }>((res) => 
+          setTimeout(() => res({ text: "" }), 1800)
+        );
+        const ocrResult = await Promise.race([ocrPromise, ocrTimeout]) as any;
         if (ocrResult && ocrResult.text && ocrResult.text.trim()) {
           extractedTextFromImage = ocrResult.text.trim();
         }
