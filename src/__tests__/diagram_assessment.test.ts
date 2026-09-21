@@ -142,6 +142,48 @@ describe("Módulo de Correção de Diagramas e Modelagem de Sistemas", () => {
     expect(data.modelingIssues.length).toBeGreaterThan(0);
   });
 
+  it("POST /api/diagrams/assess - Deve extrair e avaliar entidades dinâmicas (ex: Biblioteca) sem hardcode", async () => {
+    const libraryERD = `erDiagram
+      AUTOR ||--o{ LIVRO : "escreve"
+      LIVRO ||--o{ EMPRESTIMO : "possui"
+
+      AUTOR {
+          uuid id PK
+          string nome
+          string nacionalidade
+      }
+      LIVRO {
+          uuid id PK
+          uuid autor_id FK
+          string titulo
+          int ano_publicacao
+      }
+      EMPRESTIMO {
+          uuid id PK
+          uuid livro_id FK
+          datetime data_retirada
+      }`;
+
+    const res = await fetch(`${baseUrl}/api/diagrams/assess`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        diagramType: "erDiagram",
+        format: "code",
+        code: libraryERD,
+        scenario: "Sistema de gerenciamento de biblioteca com autores, livros e empréstimos"
+      })
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.totalGrade).toBeGreaterThanOrEqual(60);
+    expect(data.extractedTables.some((t: any) => t.name === "AUTOR" || t.name === "LIVRO")).toBe(true);
+    expect(data.generatedDdlSql.toLowerCase()).toContain("autor");
+    expect(data.generatedDdlSql.toLowerCase()).toContain("livro");
+  });
+
   it("POST /api/diagrams/assess - Deve avaliar Diagrama de Classes UML com modificadores de visibilidade", async () => {
     const validUML = `classDiagram
       class Conta {

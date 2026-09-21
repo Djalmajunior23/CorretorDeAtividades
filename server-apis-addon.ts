@@ -2954,7 +2954,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           recommendations: average < 60 
             ? ["Participar da monitoria semanal", "Completar trilha de recuperação paralela"] 
             : ["Explorar desafios de programação avançada de nível bronze na trilha pedagógica"],
-          teacher_notes: teacherNotes || ""
+          teacher_notes: teacher_notes || ""
         };
       } else if (type === "class_council") {
         let classAverage = 74.5;
@@ -2994,7 +2994,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
             "Nova rodada diagnóstica após período de recuperação"
           ],
           critical_concepts: classAverage < 60 ? ["Recursão", "Manipulação de Matrizes bidimensionais"] : ["Análise de Complexidade de Algoritmos"],
-          teacher_notes: teacherNotes || ""
+          teacher_notes: teacher_notes || ""
         };
       } else {
         calculatedContent = {
@@ -3005,7 +3005,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           strengths: ["Lógica estrutural", "Participação ativa"],
           improvements: ["Falta de testes exaustivos"],
           recommendations: ["Trilha padrão de atividades extras"],
-          teacher_notes: teacherNotes || ""
+          teacher_notes: teacher_notes || ""
         };
       }
 
@@ -3034,7 +3034,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           class_id: targetClassId, 
           student_id, 
           content: calculatedContent, 
-          teacher_notes: teacherNotes || null,
+          teacher_notes: teacher_notes || null,
           created_at: createdAt 
         } 
       });
@@ -4120,7 +4120,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         scenario,
         targetSgbd,
         studentId,
-        classId
+        classId,
+        providerConfig: req.body.providerConfig
       });
 
       // Automatically persist correction to student profile and vault
