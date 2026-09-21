@@ -56,7 +56,7 @@ export class ProviderFactory {
     }
 
     static createCustomProvider(options?: CustomAIRequestOptions): BaseProvider {
-        const reqProvider = (options?.provider || process.env.AI_PROVIDER || "ollama").toLowerCase();
+        const reqProvider = (options?.provider || process.env.AI_PROVIDER || "auto").toLowerCase();
         const reqModel = options?.model;
 
         // 1. Instancia Ollama Provider
@@ -69,47 +69,60 @@ export class ProviderFactory {
         });
 
         // 2. Instancia Gemini Provider se chave existir
-        const geminiKey = options?.apiKey || process.env.GEMINI_API_KEY;
+        const geminiKey = (reqProvider === "gemini" ? options?.apiKey : undefined) || process.env.GEMINI_API_KEY;
         const geminiProvider = geminiKey ? new GeminiProvider({
             provider: "gemini",
             model: reqModel?.includes("gemini") ? reqModel : (process.env.AI_ACTIVITY_MODEL || "gemini-2.5-flash"),
             apiKey: geminiKey
         }) : null;
 
-        // 3. Instancia OpenAI / Groq / DeepSeek Provider se configurado
-        const openaiKey = options?.apiKey || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.DEEPSEEK_API_KEY;
-        let openaiBaseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-        if (reqProvider === "groq") openaiBaseUrl = "https://api.groq.com/openai/v1";
-        if (reqProvider === "deepseek") openaiBaseUrl = "https://api.deepseek.com/v1";
+        // 3. Instancia Groq Provider (Ultra-rápido LPU)
+        const groqKey = (reqProvider === "groq" ? options?.apiKey : undefined) || process.env.GROQ_API_KEY;
+        const groqProvider = groqKey ? new OpenAICompatibleProvider({
+            provider: "groq",
+            model: reqModel || "llama-3.3-70b-versatile",
+            baseUrl: "https://api.groq.com/openai/v1",
+            apiKey: groqKey
+        }) : null;
 
+        // 4. Instancia DeepSeek Provider
+        const deepseekKey = (reqProvider === "deepseek" ? options?.apiKey : undefined) || process.env.DEEPSEEK_API_KEY;
+        const deepseekProvider = deepseekKey ? new OpenAICompatibleProvider({
+            provider: "deepseek",
+            model: reqModel || "deepseek-chat",
+            baseUrl: "https://api.deepseek.com/v1",
+            apiKey: deepseekKey
+        }) : null;
+
+        // 5. Instancia OpenAI Provider
+        const openaiKey = (reqProvider === "openai" ? options?.apiKey : undefined) || process.env.OPENAI_API_KEY;
         const openaiProvider = openaiKey ? new OpenAICompatibleProvider({
-            provider: reqProvider === "groq" ? "groq" : (reqProvider === "deepseek" ? "deepseek" : "openai"),
-            model: reqModel || (reqProvider === "groq" ? "llama-3.3-70b-versatile" : (reqProvider === "deepseek" ? "deepseek-chat" : "gpt-4o-mini")),
-            baseUrl: options?.baseUrl || openaiBaseUrl,
+            provider: "openai",
+            model: reqModel || "gpt-4o-mini",
+            baseUrl: options?.baseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
             apiKey: openaiKey
         }) : null;
 
         // Roteamento explícito
-        if (reqProvider === "gemini" && geminiProvider) {
-            return geminiProvider;
-        }
-
-        if ((reqProvider === "openai" || reqProvider === "groq" || reqProvider === "deepseek") && openaiProvider) {
-            return openaiProvider;
-        }
-
+        if (reqProvider === "gemini" && geminiProvider) return geminiProvider;
+        if (reqProvider === "groq" && groqProvider) return groqProvider;
+        if (reqProvider === "deepseek" && deepseekProvider) return deepseekProvider;
+        if (reqProvider === "openai" && openaiProvider) return openaiProvider;
         if (reqProvider === "ollama") {
-            // Em caso de fallback configurado: Ollama -> Gemini -> OpenAI
             const chain: BaseProvider[] = [ollamaProvider];
             if (geminiProvider) chain.push(geminiProvider);
+            if (groqProvider) chain.push(groqProvider);
             if (openaiProvider) chain.push(openaiProvider);
             return chain.length > 1 ? new MultiFallbackProvider(chain) : ollamaProvider;
         }
 
-        // Modo "auto": Tenta Ollama VPS -> Gemini -> OpenAI
-        const autoChain: BaseProvider[] = [ollamaProvider];
+        // Modo "auto": prioriza os provedores mais rápidos com credenciais disponíveis
+        const autoChain: BaseProvider[] = [];
         if (geminiProvider) autoChain.push(geminiProvider);
+        if (groqProvider) autoChain.push(groqProvider);
         if (openaiProvider) autoChain.push(openaiProvider);
+        if (deepseekProvider) autoChain.push(deepseekProvider);
+        autoChain.push(ollamaProvider);
 
         return autoChain.length > 1 ? new MultiFallbackProvider(autoChain) : ollamaProvider;
     }

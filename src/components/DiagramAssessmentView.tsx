@@ -33,7 +33,9 @@ import {
   Code2,
   Table,
   UploadCloud,
-  Trash2
+  Trash2,
+  Zap,
+  Cpu
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -83,6 +85,7 @@ export default function DiagramAssessmentView() {
   const [inputMode, setInputMode] = useState<DatabaseInputFormat>("image");
   
   // Content states
+  const [aiEngine, setAiEngine] = useState<string>("auto");
   const [diagramCode, setDiagramCode] = useState<string>("");
   const [scenarioPrompt, setScenarioPrompt] = useState<string>("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -325,7 +328,8 @@ CREATE TABLE tb_item_pedido (
         studentId: selectedStudentId || undefined,
         studentName: studentObj?.name || undefined,
         classId: selectedClassId || undefined,
-        className: classObj?.name || undefined
+        className: classObj?.name || undefined,
+        providerConfig: aiEngine === "auto" ? undefined : { provider: aiEngine }
       };
 
       const res = await fetch(apiUrl("/api/diagrams/assess"), {
@@ -465,8 +469,8 @@ CREATE TABLE tb_item_pedido (
         </div>
       </div>
 
-      {/* Control Toolbar: Model Category, SGBD, Input Mode */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+      {/* Control Toolbar: Model Category, SGBD, Input Mode, AI Engine, Classes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
         <div>
           <label className="block text-xs font-mono font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-sky-400" /> Categoria do Modelo
@@ -511,6 +515,24 @@ CREATE TABLE tb_item_pedido (
             <option value="sqlserver">Microsoft SQL Server (T-SQL)</option>
             <option value="oracle">Oracle Database (PL/SQL)</option>
             <option value="sqlite">SQLite 3 (Embarcado)</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-mono font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" /> Motor de IA / Acelerador
+          </label>
+          <select
+            value={aiEngine}
+            onChange={(e) => setAiEngine(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-amber-500 font-mono text-xs"
+          >
+            <option value="auto">⚡ Auto (Mais Rápido Disponível)</option>
+            <option value="gemini">🚀 Google Gemini 2.5 Flash (&lt;1s)</option>
+            <option value="groq">⚡ Groq LPU (Ultra Rápido ~500 t/s)</option>
+            <option value="openai">🧠 OpenAI GPT-4o Mini</option>
+            <option value="deepseek">💡 DeepSeek Coder / V3</option>
+            <option value="ollama">🖥️ Ollama Local (Offline / GPU)</option>
           </select>
         </div>
 
