@@ -115,21 +115,40 @@ export class GeminiProvider extends BaseProvider {
         let lastError: any = null;
         for (const modelName of modelsToTry) {
             try {
+                const geminiConfig: any = {
+                    ...optConfig,
+                    responseMimeType: "application/json"
+                };
+                if (schema) {
+                    geminiConfig.responseSchema = schema;
+                }
+
                 const response = await this.client.models.generateContent({
                     model: modelName,
                     contents: contents,
-                    config: {
-                        ...optConfig,
-                        responseMimeType: "application/json",
-                        responseSchema: schema
-                    }
+                    config: geminiConfig
                 });
 
                 if (!response.text) {
                     throw new Error("Empty structured response from GeminiProvider");
                 }
 
-                return JSON.parse(response.text) as T;
+                let cleaned = response.text.trim();
+                if (cleaned.startsWith("```json")) {
+                    cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+                } else if (cleaned.startsWith("```")) {
+                    cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+                }
+
+                try {
+                    return JSON.parse(cleaned) as T;
+                } catch (jsonErr) {
+                    const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+                    if (jsonMatch) {
+                        return JSON.parse(jsonMatch[0]) as T;
+                    }
+                    throw jsonErr;
+                }
             } catch (err: any) {
                 lastError = err;
                 console.error(`[GeminiProvider] Structured extraction failed for model ${modelName}:`, err.message);

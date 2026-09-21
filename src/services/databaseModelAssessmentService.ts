@@ -229,12 +229,17 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
 }
 `;
 
-      const aiResponse = await provider.generateStructured<any>(
+      const aiResponsePromise = provider.generateStructured<any>(
         aiSystemPrompt,
         null,
-        { temperature: 0.1, max_tokens: 3500, timeout: 20000 },
+        { temperature: 0.1, max_tokens: 3500, timeout: 15000 },
         imageData
       );
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout limite de 15s na IA")), 15000)
+      );
+
+      const aiResponse = await Promise.race([aiResponsePromise, timeoutPromise]) as any;
 
       if (aiResponse && typeof aiResponse === "object" && aiResponse.totalGrade !== undefined) {
         const totalGrade = Math.max(0, Math.min(100, Math.round(Number(aiResponse.totalGrade) || 0)));

@@ -88,7 +88,7 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const controller = new AbortController();
-        const timeoutMs = optConfig?.timeout ?? 120000;
+        const timeoutMs = optConfig?.timeout ?? 15000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
@@ -141,7 +141,7 @@ export class OllamaProvider extends BaseProvider {
         }
 
         const controller = new AbortController();
-        const timeoutMs = optConfig?.timeout ?? 120000;
+        const timeoutMs = optConfig?.timeout ?? 15000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
