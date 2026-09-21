@@ -132,7 +132,7 @@ export class DatabaseModelAssessmentService {
     // Run local OCR (Tesseract.js) to guarantee text extraction from the uploaded image
     if (isImage && params.imageBase64) {
       try {
-        const ocrResult = await OCRService.extractTextFromImage(params.imageBase64);
+        const ocrResult = await OCRService.extractTextFromImage(params.imageBase64, true);
         if (ocrResult && ocrResult.text && ocrResult.text.trim()) {
           extractedTextFromImage = ocrResult.text.trim();
         }
@@ -244,7 +244,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
       const aiResponse = await provider.generateStructured<any>(
         aiSystemPrompt,
         null,
-        { temperature: 0.1, max_tokens: 4500 },
+        { temperature: 0.1, max_tokens: 3500, timeout: 20000 },
         imageData
       );
 

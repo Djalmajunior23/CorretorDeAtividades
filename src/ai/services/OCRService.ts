@@ -7,7 +7,7 @@ export class OCRService {
         return /^[a-zA-Z0-9+/]+={0,2}$/.test(str);
     }
 
-    static async extractTextFromImage(base64Image: string): Promise<{ text: string; aiAnalysisAvailable: boolean; aiError?: string; error?: string }> {
+    static async extractTextFromImage(base64Image: string, skipAiCorrection = false): Promise<{ text: string; aiAnalysisAvailable: boolean; aiError?: string; error?: string }> {
         let extractedText = "";
         
         try {
@@ -18,13 +18,20 @@ export class OCRService {
                 : base64Image;
 
             const result = await Tesseract.recognize(source, 'por+eng');
-            extractedText = result.data.text;
+            extractedText = result.data.text || "";
         } catch (tesseractError) {
             console.error("[OCRService] Tesseract failed:", tesseractError);
             return {
                 text: "",
                 aiAnalysisAvailable: false,
                 error: "OCR local (Tesseract) falhou na extração do texto."
+            };
+        }
+
+        if (skipAiCorrection) {
+            return {
+                text: extractedText,
+                aiAnalysisAvailable: false
             };
         }
 

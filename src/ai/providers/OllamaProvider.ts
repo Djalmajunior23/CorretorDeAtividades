@@ -9,10 +9,18 @@ export class OllamaProvider extends BaseProvider {
         this.baseUrl = baseUrl.replace(/\/$/, "");
     }
 
+    private static availabilityCache = new Map<string, { available: boolean; timestamp: number }>();
+
     public async isAvailable(): Promise<boolean> {
+        const now = Date.now();
+        const cached = OllamaProvider.availabilityCache.get(this.baseUrl);
+        if (cached && (now - cached.timestamp < 20000)) {
+            return cached.available;
+        }
+
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 7000);
+            const timeoutId = setTimeout(() => controller.abort(), 1500);
             
             const headers: Record<string, string> = {};
             if (this.config.apiKey) {
@@ -25,8 +33,11 @@ export class OllamaProvider extends BaseProvider {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
-            return response.ok;
+            const isOk = response.ok;
+            OllamaProvider.availabilityCache.set(this.baseUrl, { available: isOk, timestamp: now });
+            return isOk;
         } catch (err) {
+            OllamaProvider.availabilityCache.set(this.baseUrl, { available: false, timestamp: now });
             return false;
         }
     }
