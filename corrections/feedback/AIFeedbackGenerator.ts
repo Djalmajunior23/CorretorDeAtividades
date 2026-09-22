@@ -1,4 +1,5 @@
 import { aiService } from "../../src/ai/services/AIService";
+import { CustomAIRequestOptions } from "../../src/ai/factory/ProviderFactory";
 
 export interface AIFeedbackResponse {
   resumo_desempenho: string;
@@ -18,9 +19,10 @@ export class AIFeedbackGenerator {
     testsPassed: number,
     qualityIssues: string[],
     stderr: string,
-    finalScore: number
+    finalScore: number,
+    providerConfig?: CustomAIRequestOptions
   ): Promise<AIFeedbackResponse> {
-    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER);
+    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER || providerConfig?.apiKey);
     if (hasAI) {
       try {
         const schema = {
@@ -44,7 +46,8 @@ export class AIFeedbackGenerator {
         };
 
         const optConfig = {
-          systemInstruction: "Você é um mentor acadêmico inteligente do SENAI, focado em ajudar e guiar estudantes de programação. Gere feedbacks didáticos, construtivos, claros e estimulantes."
+          systemInstruction: "Você é um mentor acadêmico inteligente do SENAI, focado em ajudar e guiar estudantes de programação. Gere feedbacks didáticos, construtivos, claros e estimulantes.",
+          providerConfig
         };
 
         const promptText = `

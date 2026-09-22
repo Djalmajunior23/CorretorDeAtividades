@@ -1,4 +1,5 @@
 import { aiService } from "../../src/ai/services/AIService";
+import { CustomAIRequestOptions } from "../../src/ai/factory/ProviderFactory";
 
 export interface RubricCriterion {
   nome: string;
@@ -34,9 +35,10 @@ export class RubricGrader {
     qualityIssues: string[],
     stderr: string,
     finalScore: number,
-    customRubricCriteria?: Record<string, number>
+    customRubricCriteria?: Record<string, number>,
+    providerConfig?: CustomAIRequestOptions
   ): Promise<RubricEvaluationResult> {
-    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER);
+    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER || providerConfig?.apiKey);
     
     // If we have custom criteria, we use them instead of the default 7
     const activeCriteria = customRubricCriteria 
@@ -69,7 +71,8 @@ export class RubricGrader {
         };
 
         const optConfig = {
-          systemInstruction: "Você é um auditor de avaliação acadêmica computacional. Seu papel é atribuir pontuações precisas às rubricas estruturadas dos alunos sem divergir da nota agregada final que já foi auferida por testes."
+          systemInstruction: "Você é um auditor de avaliação acadêmica computacional. Seu papel é atribuir pontuações precisas às rubricas estruturadas dos alunos sem divergir da nota agregada final que já foi auferida por testes.",
+          providerConfig
         };
 
         const promptText = `

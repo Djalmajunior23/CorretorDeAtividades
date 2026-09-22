@@ -134,24 +134,24 @@ export class DatabaseModelAssessmentService {
 
       const aiSystemPrompt = `
 Você é o Especialista Chefe em Bancos de Dados e Engenharia de Software do SENAI.
-Sua missão é inspecionar minuciosamente o diagrama submetido pelo estudante ${isImage ? "na imagem digitalizada fornecida" : "no código/DDL fornecido"} e gerar uma avaliação técnica rigorosa e o script DDL SQL correspondente.
+Sua missão é inspecionar minuciosamente o trabalho submetido pelo estudante ${isImage ? "na imagem/foto digitalizada fornecida" : "no código/DDL fornecido"} e gerar uma avaliação técnica rigorosa, fiel à realidade do aluno e acompanhada do script DDL SQL correspondente.
 
 ENUNCIADO / CENÁRIO INFORMADO:
 """${scenario}"""
 ${extractedTextFromImage ? `\nTEXTO EXTRAÍDO DA IMAGEM ATUAL VIA OCR LOCAL:\n"""\n${extractedTextFromImage}\n"""\n` : ""}
 
-DIRETRIZES DE EXTRAÇÃO E AVALIAÇÃO:
-1. Extraia com máxima fidelidade TODAS as Entidades/Tabelas desenhadas ou declaradas no diagrama da imagem atual, com seus atributos, tipos de dados, chaves primárias (PK), chaves estrangeiras (FK) e cardinalidades.
-2. IMPORTANTE: Cada foto/diagrama submetido é ÚNICO e INDEPENDENTE. Não reutilize entidades genéricas ou de avaliações anteriores. Avalie rigorosamente apenas as tabelas e campos desta imagem específica!
-3. Formas Normais (1FN, 2FN, 3FN):
-   - 1FN: atomicidade dos atributos e ausência de campos multivalorados na mesma coluna.
-   - 2FN: ausência de dependências parciais em tabelas com chave composta.
-   - 3FN: ausência de dependências transitivas entre atributos não-chave.
+DIRETRIZES DE AVALIAÇÃO COM MÁXIMA FIDELIDADE:
+1. Extraia TODAS as Entidades/Tabelas e Atributos exatamente como foram desenhados ou escritos pelo aluno nesta submissão. Não invente ou substitua por nomes genéricos. Se o aluno escreveu "cli_nome" ou esqueceu a PK/FK, aponte exatamente isso!
+2. Identifique o que o aluno acertou, o que omitiu em relação aos requisitos do enunciado e o que modelou com falha conceitual (ex: campo multivalorado, chave estrangeira faltando, cardinalidade invertida, tipo incompatível).
+3. Auditoria Detalhada de Normalização (1FN, 2FN, 3FN):
+   - 1ª Forma Normal (1FN): Explique especificamente se há colunas com múltiplos valores (ex: múltiplos telefones numa só coluna) ou campos compostos não atômicos.
+   - 2ª Forma Normal (2FN): Explique se em tabelas com chave composta há dependência funcional parcial.
+   - 3ª Forma Normal (3FN): Explique se há dependências transitivas entre atributos não-chave (ex: cidade/estado dependendo de cep).
 4. Geração do Script SQL DDL (${sgbd.toUpperCase()}):
-   - O campo "generatedDdlSql" DEVE conter o script SQL DDL COMPLETO, EXECUTÁVEL e 100% FIEL às entidades e atributos do modelo corrigido.
-   - Inclua CREATE TABLE para cada entidade, com colunas, tipos compatíveis (${sgbd.toUpperCase()}), PRIMARY KEY, restrições NOT NULL e FOREIGN KEY correspondentes.
-5. Geração do Diagrama Mermaid Corrigido:
-   - O campo "suggestedCorrectedDiagram" DEVE conter o código Mermaid (erDiagram para BD ou classDiagram para UML) representando o modelo corrigido.
+   - O campo "generatedDdlSql" DEVE conter o script SQL DDL COMPLETO, EXECUTÁVEL e PROFISSIONAL correspondente ao modelo corrigido.
+   - Inclua CREATE TABLE para cada entidade, colunas com tipos nativos (${sgbd.toUpperCase()}), PRIMARY KEYs, restrições NOT NULL, UNIQUE, CHECK e FOREIGN KEYs com integridade referencial.
+5. Diagrama Mermaid Corrigido:
+   - Código Mermaid (erDiagram para BD ou classDiagram para UML) representando a versão corrigida.
 
 Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
 {
@@ -1642,14 +1642,50 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
     doc.setFont("helvetica", "bold");
     doc.text("DIAGNÓSTICO TÉCNICO DETALHADO & FEEDBACK PEDAGÓGICO", 14, 13);
 
-    currentY = 28;
+    // Section: Student Extracted Tables
+    if (result.extractedTables && result.extractedTables.length > 0) {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("3. ENTIDADES & ATRIBUTOS IDENTIFICADOS NO TRABALHO DO ALUNO", 14, currentY);
+
+      const tableRows = result.extractedTables.map(t => {
+        const pks = t.columns.filter(c => c.isPrimaryKey).map(c => c.name).join(", ") || "NÃO IDENTIFICADA";
+        const fks = t.columns.filter(c => c.isForeignKey).map(c => c.name).join(", ") || "NENHUMA";
+        const cols = t.columns.map(c => `${c.name} (${c.dataType || "string"})`).join(", ");
+        return [
+          t.name,
+          t.type === "strong_entity" ? "Entidade Forte" : t.type === "associative_table" ? "Associativa" : "Tabela",
+          pks,
+          fks,
+          cols
+        ];
+      });
+
+      safeAutoTable(doc, {
+        startY: currentY + 3,
+        head: [["Entidade", "Classificação", "Chaves Primárias (PK)", "Chaves Estrangeiras (FK)", "Colunas Mapeadas"]],
+        body: tableRows,
+        columnStyles: {
+          0: { cellWidth: 30, fontStyle: "bold" },
+          1: { cellWidth: 24, halign: "center" },
+          2: { cellWidth: 32 },
+          3: { cellWidth: 32 },
+          4: { cellWidth: 64 }
+        },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5 },
+        styles: { fontSize: 7, cellPadding: 2 }
+      });
+
+      currentY = getAutoTableFinalY(doc, currentY + 35);
+    }
 
     // Physical Audit Box if applicable
     if (result.physicalAudit) {
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(9.5);
       doc.setFont("helvetica", "bold");
-      doc.text(`3. AUDITORIA DE MODELO FÍSICO & COMPATIBILIDADE SGBD (${sgbdLabel})`, 14, currentY);
+      doc.text(`4. AUDITORIA DE MODELO FÍSICO & COMPATIBILIDADE SGBD (${sgbdLabel})`, 14, currentY + 6);
 
       const physRows: string[][] = [
         ["Dialeto SGBD Alvo", sgbdLabel, "Validação de sintaxe compatível com o interpretador oficial."],
@@ -1660,7 +1696,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
       ];
 
       safeAutoTable(doc, {
-        startY: currentY + 3,
+        startY: currentY + 9,
         head: [["Componente Físico", "Classificação", "Parecer Técnico de Engenharia"]],
         body: physRows,
         columnStyles: {
@@ -1672,7 +1708,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
         styles: { fontSize: 7.5, cellPadding: 2 }
       });
 
-      currentY = getAutoTableFinalY(doc, currentY + 45);
+      currentY = getAutoTableFinalY(doc, currentY + 50);
     }
 
     // Strengths Block

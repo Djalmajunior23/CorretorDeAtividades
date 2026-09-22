@@ -114,6 +114,9 @@ export default function SmartCorrectionLab() {
       
       const url = API_BASE_URL.endsWith("/corrections/run") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/corrections/run`;
 
+      const customApiKey = localStorage.getItem("codecheck_ai_api_key") || localStorage.getItem("ai_api_key") || undefined;
+      const customProvider = localStorage.getItem("codecheck_ai_provider") || undefined;
+
       const response = await fetch(url, {
         method: "POST",
         headers: { 
@@ -124,6 +127,7 @@ export default function SmartCorrectionLab() {
             code: code,
             language: language.id,
             test_cases: [{ input: "", expected_output: "" }], // Mock test case
+            providerConfig: customApiKey ? { apiKey: customApiKey, provider: customProvider } : undefined
           }),
         },
       );

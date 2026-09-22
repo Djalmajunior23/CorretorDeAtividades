@@ -4219,7 +4219,8 @@ app.post("/api/smart-labs/submissions/:subId/correct", async (req, res) => {
       lab.test_cases || [],
       lab.rubric || {},
       lintSettings,
-      FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR
+      FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR,
+      req.body.providerConfig
     );
 
     // 4. Update submission
@@ -9634,7 +9635,7 @@ Responda APENAS em formato JSON válido estruturado assim:
 // Endpoint 1: Run code online
 // ==========================================
 app.post(["/corrections/run", "/api/corrections/run"], async (req, res) => {
-  const { language, code, test_cases, studentName, className, rubric, activity_id, class_id, student_id } = req.body;
+  const { language, code, test_cases, studentName, className, rubric, activity_id, class_id, student_id, providerConfig } = req.body;
 
   if (!language || typeof code !== "string") {
     return res.status(400).json({ error: "Language and Code parameters are required" });
@@ -9656,7 +9657,7 @@ app.post(["/corrections/run", "/api/corrections/run"], async (req, res) => {
     const tests = Array.isArray(test_cases) ? test_cases : [];
     
     // Orchestrate correction through CorrectionService (Engine 2.0)
-    const serviceResult = await CorrectionService.run(language, code, tests, rubric, currentLintingSettings, FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR);
+    const serviceResult = await CorrectionService.run(language, code, tests, rubric, currentLintingSettings, FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR, providerConfig);
 
     // Synthesis of elegant Markdown feedback for backward compatibility with standard renderes
     const unifiedFeedbackString = `

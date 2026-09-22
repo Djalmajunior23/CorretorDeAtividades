@@ -5,6 +5,7 @@ import { Grader, Rubric } from "../graders/Grader.ts";
 import { PedagogicalFeedback, FeedbackStructure } from "../feedback/PedagogicalFeedback.ts";
 import { RubricGrader, RubricCriterion } from "../feedback/RubricGrader.ts";
 import { AIFeedbackGenerator, AIFeedbackResponse } from "../feedback/AIFeedbackGenerator.ts";
+import { CustomAIRequestOptions } from "../../src/ai/factory/ProviderFactory.ts";
 
 import { PythonExecutor } from "../executors/PythonExecutor.ts";
 import { JavaScriptExecutor } from "../executors/JavaScriptExecutor.ts";
@@ -72,7 +73,8 @@ export class CorrectionService {
     testCases: TestCase[],
     rubric?: Rubric,
     lintingSettings?: LintingSettings,
-    enableSandbox: boolean = false
+    enableSandbox: boolean = false,
+    providerConfig?: CustomAIRequestOptions
   ): Promise<CorrectionResult20> {
     const langLower = language.toLowerCase();
     
@@ -99,7 +101,8 @@ export class CorrectionService {
         [],
         "",
         false,
-        securityResult.reason
+        securityResult.reason,
+        providerConfig
       );
 
       return {
@@ -181,7 +184,8 @@ export class CorrectionService {
          qualityAnalysis.issues,
          stderr,
          true,
-         null
+         null,
+         providerConfig
        );
 
        const execution_time = parseFloat((execution_time_ms / 1000).toFixed(3)) || 0.01;
@@ -199,7 +203,9 @@ export class CorrectionService {
            tests_passed,
            qualityAnalysis.issues,
            stderr,
-           graded.final_score
+           graded.final_score,
+           undefined,
+           providerConfig
          );
          rubric_criteria = rubricEval.criteria;
        }
@@ -215,7 +221,8 @@ export class CorrectionService {
            tests_passed,
            qualityAnalysis.issues,
            stderr,
-           graded.final_score
+           graded.final_score,
+           providerConfig
          );
        }
 
@@ -265,7 +272,8 @@ export class CorrectionService {
         qualityAnalysis.issues,
         staticRes.isUnavailable ? staticRes.feedback : "",
         true,
-        null
+        null,
+        providerConfig
       );
 
       const staticCompetencies = CorrectionService.analyzeCompetencies(code, language);
@@ -289,7 +297,9 @@ export class CorrectionService {
           staticRes.isUnavailable ? 0 : testCases.length,
           qualityAnalysis.issues,
           staticRes.isUnavailable ? staticRes.feedback : "",
-          graded.final_score
+          graded.final_score,
+          undefined,
+          providerConfig
         );
         rubric_criteria = rubricEval.criteria;
       }
@@ -305,7 +315,8 @@ export class CorrectionService {
           staticRes.isUnavailable ? 0 : testCases.length,
           qualityAnalysis.issues,
           staticRes.isUnavailable ? staticRes.feedback : "",
-          graded.final_score
+          graded.final_score,
+          providerConfig
         );
       }
 
@@ -405,7 +416,8 @@ export class CorrectionService {
       qualityAnalysis.issues,
       stderr,
       true,
-      null
+      null,
+      providerConfig
     );
 
     // Convert milliseconds to seconds float representation
@@ -433,7 +445,9 @@ export class CorrectionService {
         tests_passed,
         qualityAnalysis.issues,
         stderr,
-        graded.final_score
+        graded.final_score,
+        undefined,
+        providerConfig
       );
       rubric_criteria = rubricEval.criteria;
     }
@@ -449,7 +463,8 @@ export class CorrectionService {
         tests_passed,
         qualityAnalysis.issues,
         stderr,
-        graded.final_score
+        graded.final_score,
+        providerConfig
       );
     }
 

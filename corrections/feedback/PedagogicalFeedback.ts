@@ -1,4 +1,5 @@
 import { aiService } from "../../src/ai/services/AIService";
+import { CustomAIRequestOptions } from "../../src/ai/factory/ProviderFactory";
 
 export interface FeedbackStructure {
   summary: string;
@@ -11,7 +12,7 @@ export interface FeedbackStructure {
 
 export class PedagogicalFeedback {
   /**
-   * Generates feedback structure.
+   * Generates feedback structure faithful to the student's actual code.
    */
   static async generate(
     language: string,
@@ -22,71 +23,81 @@ export class PedagogicalFeedback {
     qualityIssues: string[],
     stderr: string,
     securityOk: boolean,
-    securityReason: string | null
+    securityReason: string | null,
+    providerConfig?: CustomAIRequestOptions
   ): Promise<FeedbackStructure> {
     
     // Check if security blocked
     if (!securityOk) {
       return {
-        summary: "Seu exercício foi bloqueado na validação de segurança automática devido a diretivas arriscadas integradas.",
-        strengths: ["Uso de palavras reservadas avançadas (embora não permitidas)"],
-        errors: [`Ação de segurança: ${securityReason || "Código potencialmente perigoso"}`],
-        improvements: ["Remova importações de sistema operacional ou bibliotecas de manipulação de rede/arquivos", "Conserte a lógica para seguir estritamente o escopo do algoritmo proposto"],
+        summary: "Seu exercício foi bloqueado na validação de segurança automática devido a diretivas potencialmente arriscadas.",
+        strengths: ["Tentativa de uso de bibliotecas de sistema"],
+        errors: [`Bloqueio de segurança: ${securityReason || "Código não permitido no ambiente educacional."}`],
+        improvements: ["Remova importações de sistema operacional ou bibliotecas de rede/arquivos.", "Mantenha o código estritamente focado no escopo do algoritmo proposto."],
         concepts_to_review: ["Sanitização de Código", "Ambientes Sandbox de Compilação", "Boas Práticas de Desenvolvimento Seguro"],
         next_steps: ["Revise as palavras-chave do código", "Submeta uma solução puramente algorítmica"]
       };
     }
 
-    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER);
+    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER || providerConfig?.apiKey);
     if (hasAI) {
       try {
         const schema = {
           type: "OBJECT",
           properties: {
-            summary: { type: "STRING", description: "Resumo pedagógico geral da resolução do aluno." },
-            strengths: { type: "ARRAY", items: { type: "STRING" }, description: "Lista de 1 a 3 pontos fortes do código escrito pelo aluno." },
-            errors: { type: "ARRAY", items: { type: "STRING" }, description: "O erro principal observado ou potenciais falhas em testes." },
-            improvements: { type: "ARRAY", items: { type: "STRING" }, description: "Melhorias de legibilidade, indentação ou nomes sugeridas." },
-            concepts_to_review: { type: "ARRAY", items: { type: "STRING" }, description: "Quais tópicos acadêmicos o aluno deve estudar para dominar isso." },
-            next_steps: { type: "ARRAY", items: { type: "STRING" }, description: "Próximos passos imediatos sugeridos (ex: testar caso limite)." }
+            summary: { type: "STRING", description: "Resumo pedagógico geral da resolução real do aluno citando o que ele fez." },
+            strengths: { type: "ARRAY", items: { type: "STRING" }, description: "Lista de 1 a 3 pontos fortes específicos citando funções, variáveis ou trechos reais do código." },
+            errors: { type: "ARRAY", items: { type: "STRING" }, description: "Erros específicos com citação de linhas ou cláusulas (especialmente para SQL ou lógica falha em testes)." },
+            improvements: { type: "ARRAY", items: { type: "STRING" }, description: "Melhorias práticas e concretas de refatoração para o código do aluno." },
+            concepts_to_review: { type: "ARRAY", items: { type: "STRING" }, description: "Tópicos didáticos específicos que o aluno precisa reforçar." },
+            next_steps: { type: "ARRAY", items: { type: "STRING" }, description: "Próximos passos imediatos sugeridos (ex: testar caso limite específico)." }
           },
           required: ["summary", "strengths", "errors", "improvements", "concepts_to_review", "next_steps"]
         };
 
+        const isSql = language.toLowerCase() === "sql";
+
         const optConfig = {
-          systemInstruction: "Você é um professor tutor de algoritmos e programação sênior, super carinhoso, didático e motivador. Seu papel é corrigir e explicar trechos de códigos estudantis sem entregar a resposta final de bandeja."
+          systemInstruction: `Você é um professor tutor sênior do SENAI de programação e banco de dados.
+Seu feedback deve ser extremamente fiel à REALIDADE do que o aluno escreveu.
+CITE nomes de variáveis, nomes de funções, tabelas e trechos reais do código dele.
+${isSql ? "Para scripts e queries SQL, verifique cláusulas SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, tipos de dados, chaves primárias e estrangeiras." : ""}
+Nunca use respostas genéricas de шаблон. Seja acolhedor, didático e aponte exatamente onde melhorar.`
         };
 
-        const promptText = `Analise as seguintes métricas de correção de código e gere o feedback pedagógico estruturado:
+        const promptText = `
+Analise o código submetido pelo estudante e gere um feedback pedagógico e técnico de máxima fidelidade:
+
 Linguagem: ${language}
 Sintaxe OK: ${syntaxOk}
 Métricas de testes: passou em ${testsPassed} de ${totalTests} testes unitários.
 Problemas estáticos de qualidade sinalizados: ${JSON.stringify(qualityIssues)}
-Mensagem de erro de compilação/execução (stderr): ${stderr}
+Mensagem de erro de compilação/execução (stderr): ${stderr || "Nenhum erro de compilação."}
 
-Código submetido pelo discente:
-\`\`\`
+Código real escrito pelo aluno:
+\`\`\`${language}
 ${code}
-\`\`\``;
+\`\`\`
+`;
 
         const payload = await aiService.generateStructuredWithRetry<any>(promptText, schema, optConfig);
         
-        if (payload) {
+        if (payload && payload.summary) {
           return {
-            summary: payload.summary || "Revisão gerada com sucesso pela IA de Ensino.",
-            strengths: payload.strengths || [],
-            errors: payload.errors || [],
-            improvements: payload.improvements || [],
-            concepts_to_review: payload.concepts_to_review || [],
-            next_steps: payload.next_steps || []
+            summary: payload.summary,
+            strengths: Array.isArray(payload.strengths) && payload.strengths.length > 0 ? payload.strengths : ["Estruturação do algoritmo na linguagem " + language],
+            errors: Array.isArray(payload.errors) && payload.errors.length > 0 ? payload.errors : ["Nenhum erro crítico detectado."],
+            improvements: Array.isArray(payload.improvements) && payload.improvements.length > 0 ? payload.improvements : ["Praticar mais exercícios semelhantes."],
+            concepts_to_review: Array.isArray(payload.concepts_to_review) && payload.concepts_to_review.length > 0 ? payload.concepts_to_review : ["Algoritmos e Estrutura de Dados"],
+            next_steps: Array.isArray(payload.next_steps) && payload.next_steps.length > 0 ? payload.next_steps : ["Testar casos limites adicionais."]
           };
         }
       } catch (err: any) {
-        console.warn("Failing over to rule-based feedback generator due to AI service issue:", err.message);
+        console.warn("[PedagogicalFeedback] Failing over to rule-based feedback generator:", err.message);
       }
     }
 
-    // Heuristics Static Fallback Generator (Rule-Based)
+    // Heuristics Realistic Fallback Generator (Rule-Based com extração estática de tokens)
     return this.generateHeuristicFeedback(language, code, syntaxOk, totalTests, testsPassed, qualityIssues, stderr);
   }
 
@@ -100,72 +111,120 @@ ${code}
     stderr: string
   ): FeedbackStructure {
     const isSuccess = testsPassed === totalTests && syntaxOk && totalTests > 0;
-    
+    const langLower = language.toLowerCase();
+    const isSql = langLower === "sql";
+
+    // 1. Extração de elementos reais do código do aluno
+    const functionsFound = Array.from(code.matchAll(/(?:def|function|public\s+(?:static\s+)?[a-zA-Z0-9_<>]+\s+)\s*([a-zA-Z0-9_]+)/g)).map(m => m[1]);
+    const tablesFound = Array.from(code.matchAll(/(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+([a-zA-Z0-9_]+)/gi)).map(m => m[1].toUpperCase());
+    const hasLoops = /\b(for|while|forEach|loop)\b/i.test(code);
+    const hasConditions = /\b(if|elif|else|switch|case|WHERE)\b/i.test(code);
+    const hasGroupBy = /\bGROUP\s+BY\b/i.test(code);
+    const hasJoin = /\b(JOIN|INNER\s+JOIN|LEFT\s+JOIN)\b/i.test(code);
+
     // Strengths Heuristics
     const strengths: string[] = [];
-    if (code.length > 50) strengths.push("Estrutura do código consistente e completa.");
-    if (syntaxOk) strengths.push("Sintaxe limpa, sem erros de compilação iniciais.");
-    if (testsPassed > 0) strengths.push(`${testsPassed} casos de teste validados com sucesso.`);
-    if (strengths.length === 0) strengths.push("Esforço sincero para resolver a atividade.");
+    if (isSql) {
+      if (tablesFound.length > 0) strengths.push(`Manipulação de tabelas relacionais identificada: ${tablesFound.slice(0, 3).join(", ")}.`);
+      if (hasJoin) strengths.push("Utilização de junções relacionais (JOIN) para conectar dados de múltiplas entidades.");
+      if (hasGroupBy) strengths.push("Aplicação de agrupamento de dados com cláusula GROUP BY.");
+      if (strengths.length === 0) strengths.push("Comandos SQL estruturados com sintaxe relacional.");
+    } else {
+      if (functionsFound.length > 0) strengths.push(`Modularização do algoritmo através de função(ões): ${functionsFound.slice(0, 2).map(f => `\`${f}()\``).join(", ")}.`);
+      if (hasLoops) strengths.push("Implementação de estruturas de repetição para iteração de dados.");
+      if (hasConditions) strengths.push("Controle de fluxo condicional implementado para tomada de decisões.");
+      if (syntaxOk) strengths.push(`Sintaxe limpa e compilável na linguagem ${language.toUpperCase()}.`);
+    }
+
+    if (testsPassed > 0) {
+      strengths.push(`${testsPassed} caso(s) de teste passaram com sucesso.`);
+    }
+    if (strengths.length === 0) {
+      strengths.push("Tentativa de resolução do problema com estruturação inicial.");
+    }
 
     // Errors Heuristics
     const errors: string[] = [];
     if (!syntaxOk) {
-      errors.push(`Erro de sintaxe detectado. Verifique os pontos e vírgulas: ${stderr.slice(0, 80)}`);
+      errors.push(`Erro de compilação/sintaxe: ${stderr ? stderr.slice(0, 100) : "Instrução incompleta ou símbolo ausente."}`);
     } else if (testsPassed < totalTests) {
-      errors.push(`Seu algoritmo falhou em cobrir as saídas desejadas para alguns casos de teste.`);
+      const failedCount = totalTests - testsPassed;
+      errors.push(`O algoritmo falhou em ${failedCount} de ${totalTests} casos de teste (saída obtida divergiu da saída esperada).`);
+    }
+
+    if (isSql && !code.toUpperCase().includes("SELECT") && !code.toUpperCase().includes("CREATE") && !code.toUpperCase().includes("INSERT")) {
+      errors.push("Comando SQL incompleto: Verifique a declaração de SELECT, CREATE TABLE ou INSERT.");
     }
 
     // Improvements Heuristics
-    const improvements = qualityIssues.length > 0 
-      ? qualityIssues 
-      : ["Seu código já apresenta excelente nível! Continue praticando estruturas limpas."];
+    const improvements: string[] = [];
+    if (qualityIssues.length > 0) {
+      improvements.push(...qualityIssues);
+    }
+    if (isSql) {
+      if (!code.toUpperCase().includes("WHERE") && code.toUpperCase().includes("SELECT") && !code.toUpperCase().includes("COUNT")) {
+        improvements.push("Avaliar se é necessário filtrar os registros com a cláusula WHERE para evitar Full Table Scan.");
+      }
+      if (hasJoin && !code.toUpperCase().includes(" ON ")) {
+        improvements.push("Garantir que todo JOIN possua a condição ON especificando a chave de relacionamento.");
+      }
+    } else {
+      if (code.includes("print(") || code.includes("console.log(")) {
+        improvements.push("Certifique-se de que as saídas exibidas correspondem exatamente ao formato exigido (sem textos extras não solicitados).");
+      }
+    }
+    if (improvements.length === 0) {
+      improvements.push("Código bem estruturado. Pratique a inclusão de comentários descritivos e tratamento de casos limites.");
+    }
 
     // Concepts to Review
     const concepts_to_review: string[] = [];
-    if (!syntaxOk) {
-      concepts_to_review.push("Regras de Sintaxe e Erros de Compilador");
-    }
-    if (testsPassed < totalTests) {
-      concepts_to_review.push("Lógica de Condicionais e Estruturas de Loops");
-      concepts_to_review.push("Validação de Casos de Borda (Corner Cases)");
-    }
-    if (code.toLowerCase().includes("for") || code.toLowerCase().includes("while")) {
-      concepts_to_review.push("Complexidade e Estruturas de Repetição");
+    if (isSql) {
+      concepts_to_review.push("Álgebra Relacional & Consultas SQL (DQL/DDL)");
+      if (hasJoin) concepts_to_review.push("Tipos de JOIN (INNER, LEFT, RIGHT) e Integridade Referencial");
+      if (hasGroupBy) concepts_to_review.push("Funções de Agregação (COUNT, SUM, AVG) e HAVING");
+    } else {
+      if (!syntaxOk) concepts_to_review.push("Sintaxe Básica e Delimitadores da Linguagem");
+      if (testsPassed < totalTests) {
+        concepts_to_review.push("Lógica de Algoritmos e Raciocínio Computacional");
+        concepts_to_review.push("Teste de Mesa e Casos de Borda (Corner Cases)");
+      }
+      if (hasLoops) concepts_to_review.push("Estruturas de Repetição e Condições de Parada");
     }
     if (concepts_to_review.length === 0) {
-      concepts_to_review.push("Otimização de Algoritmos", "Lógica Avançada");
+      concepts_to_review.push("Estrutura de Dados e Otimização");
     }
 
     // Next Steps
     const next_steps: string[] = [];
     if (!syntaxOk) {
-      next_steps.push("Conserte o erro na linha sinalizada no log de erros do compilador.");
+      next_steps.push("Conserte a linha indicada no log de compilação e tente executar novamente.");
     } else if (testsPassed < totalTests) {
-      next_steps.push("Simule a execução do código com papel e caneta para as entradas que falharam.");
+      next_steps.push("Faça um teste de mesa manual com as entradas que falharam para identificar onde a variável muda de valor indevidamente.");
     } else {
-      next_steps.push("Experimente resolver o mesmo problema utilizando uma abordagem diferente (ex: recursão vs loops).");
+      next_steps.push("Excelente domínio! Experimente refatorar o código para uma versão ainda mais concisa ou modular.");
     }
 
-    // Prepare pedagogical Teacher Summary
+    // Summary
     let summary = "";
     if (isSuccess) {
-      summary = `Parabéns! Seu código passou em todos os testes unitários da avaliação. A lógica está excelente, o código está muito limpo na linguagem ${language.toUpperCase()} e você demonstrou completo domínio do conceito estudado.`;
+      summary = `Parabéns! Sua solução em ${language.toUpperCase()} foi aprovada em 100% dos testes unitários (${testsPassed}/${totalTests}). A lógica está correta e demonstra domínio dos conceitos de programação.`;
     } else if (!syntaxOk) {
-      summary = `Detectei problemas na estrutura gramatical do seu código na linguagem ${language.toUpperCase()}. O compilador não conseguiu executar o programa devido a erros de formatação (ex: falta de fechamento de blocos ou erro de digitação).`;
+      summary = `Identifiquei um erro impeditivo de compilação/sintaxe no seu código ${language.toUpperCase()}. O programa não pôde ser executado até o final.`;
     } else if (testsPassed > 0) {
-      summary = `Bom trabalho! Algumas partes da sua implementação de código funcionam corretamente (foram aprovados ${testsPassed} testes de ${totalTests}), mas há cenários específicos onde a resposta fornecida diverge do esperado pelo professor tutor.`;
+      summary = `Bom trabalho! Sua implementação atendeu parcialmente aos requisitos (passou em ${testsPassed} de ${totalTests} testes), mas há divergências em cenários específicos.`;
     } else {
-      summary = `O algoritmo foi executado, mas nenhum dos testes foi completado com a saída desejável. Vamos revisar e ajustar a lógica de processamento de entrada e saída juntas de forma pedagógica.`;
+      summary = `O algoritmo foi executado, mas não produziu a saída correta para os testes aplicados. Vamos revisar a lógica e os tipos de dados juntos.`;
     }
 
     return {
       summary,
       strengths,
-      errors: errors.length > 0 ? errors : ["Nenhum erro grave detectado."],
+      errors: errors.length > 0 ? errors : ["Nenhum erro impeditivo encontrado."],
       improvements,
       concepts_to_review,
       next_steps
     };
   }
 }
+

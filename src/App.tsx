@@ -1992,6 +1992,8 @@ export default function App() {
     try {
       const currentStudent = correctorStudents.find(s => s.id === selectedCorrectorStudent);
       const resolvedStudentName = studentName || currentStudent?.name || null;
+      const customApiKey = localStorage.getItem("codecheck_ai_api_key") || localStorage.getItem("ai_api_key") || undefined;
+      const customProvider = localStorage.getItem("codecheck_ai_provider") || undefined;
 
       const payload = {
         language,
@@ -2002,7 +2004,8 @@ export default function App() {
         className: correctorClasses.find(c => c.id === selectedCorrectorClass)?.name || null,
         activity_id: selectedCorrectorActivity || null,
         class_id: selectedCorrectorClass || null,
-        student_id: selectedCorrectorStudent || null
+        student_id: selectedCorrectorStudent || null,
+        providerConfig: customApiKey ? { apiKey: customApiKey, provider: customProvider } : undefined
       };
 
       const response = await fetch(apiUrl("/api/corrections/run"), {
