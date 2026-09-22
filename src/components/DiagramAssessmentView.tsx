@@ -609,33 +609,77 @@ CREATE TABLE tb_item_pedido (
         </div>
       </div>
 
-      {/* Optional Custom API Key input banner */}
+      {/* Optional Custom API Key input banner with Free Resources Guide */}
       {showKeyInput && (
-        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-amber-500/40 flex flex-col sm:flex-row items-center gap-3 animate-fade-in text-xs shadow-lg">
-          <div className="flex items-center gap-2 text-amber-400 font-mono font-bold shrink-0">
-            <Key className="w-4 h-4" /> Chave de API Própria:
+        <div className="p-4 bg-slate-900/95 rounded-2xl border border-amber-500/40 flex flex-col gap-3 animate-fade-in text-xs shadow-xl backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+            <div className="flex items-center gap-2 text-amber-400 font-mono font-bold">
+              <Key className="w-4 h-4" /> Configuração de Chave de IA (100% Gratuita)
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <span>Recursos gratuitos recomendados:</span>
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noreferrer" 
+                className="text-sky-400 underline hover:text-sky-300 font-mono"
+              >
+                Google AI Studio (Gemini) ↗
+              </a>
+              <span>•</span>
+              <a 
+                href="https://console.groq.com/keys" 
+                target="_blank" 
+                rel="noreferrer" 
+                className="text-emerald-400 underline hover:text-emerald-300 font-mono"
+              >
+                Groq Cloud ↗
+              </a>
+            </div>
           </div>
-          <input
-            type="password"
-            value={customApiKey}
-            onChange={(e) => {
-              const val = e.target.value;
-              setCustomApiKey(val);
-              localStorage.setItem("codecheck_ai_api_key", val);
-            }}
-            placeholder="Cole sua chave (AIza... do Google Gemini, gsk_... do Groq, sk-... da OpenAI)"
-            className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-500 w-full"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              toast.success("Chave de API salva com sucesso no navegador!");
-              setShowKeyInput(false);
-            }}
-            className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shrink-0 cursor-pointer shadow-md"
-          >
-            Salvar Chave
-          </button>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <input
+              type="password"
+              value={customApiKey}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCustomApiKey(val);
+                localStorage.setItem("codecheck_ai_api_key", val);
+              }}
+              placeholder="Cole sua chave gratuita (AIza... do Google Gemini ou gsk_... da Groq)"
+              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-500 w-full shadow-inner"
+            />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  toast.success("Chave de API salva com sucesso no navegador!");
+                  setShowKeyInput(false);
+                }}
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shrink-0 cursor-pointer shadow-md transition-all"
+              >
+                Salvar Chave
+              </button>
+              {customApiKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomApiKey("");
+                    localStorage.removeItem("codecheck_ai_api_key");
+                    toast.info("Chave removida. Usando motor local gratuito.");
+                  }}
+                  className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs shrink-0 cursor-pointer border border-slate-700 transition-all"
+                  title="Limpar chave salva"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="text-[11px] text-slate-400 leading-relaxed">
+            💡 <strong>100% Grátis:</strong> A chave do Google Gemini (Google AI Studio) é totalmente gratuita para uso educacional, sem necessidade de cartão de crédito, e analisa imagens e diagramas em &lt; 1 segundo. Se não desejar usar nenhuma chave, o sistema opera automaticamente com o motor heurístico local sem custos.
+          </div>
         </div>
       )}
 
