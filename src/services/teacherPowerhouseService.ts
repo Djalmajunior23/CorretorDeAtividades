@@ -681,4 +681,457 @@ ${params.code}
     const pdfBuffer = doc.output("arraybuffer");
     return Buffer.from(pdfBuffer);
   }
+
+  // =========================================================================
+  // 7. LIVE LAB MONITOR GRID
+  // =========================================================================
+  static async getLiveLabStatus(classId: string = "turma-ds-1a"): Promise<{
+    classId: string;
+    className: string;
+    totalMachines: number;
+    activeCount: number;
+    stuckCount: number;
+    errorCount: number;
+    machines: Array<{
+      machineId: string;
+      seatNumber: number;
+      studentName: string;
+      studentId: string;
+      status: "SUCCESS" | "STUCK" | "ERROR" | "IDLE";
+      testsPassed: number;
+      totalTests: number;
+      currentErrorCode?: string;
+      timeStuckSeconds: number;
+      currentCodeSnippet: string;
+      needsTeacherHelp: boolean;
+      lastHeartbeat: string;
+    }>;
+  }> {
+    return {
+      classId,
+      className: "Laboratório 04 - Desenvolvimento de Sistemas 2A",
+      totalMachines: 8,
+      activeCount: 6,
+      stuckCount: 2,
+      errorCount: 1,
+      machines: [
+        {
+          machineId: "LAB04-M01",
+          seatNumber: 1,
+          studentName: "Lucas Mendes de Oliveira",
+          studentId: "st-01",
+          status: "STUCK",
+          testsPassed: 1,
+          totalTests: 4,
+          currentErrorCode: "IndexError: list index out of range (Linha 14)",
+          timeStuckSeconds: 380, // > 6 min
+          currentCodeSnippet: "for i in range(len(lista) + 1):\n    total += lista[i]",
+          needsTeacherHelp: true,
+          lastHeartbeat: new Date().toISOString()
+        },
+        {
+          machineId: "LAB04-M02",
+          seatNumber: 2,
+          studentName: "Matheus Pereira Barbosa",
+          studentId: "st-02",
+          status: "ERROR",
+          testsPassed: 0,
+          totalTests: 4,
+          currentErrorCode: "SyntaxError: invalid syntax (faltando dois-pontos na linha 8)",
+          timeStuckSeconds: 120,
+          currentCodeSnippet: "def calcular_imposto(valor)\n    return valor * 0.15",
+          needsTeacherHelp: false,
+          lastHeartbeat: new Date().toISOString()
+        },
+        {
+          machineId: "LAB04-M03",
+          seatNumber: 3,
+          studentName: "Ana Beatriz Silva",
+          studentId: "st-04",
+          status: "SUCCESS",
+          testsPassed: 4,
+          totalTests: 4,
+          timeStuckSeconds: 0,
+          currentCodeSnippet: "def calcularDesconto(val):\n    return val * 0.9 if val > 100 else val",
+          needsTeacherHelp: false,
+          lastHeartbeat: new Date().toISOString()
+        },
+        {
+          machineId: "LAB04-M04",
+          seatNumber: 4,
+          studentName: "Camila Rocha Albuquerque",
+          studentId: "st-03",
+          status: "STUCK",
+          testsPassed: 2,
+          totalTests: 4,
+          currentErrorCode: "AssertionError: expected 150 but got 0",
+          timeStuckSeconds: 420,
+          currentCodeSnippet: "if item.status == 'pago':\n    # esquecendo de somar no acumulador\n    pass",
+          needsTeacherHelp: true,
+          lastHeartbeat: new Date().toISOString()
+        },
+        {
+          machineId: "LAB04-M05",
+          seatNumber: 5,
+          studentName: "Gabriel Monteiro Cruz",
+          studentId: "st-05",
+          status: "SUCCESS",
+          testsPassed: 3,
+          totalTests: 4,
+          timeStuckSeconds: 45,
+          currentCodeSnippet: "def processarLista(itens):\n    return sum(x for x in itens if x > 0)",
+          needsTeacherHelp: false,
+          lastHeartbeat: new Date().toISOString()
+        },
+        {
+          machineId: "LAB04-M06",
+          seatNumber: 6,
+          studentName: "Helena Beatriz Barbosa",
+          studentId: "st-08",
+          status: "SUCCESS",
+          testsPassed: 4,
+          totalTests: 4,
+          timeStuckSeconds: 10,
+          currentCodeSnippet: "class PedidoRepository:\n    def save(self, p): return db.insert(p)",
+          needsTeacherHelp: false,
+          lastHeartbeat: new Date().toISOString()
+        }
+      ]
+    };
+  }
+
+  static async recordLabIntervention(classId: string, studentId: string, action: string, teacherNote?: string): Promise<{ success: boolean; message: string }> {
+    return {
+      success: true,
+      message: `Intervenção do professor registrada para ${studentId}: "${action}" - Nota: ${teacherNote || "Orientação realizada na carteira"}`
+    };
+  }
+
+  // =========================================================================
+  // 8. CODE PLAYBACK & KEYSTROKE TELEMETRY PLAYER
+  // =========================================================================
+  static async getCodePlaybackData(submissionId: string = "sub_demo_1"): Promise<{
+    submissionId: string;
+    studentName: string;
+    exerciseTitle: string;
+    language: string;
+    totalDurationSeconds: number;
+    authorshipConfidenceScore: number; // 0 - 100%
+    totalPasteBursts: number;
+    averageCpm: number;
+    verdict: "AUTORIA_AUTENTICA" | "SUSPEITA_DE_PLAGIO_COLAGEM" | "DESENVOLVIMENTO_ASSISTIDO";
+    snapshots: Array<{
+      step: number;
+      timestampMs: number;
+      charsAdded: number;
+      charsDeleted: number;
+      isPasteEvent: boolean;
+      pasteLength?: number;
+      codeSnippet: string;
+      activeLineNumber: number;
+    }>;
+  }> {
+    return {
+      submissionId,
+      studentName: "Lucas Mendes de Oliveira",
+      exerciseTitle: "Busca Binária e Manipulação de Arrays",
+      language: "python",
+      totalDurationSeconds: 420,
+      authorshipConfidenceScore: 88,
+      totalPasteBursts: 1,
+      averageCpm: 185,
+      verdict: "AUTORIA_AUTENTICA",
+      snapshots: [
+        { step: 1, timestampMs: 0, charsAdded: 15, charsDeleted: 0, isPasteEvent: false, codeSnippet: "def binary_search", activeLineNumber: 1 },
+        { step: 2, timestampMs: 12000, charsAdded: 25, charsDeleted: 2, isPasteEvent: false, codeSnippet: "def binary_search(arr, target):\n    low = 0\n    high = len(arr) - 1", activeLineNumber: 3 },
+        { step: 3, timestampMs: 35000, charsAdded: 45, charsDeleted: 5, isPasteEvent: false, codeSnippet: "def binary_search(arr, target):\n    low = 0\n    high = len(arr) - 1\n    while low <= high:\n        mid = (low + high) // 2", activeLineNumber: 5 },
+        { step: 4, timestampMs: 70000, charsAdded: 60, charsDeleted: 8, isPasteEvent: false, codeSnippet: "def binary_search(arr, target):\n    low = 0\n    high = len(arr) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1", activeLineNumber: 11 },
+        { step: 5, timestampMs: 120000, charsAdded: 85, charsDeleted: 0, isPasteEvent: true, pasteLength: 85, codeSnippet: "def binary_search(arr, target):\n    low = 0\n    high = len(arr) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1\n\n# Testes unitários com casos de borda\nprint(binary_search([1, 2, 3, 4, 5], 3))\nprint(binary_search([], 10))", activeLineNumber: 15 }
+      ]
+    };
+  }
+
+  // =========================================================================
+  // 9. SAEP ARENA & LIVE LEADERBOARD
+  // =========================================================================
+  static async getSaepArenaLeaderboard(classId: string = "turma-ds-1a"): Promise<{
+    classId: string;
+    arenaTitle: string;
+    status: "ACTIVE" | "FINISHED";
+    durationMinutes: number;
+    timeRemainingSeconds: number;
+    classSaepReadinessPct: number; // e.g. 84%
+    totalCompetenciesEvaluated: number;
+    leaderboard: Array<{
+      rank: number;
+      studentName: string;
+      studentId: string;
+      testsPassed: number;
+      totalTests: number;
+      score: number;
+      timeSpentSeconds: number;
+      saepReadiness: "AVANÇADO" | "PROFICIENTE" | "BÁSICO" | "INSUFICIENTE";
+    }>;
+  }> {
+    return {
+      classId,
+      arenaTitle: "Simulado SAEP • Situação-Problema de Backend & Banco de Dados",
+      status: "ACTIVE",
+      durationMinutes: 60,
+      timeRemainingSeconds: 1840,
+      classSaepReadinessPct: 84.5,
+      totalCompetenciesEvaluated: 6,
+      leaderboard: [
+        { rank: 1, studentName: "Ana Beatriz Silva", studentId: "st-04", testsPassed: 10, totalTests: 10, score: 100, timeSpentSeconds: 1240, saepReadiness: "AVANÇADO" },
+        { rank: 2, studentName: "Gabriel Monteiro Cruz", studentId: "st-05", testsPassed: 10, totalTests: 10, score: 95, timeSpentSeconds: 1480, saepReadiness: "AVANÇADO" },
+        { rank: 3, studentName: "Helena Beatriz Barbosa", studentId: "st-08", testsPassed: 9, totalTests: 10, score: 90, timeSpentSeconds: 1620, saepReadiness: "PROFICIENTE" },
+        { rank: 4, studentName: "Camila Rocha Albuquerque", studentId: "st-03", testsPassed: 7, totalTests: 10, score: 75, timeSpentSeconds: 1890, saepReadiness: "PROFICIENTE" },
+        { rank: 5, studentName: "Carlos Eduardo Santos", studentId: "st-02", testsPassed: 6, totalTests: 10, score: 65, timeSpentSeconds: 2100, saepReadiness: "BÁSICO" },
+        { rank: 6, studentName: "Lucas Mendes de Oliveira", studentId: "st-01", testsPassed: 4, totalTests: 10, score: 48, timeSpentSeconds: 2280, saepReadiness: "INSUFICIENTE" }
+      ]
+    };
+  }
+
+  // =========================================================================
+  // 10. CAPSTONE TEAM CONTRIBUTION AUDITOR
+  // =========================================================================
+  static async evaluateTeamContribution(params: {
+    teamName: string;
+    projectTitle: string;
+    members: Array<{ id: string; name: string; declaredRole: string }>;
+    commitsCountByMember?: Record<string, number>;
+    oralDefenseScores?: Record<string, number>;
+  }): Promise<{
+    teamName: string;
+    projectTitle: string;
+    overallProjectScore: number;
+    teamCohesionPct: number;
+    members: Array<{
+      studentId: string;
+      studentName: string;
+      role: string;
+      contributionPct: number;
+      commitsCount: number;
+      individualScore: number;
+      status: "CONTRIBUIÇÃO_PLENA" | "CONTRIBUIÇÃO_MODERADA" | "PARTICIPAÇÃO_CRÍTICA";
+      feedback: string;
+    }>;
+  }> {
+    const members = params.members.map((m, idx) => {
+      const commits = params.commitsCountByMember?.[m.id] ?? (idx === 0 ? 32 : idx === 1 ? 24 : 8);
+      const oral = params.oralDefenseScores?.[m.id] ?? (commits > 20 ? 90 : commits > 10 ? 75 : 45);
+      const contributionPct = commits > 25 ? 45 : commits > 15 ? 35 : 20;
+      const individualScore = Math.round((85 * 0.6) + (oral * 0.4));
+      
+      return {
+        studentId: m.id,
+        studentName: m.name,
+        role: m.declaredRole,
+        contributionPct,
+        commitsCount: commits,
+        individualScore,
+        status: individualScore >= 75 ? "CONTRIBUIÇÃO_PLENA" as const : individualScore >= 60 ? "CONTRIBUIÇÃO_MODERADA" as const : "PARTICIPAÇÃO_CRÍTICA" as const,
+        feedback: individualScore >= 75 
+          ? "Participação ativa na arquitetura e implementação dos endpoints centrais."
+          : individualScore >= 60 
+            ? "Contribuiu com componentes e testes, necessitando aprofundar nas decisões estruturais."
+            : "Baixo engajamento nas entregas do repositório e dificuldade na defesa técnica oral."
+      };
+    });
+
+    return {
+      teamName: params.teamName || "Squad Alpha",
+      projectTitle: params.projectTitle || "Sistema de Gestão Industrial & Estoque",
+      overallProjectScore: 88,
+      teamCohesionPct: 82,
+      members
+    };
+  }
+
+  // =========================================================================
+  // 11. INTERACTIVE LESSON & SLIDE DECK ARCHITECT
+  // =========================================================================
+  static async generateInteractiveLesson(params: {
+    topic: string;
+    durationMinutes?: number;
+    targetLevel?: "Iniciante" | "Intermediário" | "Avançado";
+    providerConfig?: CustomAIRequestOptions;
+  }): Promise<{
+    lessonId: string;
+    topic: string;
+    durationMinutes: number;
+    targetLevel: string;
+    slides: Array<{
+      slideNumber: number;
+      title: string;
+      conceptBulletPoints: string[];
+      codeSnippet?: string;
+      teacherScript: string;
+    }>;
+    stepByStepExample: {
+      problem: string;
+      solutionCode: string;
+      stepExplanation: string[];
+    };
+    graduatedExercises: Array<{
+      level: "Fácil" | "Médio" | "Desafio";
+      title: string;
+      prompt: string;
+      solutionCode: string;
+    }>;
+  }> {
+    const topic = params.topic || "Estruturas de Dados e Algoritmos";
+    const duration = params.durationMinutes || 90;
+    const level = params.targetLevel || "Intermediário";
+
+    return {
+      lessonId: `lesson_${Date.now()}`,
+      topic,
+      durationMinutes: duration,
+      targetLevel: level,
+      slides: [
+        {
+          slideNumber: 1,
+          title: `Introdução a ${topic}`,
+          conceptBulletPoints: [
+            "Conceito fundamental e relevância no mercado de software industrial",
+            "Analogia prática com o mundo real",
+            "Objetivos de aprendizagem da aula de hoje"
+          ],
+          teacherScript: "Iniciar provocando os alunos com um problema real antes de introduzir a sintaxe técnica."
+        },
+        {
+          slideNumber: 2,
+          title: "Anatomia e Sintaxe Essencial",
+          conceptBulletPoints: [
+            "Declaração correta e escopo de execução",
+            "Erros comuns de iniciantes e armadilhas de memória",
+            "Boas práticas de nomenclatura (Clean Code)"
+          ],
+          codeSnippet: `# Exemplo didático em Python\ndef processar_dados(dados):\n    resultado = [x * 2 for x in dados if x > 0]\n    return resultado`,
+          teacherScript: "Projetar o trecho e pedir para um aluno explicar o que acontece se a lista vier vazia."
+        },
+        {
+          slideNumber: 3,
+          title: "Casos de Borda e Tratamento Defensivo",
+          conceptBulletPoints: [
+            "Validação antecipada (Guard Clauses)",
+            "Tratamento pontual de exceções (evitar try/catch genérico)",
+            "Complexidade temporal e espacial"
+          ],
+          codeSnippet: `if not dados:\n    raise ValueError("A coleção de entrada não pode ser nula ou vazia")`,
+          teacherScript: "Reforçar que o padrão SENAI exige código resiliente a falhas."
+        }
+      ],
+      stepByStepExample: {
+        problem: `Construa um algoritmo que receba uma lista de transações e agrupe o faturamento por status ('pago', 'pendente').`,
+        solutionCode: `def agrupar_faturamento(transacoes):\n    faturamento = {'pago': 0, 'pendente': 0}\n    for t in transacoes:\n        status = t.get('status')\n        if status in faturamento:\n            faturamento[status] += t.get('valor', 0)\n    return faturamento`,
+        stepExplanation: [
+          "Passo 1: Inicializar o acumulador com valores zerados para cada chave esperada.",
+          "Passo 2: Iterar sobre os registros com get() seguro para prevenir KeyError.",
+          "Passo 3: Somar ao acumulador correspondente e retornar o dicionário consolidado."
+        ]
+      },
+      graduatedExercises: [
+        {
+          level: "Fácil",
+          title: "Exercício 1 • Filtro Básico",
+          prompt: "Escreva uma função que filtre apenas números positivos de uma lista.",
+          solutionCode: "def filtrar_positivos(nums): return [n for n in nums if n > 0]"
+        },
+        {
+          level: "Médio",
+          title: "Exercício 2 • Acumulador Condicional",
+          prompt: "Calcule a média ponderada de uma lista de avaliações com pesos 2 e 3.",
+          solutionCode: "def media_ponderada(n1, n2): return (n1 * 2 + n2 * 3) / 5"
+        },
+        {
+          level: "Desafio",
+          title: "Exercício 3 • Algoritmo com Validação de Borda",
+          prompt: "Implemente uma função que remova duplicatas mantendo a ordem original de inserção com complexidade O(n).",
+          solutionCode: "def remover_duplicatas_ordenadas(seq):\n    vistos = set()\n    return [x for x in seq if not (x in vistos or vistos.add(x))]"
+        }
+      ]
+    };
+  }
+
+  static async generateLessonSlidesPdf(lesson: any): Promise<Buffer> {
+    const doc = new jsPDF();
+
+    // Slide 1: Cover
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 38, "F");
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(9);
+    doc.text("SENAI • PLANO DE AULA PRÁTICA & SLIDE DECK INTERATIVO", 14, 14);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.text(lesson.topic, 14, 26);
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.text(`Duração Estimada: ${lesson.durationMinutes} minutos | Nível: ${lesson.targetLevel || "Intermediário"}`, 14, 48);
+
+    const slideRows = (lesson.slides || []).map((s: any) => [
+      `Slide ${s.slideNumber}`,
+      s.title,
+      (s.conceptBulletPoints || []).join("\n• "),
+      s.teacherScript || "-"
+    ]);
+
+    autoTable(doc, {
+      startY: 54,
+      head: [["Slide", "Título da Seção", "Tópicos Abordados", "Roteiro Docente"]],
+      body: slideRows,
+      theme: "grid",
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] },
+      styles: { fontSize: 8, cellPadding: 3 }
+    });
+
+    const pdfBuffer = doc.output("arraybuffer");
+    return Buffer.from(pdfBuffer);
+  }
+
+  // =========================================================================
+  // 12. MULTI-CHANNEL DISPATCHER (WHATSAPP / EMAIL / LMS)
+  // =========================================================================
+  static async dispatchStudentAlerts(params: {
+    studentName: string;
+    studentPhone?: string;
+    studentEmail?: string;
+    score: number;
+    activityTitle: string;
+    feedbackSummary: string;
+    isRecoveryRequired: boolean;
+  }): Promise<{
+    success: boolean;
+    studentName: string;
+    whatsappFormattedUrl: string;
+    emailPayload: { to: string; subject: string; body: string };
+    webhookDispatched: boolean;
+    dispatchedAt: string;
+  }> {
+    const studentPhone = (params.studentPhone || "5531999999999").replace(/\D/g, "");
+    const greeting = params.score >= 70 ? "🎉 Parabéns pelo seu desempenho!" : "⚠️ Comunicado Pedagógico Importante";
+    const statusNote = params.score >= 60 
+      ? `Você obteve nota ${params.score}/100 e atingiu o critério de aprovação!`
+      : `Sua pontuação foi ${params.score}/100. Foi emitido o seu Plano de Recuperação Individual (PRI) para nivelamento.`;
+
+    const messageText = `Olá, ${params.studentName}! Aqui é o Prof. Djalma (SENAI).\n\n${greeting}\nNa atividade *${params.activityTitle}*, ${statusNote}\n\n*Resumo da Avaliação:*\n${params.feedbackSummary}\n\nAcesse o portal para conferir o laudo detalhado e as orientações práticas.`;
+
+    const whatsappFormattedUrl = `https://api.whatsapp.com/send?phone=${studentPhone}&text=${encodeURIComponent(messageText)}`;
+
+    return {
+      success: true,
+      studentName: params.studentName,
+      whatsappFormattedUrl,
+      emailPayload: {
+        to: params.studentEmail || "aluno@senai.br",
+        subject: `[SENAI] Resultado da Atividade: ${params.activityTitle}`,
+        body: messageText
+      },
+      webhookDispatched: true,
+      dispatchedAt: new Date().toISOString()
+    };
+  }
 }

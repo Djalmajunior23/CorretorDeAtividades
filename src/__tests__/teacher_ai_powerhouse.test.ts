@@ -457,5 +457,128 @@ describe("Suíte Avançada de IA para o Docente (AI Teacher Powerhouse)", () => 
       expect(data.exam.variants.length).toBe(4);
       expect(data.exam.variants[0].variantId).toBe("A");
     });
+
+    // -------------------------------------------------------------
+    // ADVANCED SUITE: 6 NEW TEACHER FEATURES
+    // -------------------------------------------------------------
+    it("GET /api/teacher/live-lab/status - Deve retornar status das máquinas do laboratório ao vivo", async () => {
+      const res = await fetch(`${baseUrl}/api/teacher/live-lab/status/turma-ds-1a`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.status).toHaveProperty("totalMachines");
+      expect(Array.isArray(data.status.machines)).toBe(true);
+      expect(data.status.machines.length).toBeGreaterThan(0);
+      expect(data.status.machines[0]).toHaveProperty("needsTeacherHelp");
+    });
+
+    it("POST /api/teacher/live-lab/intervene - Deve registrar intervenção na carteira do estudante", async () => {
+      const payload = {
+        classId: "turma-ds-1a",
+        studentId: "st-01",
+        action: "Orientação sobre IndexError em laço for",
+        teacherNote: "Explicado conceito de índices 0 a N-1"
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/live-lab/intervene`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.result.success).toBe(true);
+    });
+
+    it("GET /api/teacher/code-playback/:submissionId - Deve retornar linha do tempo e telemetria de digitação", async () => {
+      const res = await fetch(`${baseUrl}/api/teacher/code-playback/sub_123`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.playback).toHaveProperty("authorshipConfidenceScore");
+      expect(data.playback).toHaveProperty("totalPasteBursts");
+      expect(Array.isArray(data.playback.snapshots)).toBe(true);
+      expect(data.playback.snapshots.length).toBeGreaterThan(0);
+    });
+
+    it("GET /api/teacher/saep-arena/leaderboard - Deve retornar ranking ao vivo do simulado SAEP", async () => {
+      const res = await fetch(`${baseUrl}/api/teacher/saep-arena/leaderboard/turma-ds-1a`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.leaderboard).toHaveProperty("classSaepReadinessPct");
+      expect(Array.isArray(data.leaderboard.leaderboard)).toBe(true);
+      expect(data.leaderboard.leaderboard.length).toBeGreaterThan(0);
+      expect(data.leaderboard.leaderboard[0]).toHaveProperty("saepReadiness");
+    });
+
+    it("POST /api/teacher/team-audit/evaluate - Deve auditar contribuição e notas individuais da equipe", async () => {
+      const payload = {
+        teamName: "Squad DevSecOps",
+        projectTitle: "Portal de Vendas e Estoque",
+        members: [
+          { id: "st-01", name: "Lucas Mendes", declaredRole: "Backend Lead" },
+          { id: "st-02", name: "Matheus Pereira", declaredRole: "DBA & SQL" },
+          { id: "st-03", name: "Camila Rocha", declaredRole: "Frontend" }
+        ],
+        commitsCountByMember: {
+          "st-01": 35,
+          "st-02": 22,
+          "st-03": 8
+        }
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/team-audit/evaluate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.evaluation.members.length).toBe(3);
+      expect(data.evaluation.members[0]).toHaveProperty("contributionPct");
+      expect(data.evaluation.members[0]).toHaveProperty("individualScore");
+    });
+
+    it("POST /api/teacher/lesson-generator/generate - Deve gerar plano de aula prático com slides e exercícios", async () => {
+      const payload = {
+        topic: "Recursão e Estruturas de Árvores",
+        durationMinutes: 90,
+        targetLevel: "Intermediário"
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/lesson-generator/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.lesson.slides)).toBe(true);
+      expect(data.lesson.slides.length).toBeGreaterThan(0);
+      expect(data.lesson.graduatedExercises.length).toBe(3);
+    });
+
+    it("POST /api/teacher/dispatch-alerts - Deve formatar mensagem WhatsApp e payload de comunicação para o aluno", async () => {
+      const payload = {
+        studentName: "Ana Beatriz",
+        studentPhone: "(31) 98765-4321",
+        studentEmail: "ana.beatriz@aluno.senai.br",
+        score: 95,
+        activityTitle: "Modelagem DER e SQL DDL",
+        feedbackSummary: "Excelente modelagem e 100% de conformidade com a 3FN.",
+        isRecoveryRequired: false
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/dispatch-alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.result.whatsappFormattedUrl).toContain("api.whatsapp.com");
+      expect(data.result.emailPayload).toHaveProperty("subject");
+    });
   });
 });

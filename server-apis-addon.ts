@@ -7364,6 +7364,92 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       res.status(500).json({ success: false, error: e.message });
     }
   });
+
+  // 7. Live Lab Monitor Grid
+  app.get(["/api/teacher/live-lab/status", "/api/teacher/live-lab/status/:classId"], async (req, res) => {
+    try {
+      const classId = req.params.classId || (req.query.classId as string) || "turma-ds-1a";
+      const status = await TeacherPowerhouseService.getLiveLabStatus(classId);
+      res.json({ success: true, status });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/live-lab/intervene", async (req, res) => {
+    try {
+      const { classId, studentId, action, teacherNote } = req.body;
+      const result = await TeacherPowerhouseService.recordLabIntervention(classId, studentId, action, teacherNote);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 8. Code Playback & Keystroke Telemetry
+  app.get(["/api/teacher/code-playback/:submissionId", "/api/teacher/code-playback"], async (req, res) => {
+    try {
+      const subId = req.params.submissionId || "sub_demo_1";
+      const playback = await TeacherPowerhouseService.getCodePlaybackData(subId);
+      res.json({ success: true, playback });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 9. SAEP Arena & Leaderboard
+  app.get(["/api/teacher/saep-arena/leaderboard", "/api/teacher/saep-arena/leaderboard/:classId"], async (req, res) => {
+    try {
+      const classId = req.params.classId || "turma-ds-1a";
+      const leaderboard = await TeacherPowerhouseService.getSaepArenaLeaderboard(classId);
+      res.json({ success: true, leaderboard });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 10. Team Contribution Auditor
+  app.post("/api/teacher/team-audit/evaluate", async (req, res) => {
+    try {
+      const evaluation = await TeacherPowerhouseService.evaluateTeamContribution(req.body);
+      res.json({ success: true, evaluation });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 11. Lesson & Slide Deck Architect
+  app.post("/api/teacher/lesson-generator/generate", async (req, res) => {
+    try {
+      const lesson = await TeacherPowerhouseService.generateInteractiveLesson(req.body);
+      res.json({ success: true, lesson });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/lesson-generator/export-pdf", async (req, res) => {
+    try {
+      const { lesson } = req.body;
+      if (!lesson) return res.status(400).json({ success: false, error: "Lesson data is required" });
+      const pdfBuffer = await TeacherPowerhouseService.generateLessonSlidesPdf(lesson);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=plano_aula_${lesson.topic.replace(/\s+/g, "_")}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 12. Multi-Channel Dispatcher
+  app.post("/api/teacher/dispatch-alerts", async (req, res) => {
+    try {
+      const result = await TeacherPowerhouseService.dispatchStudentAlerts(req.body);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
 }
 
 // Helper
