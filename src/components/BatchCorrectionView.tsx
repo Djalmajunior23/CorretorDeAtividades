@@ -245,6 +245,67 @@ export default function BatchCorrectionView() {
     }
   };
 
+  const handleExportStudentPRIPdf = async (e: React.MouseEvent, r: any) => {
+    e.stopPropagation();
+    try {
+      const planPayload = {
+        studentId: r.id || "st-01",
+        studentName: r.student_name,
+        enrollmentCode: "MAT-2026",
+        className: selectedBatch?.title || "Desenvolvimento de Sistemas 2A",
+        courseName: "Técnico em Desenvolvimento de Sistemas - SENAI",
+        unitCurricular: "Programação e Estruturas de Dados",
+        currentGrade: r.score || 40,
+        deficienciesIdentified: [
+          `Falha em testes unitários (${r.detected_language})`,
+          "Tratamento de exceções e casos de borda"
+        ],
+        learningObjectives: [
+          "Compreender validação de entradas",
+          "Construir algoritmos com cobertura integral de testes"
+        ],
+        studyRoadmap: [
+          {
+            topic: `Prática em ${r.detected_language || "Programação"}`,
+            recommendedReading: "Guia SENAI de Resolução de Algoritmos",
+            practicalFocus: "Refatoração de casos de borda e cobertura de testes"
+          }
+        ],
+        levelingExercises: [
+          {
+            id: 1,
+            title: `Refatoração de ${r.filename || "Algoritmo"}`,
+            enunciado: `Revise a lógica do arquivo ${r.filename} cobrindo casos com valores nulos ou vazios.`,
+            dicaDidatica: "Depure o fluxo passo a passo verificando os logs emitidos.",
+            gabaritoComentado: "Inclusão de validação prévia e retorno defensivo."
+          }
+        ],
+        deadlineDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toLocaleDateString("pt-BR"),
+        teacherName: "Prof. Djalma Batista"
+      };
+
+      const res = await fetch(apiUrl("/api/teacher/recovery-plan/export-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: planPayload })
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `PRI_${r.student_name.replace(/\s+/g, "_")}.pdf`;
+        a.click();
+        toast.success(`Plano de Recuperação Individual de ${r.student_name} exportado em PDF!`);
+      } else {
+        toast.error("Erro ao emitir PRI do aluno.");
+      }
+    } catch (err: any) {
+      toast.error("Falha ao exportar PRI: " + err.message);
+    }
+  };
+
   const getEnrichedData = (res: any) => {
     if (!res || !res.ai_result) return null;
     try {
@@ -1078,9 +1139,21 @@ export default function BatchCorrectionView() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <button className="p-2 text-slate-600 hover:text-emerald-400 transition-all opacity-0 group-hover:opacity-100">
-                                <ChevronRight className="w-5 h-5" />
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                {r.score < 60 && (
+                                  <button
+                                    onClick={(e) => handleExportStudentPRIPdf(e, r)}
+                                    title="Emitir Plano de Recuperação Individual (PRI) em PDF"
+                                    className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded text-[9px] font-mono font-bold flex items-center gap-1 transition-all"
+                                  >
+                                    <FileText className="w-3 h-3 text-rose-400" />
+                                    <span>PRI</span>
+                                  </button>
+                                )}
+                                <button className="p-2 text-slate-600 hover:text-emerald-400 transition-all opacity-0 group-hover:opacity-100">
+                                  <ChevronRight className="w-5 h-5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}

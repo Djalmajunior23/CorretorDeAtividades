@@ -36,6 +36,7 @@ import { ParametricExamService } from "./src/services/parametricExamService";
 import { GitAutoGradingService } from "./src/services/gitAutoGradingService";
 import { SocraticScaffoldingService } from "./src/services/socraticScaffoldingService";
 import { DatabaseModelAssessmentService } from "./src/services/databaseModelAssessmentService";
+import { TeacherPowerhouseService } from "./src/services/teacherPowerhouseService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -7235,6 +7236,132 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       res.send(pdfBuffer);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 20: TEACHER POWERHOUSE & CLASS ANALYTICS
+  // ==========================================
+  
+  // 1. Radar da Turma (Early Warning)
+  app.get(["/api/teacher/class-radar", "/api/teacher/class-radar/:classId"], async (req, res) => {
+    try {
+      const classId = req.params.classId || (req.query.classId as string) || "turma-ds-1a";
+      const radar = await TeacherPowerhouseService.getClassRadar(classId, pool);
+      res.json({ success: true, radar });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 2. Mapa de Calor de Competências
+  app.get(["/api/teacher/skill-heatmap", "/api/teacher/skill-heatmap/:classId"], async (req, res) => {
+    try {
+      const classId = req.params.classId || (req.query.classId as string) || "turma-ds-1a";
+      const heatmap = await TeacherPowerhouseService.getSkillHeatmap(classId);
+      res.json({ success: true, heatmap });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 3. Exportação de Diário de Classe (Excel .xlsx / .csv)
+  app.get(["/api/teacher/classes/:classId/export-diary-xlsx", "/api/teacher/classes/export-diary-xlsx"], async (req, res) => {
+    try {
+      const classId = req.params.classId || (req.query.classId as string) || "turma-ds-1a";
+      const buffer = await TeacherPowerhouseService.exportClassDiaryBuffer(classId, "xlsx", pool);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=diario_classe_${classId}.xlsx`);
+      res.send(buffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get(["/api/teacher/classes/:classId/export-diary-csv", "/api/teacher/classes/export-diary-csv"], async (req, res) => {
+    try {
+      const classId = req.params.classId || (req.query.classId as string) || "turma-ds-1a";
+      const buffer = await TeacherPowerhouseService.exportClassDiaryBuffer(classId, "csv", pool);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename=diario_classe_${classId}.csv`);
+      res.send(buffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 4. Estação de Defesa Oral Socrática
+  app.post("/api/teacher/oral-defense/session", async (req, res) => {
+    try {
+      const { studentName, studentId, exerciseTitle, code, language, providerConfig } = req.body;
+      if (!studentName || !code) {
+        return res.status(400).json({ success: false, error: "studentName and code are required" });
+      }
+      const session = await TeacherPowerhouseService.generateOralDefenseSession({
+        studentName,
+        studentId,
+        exerciseTitle: exerciseTitle || "Atividade Prática de Algoritmos",
+        code,
+        language: language || "python",
+        providerConfig
+      });
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/oral-defense/export-pdf", async (req, res) => {
+    try {
+      const { evaluation } = req.body;
+      if (!evaluation) {
+        return res.status(400).json({ success: false, error: "Evaluation data is required" });
+      }
+      const pdfBuffer = await TeacherPowerhouseService.generateOralDefensePdf(evaluation);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_defesa_oral_${evaluation.studentName.replace(/\s+/g, "_")}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 5. Plano de Recuperação Individual (PRI) PDF
+  app.post("/api/teacher/recovery-plan/export-pdf", async (req, res) => {
+    try {
+      const { plan } = req.body;
+      if (!plan) {
+        return res.status(400).json({ success: false, error: "Recovery plan data is required" });
+      }
+      const pdfBuffer = await TeacherPowerhouseService.generateRecoveryPlanPdf(plan);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=PRI_${plan.studentName.replace(/\s+/g, "_")}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 6. Gerador de Provas Parametrizadas Anti-Cola PDF
+  app.post("/api/teacher/exam-variants/generate", async (req, res) => {
+    try {
+      const exam = await ParametricExamService.generateParametricExam(req.body);
+      res.json({ success: true, exam });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/exam-variants/export-pdf", async (req, res) => {
+    try {
+      const { exam } = req.body;
+      if (!exam) return res.status(400).json({ success: false, error: "Exam data is required" });
+      const pdfBuffer = await ParametricExamService.generateMasterExamPdf(exam);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=dossie_prova_parametrizada_${exam.examId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 }

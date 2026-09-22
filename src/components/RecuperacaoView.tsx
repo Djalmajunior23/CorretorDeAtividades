@@ -141,6 +141,84 @@ export default function RecuperacaoView() {
     }
   };
 
+  const handleExportOfficialPRIPdf = async () => {
+    if (!selectedStudent) return;
+    try {
+      const planPayload = {
+        studentId: selectedStudent.student_id || "st-01",
+        studentName: selectedStudent.name,
+        enrollmentCode: selectedStudent.enrollment_code || "MAT-2026",
+        className: selectedStudent.class_name || "Desenvolvimento de Sistemas 2A",
+        courseName: "Técnico em Desenvolvimento de Sistemas - SENAI",
+        unitCurricular: "Programação e Estruturas de Dados",
+        currentGrade: selectedStudent.average_grade || 50,
+        deficienciesIdentified: selectedStudent.failing_competencies || ["Estruturas de Repetição (Loops)", "Normalização Relacional"],
+        learningObjectives: [
+          "Dominar algoritmos de acumulação e condições de parada",
+          "Aplicar validações defensivas e tratamento de exceções",
+          "Consolidar conceitos de normalização de dados (1FN, 2FN, 3FN)"
+        ],
+        studyRoadmap: [
+          {
+            topic: "Laços de Repetição & Condições de Parada",
+            recommendedReading: "Manual de Algoritmos SENAI - Cap. 4 (Iteradores)",
+            practicalFocus: "Construção de acumuladores sem loop infinito"
+          },
+          {
+            topic: "Normalização de Banco de Dados",
+            recommendedReading: "Modelagem Relacional SENAI - Cap. 3 (1FN a 3FN)",
+            practicalFocus: "Eliminação de dependências transitivas"
+          }
+        ],
+        levelingExercises: [
+          {
+            id: 1,
+            title: "Processamento de Lista com Filtros de Condição",
+            enunciado: "Implemente uma função que receba uma lista de valores inteiros e retorne a soma apenas dos números pares maiores que 10, tratando entradas nulas.",
+            dicaDidatica: "Utilize uma condição de guarda no início da função antes de iterar sobre o array.",
+            gabaritoComentado: "Verificação de nulo / tipo -> Laço for -> Acumulador condicional (if item % 2 == 0 and item > 10) -> Retorno."
+          },
+          {
+            id: 2,
+            title: "Tratamento de Exceções em Operações Aritméticas",
+            enunciado: "Construa um bloco try/catch para divisão com segurança, retornando mensagem descritiva caso o divisor seja zero.",
+            dicaDidatica: "Evite capturar exceções genéricas sem tratar a causa raiz (ZeroDivisionError / ArithmeticException).",
+            gabaritoComentado: "Captura pontual de ZeroDivisionError ou validação prévia com retorno de código de status."
+          },
+          {
+            id: 3,
+            title: "Normalização de Tabela de Pedidos (3FN)",
+            enunciado: "Dada uma tabela contendo id_pedido, data, id_cliente, nome_cliente, cidade_cliente, decomponha na 3FN.",
+            dicaDidatica: "Atributos do cliente dependem da chave primária id_cliente e não diretamente de id_pedido.",
+            gabaritoComentado: "Criação de 2 tabelas: Pedido (id_pedido, data, id_cliente [FK]) e Cliente (id_cliente [PK], nome_cliente, cidade_cliente)."
+          }
+        ],
+        deadlineDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toLocaleDateString("pt-BR"),
+        teacherName: "Prof. Djalma Batista"
+      };
+
+      const res = await fetch(apiUrl("/api/teacher/recovery-plan/export-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: planPayload })
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `PRI_Oficial_SENAI_${selectedStudent.name.replace(/\s+/g, "_")}.pdf`;
+        a.click();
+        toast.success(`Plano de Recuperação Individual (PRI) de ${selectedStudent.name} baixado em PDF!`);
+      } else {
+        toast.error("Erro ao gerar PDF do PRI no servidor.");
+      }
+    } catch (e: any) {
+      toast.error("Falha ao exportar PRI: " + e.message);
+    }
+  };
+
   const handleRecordRecoveryGrade = async () => {
     if (!selectedStudent || !recoveryGradeInput) return;
     setIsSavingGrade(true);
@@ -274,19 +352,28 @@ export default function RecuperacaoView() {
               </div>
 
               {selectedStudent && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-2">
+                  <button
+                    onClick={handleExportOfficialPRIPdf}
+                    className="px-3.5 py-2 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold rounded-xl text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Emitir Plano de Recuperação Individual (PRI) Oficial SENAI em PDF"
+                  >
+                    <FileText className="w-4 h-4 text-rose-400" />
+                    <span>Emitir PRI (PDF)</span>
+                  </button>
+
                   <button
                     onClick={handleGenerateAiPlan}
                     disabled={isGeneratingPlan}
-                    className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs font-mono flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+                    className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl text-xs font-mono flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
                   >
                     <Sparkles className="w-4 h-4" />
-                    <span>{isGeneratingPlan ? "Gerando Trilha..." : "Gerar Trilha com IA"}</span>
+                    <span>{isGeneratingPlan ? "Gerando..." : "Trilha com IA"}</span>
                   </button>
 
                   <button
                     onClick={() => setShowGradeModal(true)}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs font-mono flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs font-mono flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
                   >
                     <Award className="w-4 h-4" />
                     <span>Lançar Nota</span>

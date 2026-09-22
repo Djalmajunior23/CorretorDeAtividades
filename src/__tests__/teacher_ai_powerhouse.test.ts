@@ -323,4 +323,139 @@ describe("Suíte Avançada de IA para o Docente (AI Teacher Powerhouse)", () => 
       expect(data.status).toBe("Aprovado");
     });
   });
+
+  // =========================================================================
+  // 7. TEACHER POWERHOUSE: RADAR, DIÁRIO, DEFESA ORAL, PRI E PROVAS
+  // =========================================================================
+  describe("7. Teacher Powerhouse: Radar, Diário, Defesa Oral & PRI", () => {
+    it("GET /api/teacher/class-radar - Deve retornar diagnóstico antecipado (Early Warning) da turma", async () => {
+      const res = await fetch(`${baseUrl}/api/teacher/class-radar/turma-ds-1a`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.radar).toHaveProperty("totalStudents");
+      expect(data.radar).toHaveProperty("atRiskCount");
+      expect(Array.isArray(data.radar.students)).toBe(true);
+      expect(data.radar.students.length).toBeGreaterThan(0);
+      expect(data.radar.students[0]).toHaveProperty("riskLevel");
+    });
+
+    it("GET /api/teacher/skill-heatmap - Deve retornar mapa de calor de competências da turma", async () => {
+      const res = await fetch(`${baseUrl}/api/teacher/skill-heatmap/turma-ds-1a`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.heatmap.competencies)).toBe(true);
+      expect(data.heatmap.competencies.length).toBeGreaterThan(0);
+      expect(data.heatmap.competencies[0]).toHaveProperty("masteryPercent");
+    });
+
+    it("GET /api/teacher/classes/:classId/export-diary-xlsx - Deve exportar diário de classe formatado em Excel", async () => {
+      const res = await fetch(`${baseUrl}/api/teacher/classes/turma-ds-1a/export-diary-xlsx`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("spreadsheetml.sheet");
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(100);
+    });
+
+    it("POST /api/teacher/oral-defense/session - Deve gerar sessão de arguição presencial com 3 perguntas", async () => {
+      const payload = {
+        studentName: "Matheus Pereira",
+        studentId: "st-02",
+        exerciseTitle: "Fila de Atendimento em Python",
+        code: "def atender_cliente(fila): return fila.pop(0) if fila else None",
+        language: "python"
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/oral-defense/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.session.questions.length).toBe(3);
+      expect(data.session.questions[0]).toHaveProperty("focusArea");
+    });
+
+    it("POST /api/teacher/oral-defense/export-pdf - Deve exportar laudo oficial de arguição oral em PDF", async () => {
+      const payload = {
+        evaluation: {
+          sessionId: "socr_123",
+          studentName: "Matheus Pereira",
+          exerciseTitle: "Fila de Atendimento em Python",
+          language: "python",
+          questions: [
+            { question: "Como você tratou fila vazia?", focusArea: "Tratamento de Exceções", teacherScore: 90, teacherNotes: "Excelente" },
+            { question: "Explique a complexidade do pop(0)", focusArea: "Complexidade Algorítmica", teacherScore: 85, teacherNotes: "Correto" },
+            { question: "Como escalaria para concorrência?", focusArea: "Decisão Arquitetural", teacherScore: 95, teacherNotes: "Muito bom" }
+          ],
+          overallOralScore: 90,
+          teacherGeneralFeedback: "O estudante demonstrou pleno domínio do código submetido.",
+          evaluatedAt: new Date().toISOString()
+        }
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/oral-defense/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/pdf");
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(500);
+    });
+
+    it("POST /api/teacher/recovery-plan/export-pdf - Deve exportar Plano de Recuperação Individual (PRI) em PDF", async () => {
+      const payload = {
+        plan: {
+          studentId: "st-01",
+          studentName: "Lucas Mendes",
+          enrollmentCode: "20261011",
+          className: "Desenvolvimento de Sistemas 2A",
+          courseName: "Técnico em Desenvolvimento de Sistemas - SENAI",
+          unitCurricular: "Lógica de Programação",
+          currentGrade: 45.0,
+          deficienciesIdentified: ["Estruturas de Repetição (Loops)", "Normalização 3FN"],
+          learningObjectives: ["Dominar laços for/while", "Decomposição em 3FN"],
+          studyRoadmap: [
+            { topic: "Iteradores", recommendedReading: "Cap. 4", practicalFocus: "Acumuladores" }
+          ],
+          levelingExercises: [
+            { id: 1, title: "Loop Seguro", enunciado: "Crie um loop seguro", dicaDidatica: "Verifique parada", gabaritoComentado: "while n > 0" }
+          ],
+          deadlineDate: "15/10/2026",
+          teacherName: "Prof. Djalma Batista"
+        }
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/recovery-plan/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/pdf");
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(500);
+    });
+
+    it("POST /api/teacher/exam-variants/generate - Deve gerar variantes de prova A/B/C/D", async () => {
+      const payload = {
+        examTitle: "Avaliação de Algoritmos",
+        basePrompt: "Escreva uma função para validar descontos",
+        language: "python",
+        variantCount: 4
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/exam-variants/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.exam.variants.length).toBe(4);
+      expect(data.exam.variants[0].variantId).toBe("A");
+    });
+  });
 });

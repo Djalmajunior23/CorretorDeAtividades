@@ -324,6 +324,25 @@ export const EarlyWarningRadarModal: React.FC<EarlyWarningRadarModalProps> = ({
     }
   };
 
+  const handleExportClassDiary = async (format: "xlsx" | "csv" = "xlsx") => {
+    try {
+      const res = await fetch(apiUrl(`/api/teacher/classes/turma-ds-1a/export-diary-${format}`));
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `diario_classe_${Date.now()}.${format}`;
+        a.click();
+        toast.success(`Diário de classe exportado com sucesso em .${format.toUpperCase()}!`);
+      } else {
+        toast.error("Erro ao baixar diário de classe.");
+      }
+    } catch (e: any) {
+      toast.error("Erro ao exportar diário: " + e.message);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -352,12 +371,28 @@ export const EarlyWarningRadarModal: React.FC<EarlyWarningRadarModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleExportClassDiary("xlsx")}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Diário XLSX</span>
+            </button>
+            <button
+              onClick={() => handleExportClassDiary("csv")}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-indigo-400" />
+              <span>CSV</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* KPI Mini-bar */}
