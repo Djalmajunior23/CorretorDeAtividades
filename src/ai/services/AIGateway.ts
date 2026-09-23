@@ -5,10 +5,6 @@ import { ProviderFactory } from "../factory/ProviderFactory";
 export class AIGateway {
     static async executeTask<T>(task: string, prompt: string, options?: any, imageData?: any, optConfig?: any): Promise<T> {
         try {
-            // Tenta chamar o provedor configurado (Auto, Gemini, Groq, OpenAI ou Ollama com fallback)
-            const provider = ProviderFactory.createProvider(task);
-            if (!provider) throw new Error("Nenhum provedor de IA disponível.");
-            
             // Detecta se 'options' é um schema JSON ou configuração
             let schema: any = null;
             let finalOptConfig: any = optConfig || {};
@@ -24,6 +20,14 @@ export class AIGateway {
                     finalOptConfig = { ...options, ...finalOptConfig };
                 }
             }
+
+            // Tenta chamar o provedor customizado ou padrão com fallback
+            const customOptions = finalOptConfig?.providerConfig || options?.providerConfig;
+            const provider = customOptions 
+                ? ProviderFactory.createCustomProvider(customOptions)
+                : ProviderFactory.createProvider(task);
+
+            if (!provider) throw new Error("Nenhum provedor de IA disponível.");
 
             if (schema) {
                 return await provider.generateStructured<T>(prompt, schema, finalOptConfig, imageData);

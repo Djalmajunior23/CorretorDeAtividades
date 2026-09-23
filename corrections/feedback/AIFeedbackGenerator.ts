@@ -20,7 +20,8 @@ export class AIFeedbackGenerator {
     qualityIssues: string[],
     stderr: string,
     finalScore: number,
-    providerConfig?: CustomAIRequestOptions
+    providerConfig?: CustomAIRequestOptions,
+    testResults?: Array<{ input: string; expected_output: string; actual_output: string; passed: boolean }>
   ): Promise<AIFeedbackResponse> {
     const hasAI = !!(process.env.GEMINI_API_KEY || process.env.AI_PROVIDER || providerConfig?.apiKey);
     if (hasAI) {
@@ -28,9 +29,9 @@ export class AIFeedbackGenerator {
         const schema = {
           type: "OBJECT",
           properties: {
-            resumo_desempenho: { type: "STRING", description: "Resumo didático e conciso do desempenho do discente." },
-            pontos_fortes: { type: "ARRAY", items: { type: "STRING" }, description: "1 a 3 pontos destacados positivos na construção da lógica ou sintaxe." },
-            erros_encontrados: { type: "ARRAY", items: { type: "STRING" }, description: "Dificuldades reais, falhas lógicas nos testes ou inconsistências." },
+            resumo_desempenho: { type: "STRING", description: "Resumo didático e conciso do desempenho do discente citando a realidade do código." },
+            pontos_fortes: { type: "ARRAY", items: { type: "STRING" }, description: "1 a 3 pontos destacados positivos na construção da lógica ou sintaxe citando funções/variáveis." },
+            erros_encontrados: { type: "ARRAY", items: { type: "STRING" }, description: "Dificuldades reais, falhas lógicas nos testes ou inconsistências com citação de entradas/saídas." },
             orientacao_melhoria: { type: "ARRAY", items: { type: "STRING" }, description: "Dicas de refatoração, legibilidade e conformidade com as regras impostas." },
             sugestao_estudo: { type: "ARRAY", items: { type: "STRING" }, description: "Conceitos teóricos e pedagógicos recomendados para estudo posterior." },
             proxima_etapa: { type: "ARRAY", items: { type: "STRING" }, description: "Recomendações de prática ou desafios subsequentes para fixação." }
@@ -45,8 +46,15 @@ export class AIFeedbackGenerator {
           ]
         };
 
+        const failedTests = testResults ? testResults.filter(t => !t.passed) : [];
+        const failedTestsText = failedTests.length > 0 
+          ? `\nDIAGNÓSTICO DE TESTES UNITÁRIOS FALHOS:\n` + failedTests.slice(0, 3).map((t, i) => 
+              `- Teste ${i + 1}: Entrada: \`${t.input || "(padrão)"}\` | Esperado: \`${t.expected_output}\` | Obtido: \`${t.actual_output || "(vazio)"}\``
+            ).join("\n")
+          : "";
+
         const optConfig = {
-          systemInstruction: "Você é um mentor acadêmico inteligente do SENAI, focado em ajudar e guiar estudantes de programação. Gere feedbacks didáticos, construtivos, claros e estimulantes.",
+          systemInstruction: "Você é um mentor acadêmico inteligente do SENAI, focado em ajudar e guiar estudantes de programação. Gere feedbacks didáticos, construtivos, claros, estimulantes e extremamente fiéis ao código submetido.",
           providerConfig
         };
 
@@ -57,10 +65,11 @@ Sintaxe OK: ${syntaxOk}
 Testes: passou em ${testsPassed} de ${totalTests} testes unitários.
 Nota final obtida: ${finalScore}/100.
 Problemas de Qualidade estáticos identificados: ${JSON.stringify(qualityIssues)}
-Mensagem de Erro/Logs (stderr): ${stderr}
+Mensagem de Erro/Logs (stderr): ${stderr || "Nenhum erro de compilação."}
+${failedTestsText}
 
 Código submetido pelo estudante:
-\`\`\`
+\`\`\`${language}
 ${code}
 \`\`\``;
 
@@ -74,7 +83,7 @@ ${code}
     }
 
     // Static Heuristic Rule-Based Fallback
-    return this.generateHeuristics(language, code, syntaxOk, totalTests, testsPassed, qualityIssues, stderr, finalScore);
+    return this.generateHeuristics(language, code, syntaxOk, totalTests, testsPassed, qualityIssues, stderr, finalScore, testResults);
   }
 
   private static generateHeuristics(
@@ -85,7 +94,8 @@ ${code}
     testsPassed: number,
     qualityIssues: string[],
     stderr: string,
-    finalScore: number
+    finalScore: number,
+    testResults?: Array<{ input: string; expected_output: string; actual_output: string; passed: boolean }>
   ): AIFeedbackResponse {
     const isSuccess = testsPassed === totalTests && syntaxOk && totalTests > 0;
 
@@ -101,6 +111,10 @@ ${code}
     }
 
     const pontos_fortes: string[] = [];
+    const functionsFound = Array.from(code.matchAll(/(?:def|function|public\s+(?:static\s+)?[a-zA-Z0-9_<>]+\s+)\s*([a-zA-Z0-9_]+)/g)).map(m => m[1]);
+    if (functionsFound.length > 0) {
+      pontos_fortes.push(`Estruturação modular em funções identificada: ${functionsFound.slice(0, 2).map(f => `\`${f}()\``).join(", ")}.`);
+    }
     if (code.length > 40) pontos_fortes.push("Código completo com esforço relevante estruturado.");
     if (syntaxOk) pontos_fortes.push("Compilação inicial bem-sucedida, sugerindo boa intimidade com comandos fundamentais.");
     if (testsPassed > 0) pontos_fortes.push(`Aprovação em ${testsPassed} cenários de teste dinâmicos.`);
@@ -110,7 +124,12 @@ ${code}
     if (!syntaxOk) {
       erros_encontrados.push(`Mensagem do compilador: ${stderr.slice(0, 80) || "Erro estrutural interno"}`);
     } else if (testsPassed < totalTests) {
-      erros_encontrados.push(`Divergência de valores de saída esperados nos testes automáticos (${totalTests - testsPassed} falhas).`);
+      const failed = testResults ? testResults.filter(t => !t.passed) : [];
+      if (failed.length > 0) {
+        erros_encontrados.push(`Falha em teste: Entrada "${failed[0].input || 'padrão'}", era esperado "${failed[0].expected_output}", mas retornou "${failed[0].actual_output || 'vazio'}".`);
+      } else {
+        erros_encontrados.push(`Divergência de valores de saída esperados nos testes automáticos (${totalTests - testsPassed} falhas).`);
+      }
     } else {
       erros_encontrados.push("Nenhum erro relevante identificado na execução lógica.");
     }

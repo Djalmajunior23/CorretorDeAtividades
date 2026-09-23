@@ -129,29 +129,49 @@ export class DatabaseModelAssessmentService {
     const isImage = format === "image" && !!params.imageBase64;
     const imageData = isImage ? parseImageData(params.imageBase64!) : undefined;
 
+    // Run OCR beforehand for image inputs to enrich prompt context (hybrid vision + text grounding)
+    if (isImage && params.imageBase64) {
+      try {
+        const ocrPromise = OCRService.extractTextFromImage(params.imageBase64, true);
+        const ocrTimeout = new Promise<{ text: string }>((res) => 
+          setTimeout(() => res({ text: "" }), 3000)
+        );
+        const ocrResult = await Promise.race([ocrPromise, ocrTimeout]) as any;
+        if (ocrResult && ocrResult.text && ocrResult.text.trim()) {
+          extractedTextFromImage = ocrResult.text.trim();
+        }
+      } catch (ocrErr: any) {
+        console.warn("[DatabaseModelAssessmentService] Pre-AI OCR extraction warning:", ocrErr.message);
+      }
+    }
+
     try {
       const provider = ProviderFactory.createCustomProvider(params.providerConfig);
 
       const aiSystemPrompt = `
-Você é o Especialista Chefe em Bancos de Dados e Engenharia de Software do SENAI.
-Sua missão é inspecionar minuciosamente o trabalho submetido pelo estudante ${isImage ? "na imagem/foto digitalizada fornecida" : "no código/DDL fornecido"} e gerar uma avaliação técnica rigorosa, fiel à realidade do aluno e acompanhada do script DDL SQL correspondente.
+Você é o Especialista Chefe em Modelagem de Bancos de Dados e Engenharia de Software do SENAI.
+Sua missão é auditar com rigor técnico absoluto a submissão do estudante ${isImage ? "na imagem/foto digitalizada fornecida" : "no código/DDL fornecido"} e gerar uma avaliação pedagógica de alta fidelidade e acompanhada do script SQL DDL correspondente.
 
-ENUNCIADO / CENÁRIO INFORMADO:
+ENUNCIADO / CENÁRIO DE REQUISITOS INFORMADO:
 """${scenario}"""
-${extractedTextFromImage ? `\nTEXTO EXTRAÍDO DA IMAGEM ATUAL VIA OCR LOCAL:\n"""\n${extractedTextFromImage}\n"""\n` : ""}
+${isImage && extractedTextFromImage ? `\nTEXTO DETECTADO NA IMAGEM VIA OCR LOCAL (Grounding Híbrido):\n"""\n${extractedTextFromImage}\n"""\n` : ""}
+${!isImage && rawCode ? `\nCÓDIGO / MODELO DECLARATIVO ESCRITO PELO ESTUDANTE:\n\`\`\`sql\n${rawCode}\n\`\`\`\n` : ""}
 
-DIRETRIZES DE AVALIAÇÃO COM MÁXIMA FIDELIDADE:
-1. Extraia TODAS as Entidades/Tabelas e Atributos exatamente como foram desenhados ou escritos pelo aluno nesta submissão. Não invente ou substitua por nomes genéricos. Se o aluno escreveu "cli_nome" ou esqueceu a PK/FK, aponte exatamente isso!
+DIRETRIZES DE AVALIAÇÃO DE ALTA PRECISÃO E FIDELIDADE:
+1. Extraia TODAS as Entidades/Tabelas e Atributos exatamente como foram desenhados ou escritos pelo aluno nesta submissão. Não invente entidades ou substitua por nomes genéricos. Se o aluno nomeou "tb_cli", "cli_nome" ou omitiu a PK/FK, aponte exatamente esses nomes literais!
 2. Identifique o que o aluno acertou, o que omitiu em relação aos requisitos do enunciado e o que modelou com falha conceitual (ex: campo multivalorado, chave estrangeira faltando, cardinalidade invertida, tipo incompatível).
-3. Auditoria Detalhada de Normalização (1FN, 2FN, 3FN):
-   - 1ª Forma Normal (1FN): Explique especificamente se há colunas com múltiplos valores (ex: múltiplos telefones numa só coluna) ou campos compostos não atômicos.
-   - 2ª Forma Normal (2FN): Explique se em tabelas com chave composta há dependência funcional parcial.
-   - 3ª Forma Normal (3FN): Explique se há dependências transitivas entre atributos não-chave (ex: cidade/estado dependendo de cep).
-4. Geração do Script SQL DDL (${sgbd.toUpperCase()}):
+3. Auditoria Detalhada de Formas Normais (1FN, 2FN, 3FN):
+   - 1ª Forma Normal (1FN): Explique especificamente se há colunas com múltiplos valores (ex: múltiplos telefones numa só coluna, listas separadas por vírgula) ou campos compostos não atômicos.
+   - 2ª Forma Normal (2FN): Explique se em tabelas com chave primária composta há dependência funcional parcial (atributos que dependem de apenas uma parte da chave composta).
+   - 3ª Forma Normal (3FN): Explique se há dependências transitivas entre atributos não-chave (ex: cidade/estado dependendo de cep, onde id_cliente é a PK). Proponha a divisão de tabelas quando violada.
+4. Integridade Referencial & Cardinalidades:
+   - Verifique se relacionamentos 1:N posicionaram a FK no lado correto (lado "N").
+   - Verifique se relacionamentos N:N possuem tabela associativa/junção intermediária com as respectivas PKs/FKs.
+5. Geração do Script SQL DDL (${sgbd.toUpperCase()}):
    - O campo "generatedDdlSql" DEVE conter o script SQL DDL COMPLETO, EXECUTÁVEL e PROFISSIONAL correspondente ao modelo corrigido.
-   - Inclua CREATE TABLE para cada entidade, colunas com tipos nativos (${sgbd.toUpperCase()}), PRIMARY KEYs, restrições NOT NULL, UNIQUE, CHECK e FOREIGN KEYs com integridade referencial.
-5. Diagrama Mermaid Corrigido:
-   - Código Mermaid (erDiagram para BD ou classDiagram para UML) representando a versão corrigida.
+   - Inclua CREATE TABLE para cada entidade, colunas com tipos nativos (${sgbd.toUpperCase()}), PRIMARY KEYs, restrições NOT NULL, UNIQUE, CHECK e FOREIGN KEYs com integridade referencial e regras ON DELETE.
+6. Diagrama Mermaid Corrigido:
+   - Código Mermaid (erDiagram para BD ou classDiagram para UML) representando a versão corrigida fiel.
 
 Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
 {
@@ -232,11 +252,11 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
       const aiResponsePromise = provider.generateStructured<any>(
         aiSystemPrompt,
         null,
-        { temperature: 0.1, max_tokens: 3500, timeout: 5000 },
+        { temperature: 0.1, max_tokens: 4000, timeout: 25000 },
         imageData
       );
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout limite de 5s na IA")), 5000)
+        setTimeout(() => reject(new Error("Timeout limite de 25s na IA")), 25000)
       );
 
       const aiResponse = await Promise.race([aiResponsePromise, timeoutPromise]) as any;

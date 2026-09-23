@@ -12,7 +12,7 @@ export interface FeedbackStructure {
 
 export class PedagogicalFeedback {
   /**
-   * Generates feedback structure faithful to the student's actual code.
+   * Generates feedback structure faithful to the student's actual code and test execution diffs.
    */
   static async generate(
     language: string,
@@ -24,7 +24,8 @@ export class PedagogicalFeedback {
     stderr: string,
     securityOk: boolean,
     securityReason: string | null,
-    providerConfig?: CustomAIRequestOptions
+    providerConfig?: CustomAIRequestOptions,
+    testResults?: Array<{ input: string; expected_output: string; actual_output: string; passed: boolean }>
   ): Promise<FeedbackStructure> {
     
     // Check if security blocked
@@ -47,7 +48,7 @@ export class PedagogicalFeedback {
           properties: {
             summary: { type: "STRING", description: "Resumo pedagógico geral da resolução real do aluno citando o que ele fez." },
             strengths: { type: "ARRAY", items: { type: "STRING" }, description: "Lista de 1 a 3 pontos fortes específicos citando funções, variáveis ou trechos reais do código." },
-            errors: { type: "ARRAY", items: { type: "STRING" }, description: "Erros específicos com citação de linhas ou cláusulas (especialmente para SQL ou lógica falha em testes)." },
+            errors: { type: "ARRAY", items: { type: "STRING" }, description: "Erros específicos com citação de linhas ou cláusulas (especialmente para SQL ou lógica falha em testes com diffs)." },
             improvements: { type: "ARRAY", items: { type: "STRING" }, description: "Melhorias práticas e concretas de refatoração para o código do aluno." },
             concepts_to_review: { type: "ARRAY", items: { type: "STRING" }, description: "Tópicos didáticos específicos que o aluno precisa reforçar." },
             next_steps: { type: "ARRAY", items: { type: "STRING" }, description: "Próximos passos imediatos sugeridos (ex: testar caso limite específico)." }
@@ -57,12 +58,22 @@ export class PedagogicalFeedback {
 
         const isSql = language.toLowerCase() === "sql";
 
+        const failedTests = testResults ? testResults.filter(t => !t.passed) : [];
+        const failedTestsText = failedTests.length > 0 
+          ? `\nCASOS DE TESTE COM FALHA (DIAGÓSTICO DE EXECUÇÃO):\n` + failedTests.slice(0, 4).map((t, i) => 
+              `- Cenário ${i + 1}: Entrada: \`${t.input || "(vazio)"}\` | Esperado: \`${t.expected_output}\` | Obtido pelo aluno: \`${t.actual_output || "(sem saída)"}\``
+            ).join("\n")
+          : "";
+
         const optConfig = {
           systemInstruction: `Você é um professor tutor sênior do SENAI de programação e banco de dados.
 Seu feedback deve ser extremamente fiel à REALIDADE do que o aluno escreveu.
-CITE nomes de variáveis, nomes de funções, tabelas e trechos reais do código dele.
-${isSql ? "Para scripts e queries SQL, verifique cláusulas SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, tipos de dados, chaves primárias e estrangeiras." : ""}
-Nunca use respostas genéricas de шаблон. Seja acolhedor, didático e aponte exatamente onde melhorar.`
+DIRETRIZES DE PRECISÃO ABSOLUTA:
+1. CITE nomes de variáveis, nomes de funções, tabelas e trechos reais do código dele (ex: "sua função \`soma()\`", "o loop \`for i in range...\`").
+2. Se houver falhas em testes unitários, cite exatamente o caso de teste, o valor esperado e o valor retornado.
+3. ${isSql ? "Para scripts e queries SQL, verifique cláusulas SELECT, FROM, JOIN ... ON, WHERE, GROUP BY, HAVING, tipos de dados, chaves primárias e integridade referencial." : "Para códigos executáveis, verifique condições de parada, limites de índices e conversão de tipos."}
+4. Nunca use respostas genéricas ou alucinações. Seja acolhedor, didático, rigoroso e aponte exatamente a linha e a lógica a melhorar.`,
+          providerConfig
         };
 
         const promptText = `
@@ -73,6 +84,7 @@ Sintaxe OK: ${syntaxOk}
 Métricas de testes: passou em ${testsPassed} de ${totalTests} testes unitários.
 Problemas estáticos de qualidade sinalizados: ${JSON.stringify(qualityIssues)}
 Mensagem de erro de compilação/execução (stderr): ${stderr || "Nenhum erro de compilação."}
+${failedTestsText}
 
 Código real escrito pelo aluno:
 \`\`\`${language}
@@ -98,7 +110,7 @@ ${code}
     }
 
     // Heuristics Realistic Fallback Generator (Rule-Based com extração estática de tokens)
-    return this.generateHeuristicFeedback(language, code, syntaxOk, totalTests, testsPassed, qualityIssues, stderr);
+    return this.generateHeuristicFeedback(language, code, syntaxOk, totalTests, testsPassed, qualityIssues, stderr, testResults);
   }
 
   private static generateHeuristicFeedback(
@@ -108,7 +120,8 @@ ${code}
     totalTests: number,
     testsPassed: number,
     qualityIssues: string[],
-    stderr: string
+    stderr: string,
+    testResults?: Array<{ input: string; expected_output: string; actual_output: string; passed: boolean }>
   ): FeedbackStructure {
     const isSuccess = testsPassed === totalTests && syntaxOk && totalTests > 0;
     const langLower = language.toLowerCase();
@@ -143,13 +156,19 @@ ${code}
       strengths.push("Tentativa de resolução do problema com estruturação inicial.");
     }
 
-    // Errors Heuristics
+    // Errors Heuristics com diagnóstico preciso de casos de teste falhos
     const errors: string[] = [];
     if (!syntaxOk) {
       errors.push(`Erro de compilação/sintaxe: ${stderr ? stderr.slice(0, 100) : "Instrução incompleta ou símbolo ausente."}`);
     } else if (testsPassed < totalTests) {
       const failedCount = totalTests - testsPassed;
-      errors.push(`O algoritmo falhou em ${failedCount} de ${totalTests} casos de teste (saída obtida divergiu da saída esperada).`);
+      const failedList = testResults ? testResults.filter(t => !t.passed) : [];
+      if (failedList.length > 0) {
+        const firstFail = failedList[0];
+        errors.push(`O algoritmo falhou em ${failedCount} de ${totalTests} testes. Exemplo: Para entrada "${firstFail.input || 'padrão'}", era esperado "${firstFail.expected_output}", mas retornou "${firstFail.actual_output || 'vazio'}".`);
+      } else {
+        errors.push(`O algoritmo falhou em ${failedCount} de ${totalTests} casos de teste (saída obtida divergiu da saída esperada).`);
+      }
     }
 
     if (isSql && !code.toUpperCase().includes("SELECT") && !code.toUpperCase().includes("CREATE") && !code.toUpperCase().includes("INSERT")) {

@@ -65,7 +65,7 @@ export class GeminiProvider extends BaseProvider {
                     config: geminiConfig
                 });
                 const timeoutPromise = new Promise<never>((_, reject) => 
-                    setTimeout(() => reject(new Error(`Timeout na chamada do modelo ${modelName}`)), optConfig?.timeout ?? 4000)
+                    setTimeout(() => reject(new Error(`Timeout na chamada do modelo ${modelName}`)), optConfig?.timeout ?? 20000)
                 );
                 const response = await Promise.race([genPromise, timeoutPromise]) as any;
                 return response.text || "";
@@ -142,7 +142,7 @@ export class GeminiProvider extends BaseProvider {
                     config: geminiConfig
                 });
                 const timeoutPromise = new Promise<never>((_, reject) => 
-                    setTimeout(() => reject(new Error(`Timeout na extração estruturada do modelo ${modelName}`)), optConfig?.timeout ?? 4000)
+                    setTimeout(() => reject(new Error(`Timeout na extração estruturada do modelo ${modelName}`)), optConfig?.timeout ?? 20000)
                 );
                 const response = await Promise.race([genPromise, timeoutPromise]) as any;
 

@@ -8255,7 +8255,7 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
                                ext === ".sql" ? "sql" : defaultLanguage;
 
         // Perform primary execution and corrections via Service
-        const result = await CorrectionService.run(detectedLanguage, content, testCases, rubric, lintingSettings, FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR);
+        const result = await CorrectionService.run(detectedLanguage, content, testCases, rubric, lintingSettings, FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR, req.body?.providerConfig);
 
         // Compute detailed Rubrics (Module 4)
         const codeLower = content.toLowerCase();

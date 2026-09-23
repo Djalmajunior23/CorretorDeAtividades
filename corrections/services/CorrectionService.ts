@@ -185,7 +185,8 @@ export class CorrectionService {
          stderr,
          true,
          null,
-         providerConfig
+         providerConfig,
+         test_results
        );
 
        const execution_time = parseFloat((execution_time_ms / 1000).toFixed(3)) || 0.01;
@@ -205,7 +206,8 @@ export class CorrectionService {
            stderr,
            graded.final_score,
            undefined,
-           providerConfig
+           providerConfig,
+           test_results
          );
          rubric_criteria = rubricEval.criteria;
        }
@@ -222,7 +224,8 @@ export class CorrectionService {
            qualityAnalysis.issues,
            stderr,
            graded.final_score,
-           providerConfig
+           providerConfig,
+           test_results
          );
        }
 
@@ -417,7 +420,8 @@ export class CorrectionService {
       stderr,
       true,
       null,
-      providerConfig
+      providerConfig,
+      test_results
     );
 
     // Convert milliseconds to seconds float representation
@@ -447,7 +451,8 @@ export class CorrectionService {
         stderr,
         graded.final_score,
         undefined,
-        providerConfig
+        providerConfig,
+        test_results
       );
       rubric_criteria = rubricEval.criteria;
     }
@@ -464,7 +469,8 @@ export class CorrectionService {
         qualityAnalysis.issues,
         stderr,
         graded.final_score,
-        providerConfig
+        providerConfig,
+        test_results
       );
     }
 
