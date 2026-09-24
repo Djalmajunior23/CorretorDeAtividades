@@ -37,6 +37,7 @@ import { GitAutoGradingService } from "./src/services/gitAutoGradingService";
 import { SocraticScaffoldingService } from "./src/services/socraticScaffoldingService";
 import { DatabaseModelAssessmentService } from "./src/services/databaseModelAssessmentService";
 import { TeacherPowerhouseService } from "./src/services/teacherPowerhouseService";
+import { ComplexActivityGeneratorService } from "./src/services/complexActivityService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -7446,6 +7447,115 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     try {
       const result = await TeacherPowerhouseService.dispatchStudentAlerts(req.body);
       res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ============================================================
+  // TEACHER POWERHOUSE 2.0: ATIVIDADES COMPLEXAS & SALA DE AULA
+  // ============================================================
+
+  // 13. Gerador de Atividades Complexas com Contexto Industrial
+  app.post("/api/teacher/complex-activities/generate", async (req, res) => {
+    try {
+      const activity = await ComplexActivityGeneratorService.generateComplexActivity(req.body);
+      res.json({ success: true, activity });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/complex-activities/export-pdf", async (req, res) => {
+    try {
+      const { activity, teacherName, className } = req.body;
+      if (!activity) return res.status(400).json({ success: false, error: "Activity data is required" });
+      const pdfBuffer = ComplexActivityGeneratorService.exportActivityToPdf(activity, { teacherName, className });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=atividade_complexa_${activity.title.replace(/\s+/g, "_")}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 14. Simulador de Test-Drive de Enunciado com IA (3 Personas)
+  app.post("/api/teacher/complex-activities/test-drive", async (req, res) => {
+    try {
+      const testDrive = await ComplexActivityGeneratorService.simulatePromptTestDrive(req.body);
+      res.json({ success: true, testDrive });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 15. Matrizes de Avaliação & Rubricas SAEP / SENAI
+  app.post("/api/teacher/saep-matrix/generate", async (req, res) => {
+    try {
+      const matrix = await ComplexActivityGeneratorService.generateSaepRubricMatrix(req.body);
+      res.json({ success: true, matrix });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/saep-matrix/export-pdf", async (req, res) => {
+    try {
+      const { matrix } = req.body;
+      if (!matrix) return res.status(400).json({ success: false, error: "Matrix data is required" });
+      const pdfBuffer = ComplexActivityGeneratorService.exportSaepMatrixToPdf(matrix);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=matriz_saep_${matrix.title.replace(/\s+/g, "_")}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 16. Assistente de Ditado / Voz & Parecer Pedagógico com IA
+  app.post("/api/teacher/voice-feedback/generate", async (req, res) => {
+    try {
+      const feedbackReport = await ComplexActivityGeneratorService.formatVoiceDictatedFeedback(req.body);
+      res.json({ success: true, feedbackReport });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 17. Gerador de Trilhas de Reforço Adaptativas (Diferenciação Pedagógica)
+  app.post("/api/teacher/adaptive-tracks/generate", async (req, res) => {
+    try {
+      const tracks = await ComplexActivityGeneratorService.generateAdaptiveTracks(req.body);
+      res.json({ success: true, tracks });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 18. Publicar Atividade Diretamente para Turma
+  app.post("/api/teacher/complex-activities/publish-to-class", async (req, res) => {
+    try {
+      const { activity, classId = "turma-1a" } = req.body;
+      if (!activity) return res.status(400).json({ success: false, error: "Activity data is required" });
+
+      if (pool) {
+        try {
+          const actId = uuidv4();
+          await pool.query(`
+            INSERT INTO d_activities (id, teacher_id, class_id, title, description, language, rubric, deadline, status)
+            VALUES ($1, 'teacher_portal', $2, $3, $4, $5, $6, NOW() + INTERVAL '7 days', 'published')
+            ON CONFLICT (id) DO NOTHING;
+          `, [actId, classId, activity.title, activity.questionCommand, activity.languageOrDialect || 'python', JSON.stringify(activity.rubrics || [])]);
+        } catch (dbErr) {
+          console.warn("[PublishActivity] DB warning:", dbErr);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Atividade "${activity.title}" atribuída com sucesso à turma ${classId}!`,
+        publishedAt: new Date().toISOString()
+      });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

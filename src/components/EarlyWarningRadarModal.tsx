@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { apiUrl } from "../config/api";
 
 export interface StudentRiskProfile {
   student_id: string;

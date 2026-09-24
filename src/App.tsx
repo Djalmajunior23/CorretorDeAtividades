@@ -64,6 +64,7 @@ const ActivitiesControlHubView = React.lazy(() => import("./components/Activitie
 const StudentPortalView = React.lazy(() => import("./components/StudentPortalView"));
 const SkillTreePortfolioView = React.lazy(() => import("./components/SkillTreePortfolioView"));
 const TeacherAiPowerhouseView = React.lazy(() => import("./components/TeacherAiPowerhouseView"));
+const ComplexActivityGeneratorView = React.lazy(() => import("./components/ComplexActivityGeneratorView"));
 const TechInterviewSimulatorView = React.lazy(() => import("./components/TechInterviewSimulatorView"));
 const CognitiveTelemetryRadarView = React.lazy(() => import("./components/CognitiveTelemetryRadarView"));
 const CapstoneProjectArchitectView = React.lazy(() => import("./components/CapstoneProjectArchitectView"));
@@ -2683,6 +2684,10 @@ export default function App() {
 
            {currentTab === "socratic_tutor" && (
              <SocraticTutorScaffoldingView />
+           )}
+
+           {currentTab === "complex_activities" && (
+             <ComplexActivityGeneratorView />
            )}
 
           {currentTab === "avaliacoes" && (

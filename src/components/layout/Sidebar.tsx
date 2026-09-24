@@ -44,7 +44,8 @@ import {
   Radio,
   ShieldCheck,
   GitBranch,
-  Lightbulb
+  Lightbulb,
+  Target
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -117,6 +118,7 @@ export default function Sidebar({
     { id: "collab_sandbox", label: "Sandbox Live", icon: Users, desc: "Programação Colaborativa", visible: true },
     { id: "lms_integration", label: "Integração LMS", icon: BookOpen, desc: "Moodle & Google Classroom", visible: true },
     { id: "ai_powerhouse", label: "Super IA do Professor", icon: Sparkles, desc: "Banca Socrática, Aulas & Forense", visible: true },
+    { id: "complex_activities", label: "Atividades Complexas & Estudo de Caso", icon: Target, desc: "Comando Rígido, Test-Drive, SAEP & Voz", visible: true },
     { id: "tech_interview", label: "Mock Interview & Empregabilidade", icon: Briefcase, desc: "STAR, Live Coding & Laudo PDF", visible: true },
     { id: "cognitive_radar", label: "Radar Cognitivo Live", icon: Activity, desc: "Cadência, Churn & Micro-Dicas IA", visible: true },
     { id: "capstone_architect", label: "Arquiteto Capstone & PBL", icon: Layers, desc: "Gherkin, Squads & Rubricas 360°", visible: true },

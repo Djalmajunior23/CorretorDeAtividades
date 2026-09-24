@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../../components/layout/Sidebar';
 import { Settings as SettingsIcon, Save, Key, ExternalLink, CheckCircle2, Trash2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState<string>('');

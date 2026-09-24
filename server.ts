@@ -7687,7 +7687,7 @@ app.post("/api/batch/upload", upload, async (req: any, res: any) => {
   }
 
   // Start background processing
-  processBatchCorrection(batchId, file.buffer, language, tests, parsedRubric, currentLintingSettings);
+  processBatchCorrection(batchId, file.buffer, language, tests, parsedRubric, currentLintingSettings, req.body?.providerConfig);
 
   res.json({ success: true, batchId });
 });
@@ -8174,7 +8174,7 @@ function runPlagiarismAnalysis(studentsCode: Array<{ studentName: string, code: 
   return plagResults;
 }
 
-async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaultLanguage: string, testCases: any[], rubric: any, lintingSettings: any) {
+async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaultLanguage: string, testCases: any[], rubric: any, lintingSettings: any, providerConfig?: any) {
   let totalFiles = 0;
   let processedFiles = 0;
   let failedFiles = 0;
@@ -8255,7 +8255,7 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
                                ext === ".sql" ? "sql" : defaultLanguage;
 
         // Perform primary execution and corrections via Service
-        const result = await CorrectionService.run(detectedLanguage, content, testCases, rubric, lintingSettings, FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR, req.body?.providerConfig);
+        const result = await CorrectionService.run(detectedLanguage, content, testCases, rubric, lintingSettings, FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR, providerConfig);
 
         // Compute detailed Rubrics (Module 4)
         const codeLower = content.toLowerCase();
