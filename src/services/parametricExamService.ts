@@ -1,6 +1,7 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { safeAutoTable, getAutoTableFinalY } from "../utils/pdfExport";
 
 export type ExamVariantLetter = "A" | "B" | "C" | "D";
 
@@ -358,7 +359,7 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
       sa.uniqueExamToken
     ]);
 
-    autoTable(doc, {
+    safeAutoTable(doc, {
       startY: 78,
       head: [["Carteira", "Nome do Estudante", "Variante Atribuída", "Código do Token"]],
       body: allocationRows,
@@ -430,7 +431,7 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
         t.explanation || "-"
       ]);
 
-      autoTable(doc, {
+      safeAutoTable(doc, {
         startY: testsStartY + 3,
         head: [["Caso de Teste", "Entrada", "Saída Esperada", "Observação"]],
         body: publicTests,
@@ -441,11 +442,11 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
       });
 
       // Space for draft / solution
-      const finalY = (doc as any).lastAutoTable.finalY || 180;
+      const finalY = getAutoTableFinalY(doc, 180);
       doc.setFillColor(250, 250, 250);
-      doc.rect(14, finalY + 6, 182, 280 - (finalY + 12), "F");
+      doc.rect(14, finalY + 6, 182, Math.max(30, 280 - (finalY + 12)), "F");
       doc.setDrawColor(203, 213, 225);
-      doc.rect(14, finalY + 6, 182, 280 - (finalY + 12), "S");
+      doc.rect(14, finalY + 6, 182, Math.max(30, 280 - (finalY + 12)), "S");
       doc.setTextColor(148, 163, 184);
       doc.setFontSize(8);
       doc.text("Espaço para Rascunho / Assinatura do Código da Solução:", 18, finalY + 12);
@@ -468,6 +469,11 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
 
     let currentY = 36;
     exam.variants.forEach((v) => {
+      if (currentY > 240) {
+        doc.addPage();
+        currentY = 20;
+      }
+
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(10);
       doc.text(`[GABARITO VARIANTE ${v.variantId}] - ${v.title}`, 14, currentY);
@@ -483,7 +489,7 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
         tc.isHidden ? "SIM (Oculto)" : "NÃO (Público)"
       ]);
 
-      autoTable(doc, {
+      safeAutoTable(doc, {
         startY: currentY + 8,
         head: [["Caso de Teste", "Entrada", "Saída Esperada", "Oculto na Prova?"]],
         body: allTests,
@@ -492,10 +498,126 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
         styles: { fontSize: 7, cellPadding: 1.8 }
       });
 
-      currentY = ((doc as any).lastAutoTable.finalY || currentY + 30) + 10;
+      currentY = getAutoTableFinalY(doc, currentY + 30) + 10;
     });
 
     const arrayBuffer = doc.output("arraybuffer");
     return Buffer.from(arrayBuffer);
+  }
+
+  /**
+   * Generates a single-variant printable PDF for an individual student or seat.
+   */
+  static exportSingleVariantPdf(variant: ParametricVariant, examInfo?: { examTitle?: string; courseName?: string; durationMinutes?: number }): Buffer {
+    const doc = new jsPDF();
+    const title = examInfo?.examTitle || variant.title;
+    const course = examInfo?.courseName || "Técnico em Desenvolvimento de Sistemas";
+    const duration = examInfo?.durationMinutes || 90;
+
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 28, "F");
+
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(8);
+    doc.text(`SENAI • ${course.toUpperCase()} • DURAÇÃO: ${duration} MIN`, 14, 10);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text(`AVALIAÇÃO PRÁTICA • CADERNO INDIVIDUAL [VARIANTE ${variant.variantId}]`, 14, 20);
+
+    // Box de Identificação
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(14, 34, 182, 20, 2, 2, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, 34, 182, 20, 2, 2, "S");
+
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(8);
+    doc.text("Nome do Estudante: __________________________________________________  Matrícula: _____________", 18, 42);
+    doc.text("Assinatura: ____________________________________   Data: ___/___/______   Nota: [       /100]", 18, 49);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(11);
+    doc.text(`${title} (${variant.domainScenario})`, 14, 62);
+
+    doc.setTextColor(51, 65, 85);
+    doc.setFontSize(8.5);
+    const splitStatement = doc.splitTextToSize(variant.problemStatement, 182);
+    doc.text(splitStatement, 14, 68);
+
+    const nextY = 68 + splitStatement.length * 4.5;
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9);
+    doc.text("Restrições & Formato:", 14, nextY + 4);
+
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(8);
+    variant.constraints.forEach((c, idx) => {
+      doc.text(`• ${c}`, 18, nextY + 9 + idx * 4);
+    });
+
+    const testsStartY = nextY + 12 + variant.constraints.length * 4;
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9);
+    doc.text("Casos de Teste Públicos da Variante:", 14, testsStartY);
+
+    const publicTests = variant.testCases.filter(t => !t.isHidden).map(t => [
+      t.name,
+      t.input,
+      t.expectedOutput,
+      t.explanation || "-"
+    ]);
+
+    safeAutoTable(doc, {
+      startY: testsStartY + 3,
+      head: [["Caso de Teste", "Entrada", "Saída Esperada", "Observação"]],
+      body: publicTests,
+      theme: "plain",
+      headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: "bold" },
+      styles: { fontSize: 7.5, cellPadding: 2 }
+    });
+
+    const finalY = getAutoTableFinalY(doc, 180);
+    doc.setFillColor(250, 250, 250);
+    doc.roundedRect(14, finalY + 6, 182, Math.max(30, 280 - (finalY + 12)), 2, 2, "FD");
+    doc.setTextColor(148, 163, 184);
+    doc.setFontSize(8);
+    doc.text("Espaço para Rascunho / Assinatura do Código da Solução:", 18, finalY + 12);
+
+    return Buffer.from(doc.output("arraybuffer"));
+  }
+
+  /**
+   * Exports the variant to Moodle XML format for LMS import.
+   */
+  static exportVariantMoodleXml(variant: ParametricVariant): string {
+    const sanitize = (str: string) => (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<quiz>
+  <question type="essay">
+    <name><text>${sanitize(variant.title)}</text></name>
+    <questiontext format="html">
+      <text><![CDATA[
+        <h3>${sanitize(variant.title)}</h3>
+        <p><strong>Cenário:</strong> ${sanitize(variant.domainScenario)}</p>
+        <p>${sanitize(variant.problemStatement)}</p>
+        <hr/>
+        <p><strong>Restrições:</strong></p>
+        <ul>${variant.constraints.map(c => `<li>${sanitize(c)}</li>`).join("")}</ul>
+        <p><strong>Casos de Teste Públicos:</strong></p>
+        <ul>${variant.testCases.filter(t => !t.isHidden).map(t => `<li><code>${sanitize(t.input)}</code> &rarr; <code>${sanitize(t.expectedOutput)}</code></li>`).join("")}</ul>
+      ]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text><![CDATA[<pre>${sanitize(variant.expectedSolutionCode)}</pre>]]></text>
+    </generalfeedback>
+    <defaultgrade>100.0000000</defaultgrade>
+    <penalty>0.0000000</penalty>
+    <responseformat>editor</responseformat>
+    <responserequired>1</responserequired>
+  </question>
+</quiz>`;
   }
 }

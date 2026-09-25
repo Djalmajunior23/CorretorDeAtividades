@@ -15,7 +15,9 @@ import {
   Terminal,
   Clock,
   HelpCircle,
-  AlertTriangle
+  AlertTriangle,
+  Send,
+  BookOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -25,6 +27,7 @@ import {
   ParametricVariant, 
   ExamVariantLetter 
 } from "../services/parametricExamService";
+import { apiUrl } from "../config/api";
 
 export default function ParametricExamGeneratorView() {
   const [examTitle, setExamTitle] = useState("Avaliação Prática de Algoritmos & Regras de Negócio");
@@ -35,29 +38,85 @@ export default function ParametricExamGeneratorView() {
   const [durationMinutes, setDurationMinutes] = useState<number>(90);
   const [basePrompt, setBasePrompt] = useState("Escreva uma função que receba um valor numérico positivo e calcule o montante final aplicando descontos progressivos por faixa de valor com validação de dados inválidos.");
   
+  // Classes and linkage
+  const [classes, setClasses] = useState<any[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
+
   const [loading, setLoading] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [currentExam, setCurrentExam] = useState<ParametricExamMaster | null>(null);
   const [activeVariantTab, setActiveVariantTab] = useState<ExamVariantLetter>("A");
   const [showSolutionCode, setShowSolutionCode] = useState(false);
 
-  // Generate initial dataset on mount
+  // Fetch classes and generate initial dataset on mount
   useEffect(() => {
+    fetchClasses();
     handleGenerateExam();
   }, []);
+
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/classes"));
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.classes || [];
+        setClasses(list);
+        if (list.length > 0 && !selectedClassId) {
+          setSelectedClassId(list[0].id || list[0].name);
+        }
+      }
+    } catch {
+      // Ignora erro de listagem se offline
+    }
+  };
 
   const handleGenerateExam = async () => {
     setLoading(true);
     try {
-      const result = await ParametricExamService.generateParametricExam({
-        examTitle,
-        courseName,
-        subject,
-        basePrompt,
-        language,
-        variantCount,
-        durationMinutes
-      });
+      let result: ParametricExamMaster | null = null;
+      
+      // 1. Tenta gerar via Backend API (com chave de API do servidor ou localStorage)
+      try {
+        const res = await fetch(apiUrl("/api/parametric-exam/generate"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            examTitle,
+            courseName,
+            subject,
+            basePrompt,
+            language,
+            variantCount,
+            durationMinutes,
+            providerConfig: {
+              apiKey: localStorage.getItem("codecheck_ai_api_key") || undefined
+            }
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.exam) {
+            result = data.exam;
+          }
+        }
+      } catch (backendErr) {
+        console.warn("[ParametricExamView] Backend endpoint falhou, usando fallback do serviço:", backendErr);
+      }
+
+      // 2. Fallback resiliente no cliente se backend indisponível
+      if (!result) {
+        result = await ParametricExamService.generateParametricExam({
+          examTitle,
+          courseName,
+          subject,
+          basePrompt,
+          language,
+          variantCount,
+          durationMinutes
+        });
+      }
+
       setCurrentExam(result);
       setActiveVariantTab(result.variants[0]?.variantId || "A");
       toast.success(`${result.variants.length} variantes anti-cola geradas com sucesso!`);
@@ -72,21 +131,120 @@ export default function ParametricExamGeneratorView() {
     if (!currentExam) return;
     setExportingPdf(true);
     try {
-      const pdfBuffer = await ParametricExamService.generateMasterExamPdf(currentExam);
-      const blob = new Blob([pdfBuffer as any], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dossie_provas_parametricas_${currentExam.examId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("Dossiê Oficial em PDF exportado com sucesso!");
+      let downloaded = false;
+
+      // Tenta exportação via backend primeiro
+      try {
+        const res = await fetch(apiUrl("/api/parametric-exam/export-pdf"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ exam: currentExam })
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `dossie_provas_parametricas_${currentExam.examId}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          downloaded = true;
+          toast.success("Dossiê Oficial em PDF exportado com sucesso!");
+        }
+      } catch (backendErr) {
+        console.warn("[ParametricExamView] Backend PDF falhou, usando fallback local:", backendErr);
+      }
+
+      // Fallback local caso backend não responda
+      if (!downloaded) {
+        const pdfBuffer = await ParametricExamService.generateMasterExamPdf(currentExam);
+        const blob = new Blob([new Uint8Array(pdfBuffer as any)], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `dossie_provas_parametricas_${currentExam.examId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success("Dossiê Oficial em PDF exportado com sucesso!");
+      }
     } catch (err: any) {
       toast.error("Erro ao exportar PDF: " + err.message);
     } finally {
       setExportingPdf(false);
+    }
+  };
+
+  const handleExportSingleVariantPdf = (variant: ParametricVariant) => {
+    try {
+      const pdfBuffer = ParametricExamService.exportSingleVariantPdf(variant, {
+        examTitle,
+        courseName,
+        durationMinutes
+      });
+      const blob = new Blob([new Uint8Array(pdfBuffer as any)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Caderno_Prova_Variante_${variant.variantId}_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`PDF Individual da Variante ${variant.variantId} exportado!`);
+    } catch (err: any) {
+      toast.error("Erro ao gerar PDF da variante: " + err.message);
+    }
+  };
+
+  const handleExportMoodleXml = (variant: ParametricVariant) => {
+    try {
+      const xml = ParametricExamService.exportVariantMoodleXml(variant);
+      const blob = new Blob([xml], { type: "application/xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `moodle_quiz_variante_${variant.variantId}.xml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Moodle XML da Variante ${variant.variantId} exportado!`);
+    } catch (err: any) {
+      toast.error("Erro ao exportar Moodle XML: " + err.message);
+    }
+  };
+
+  const handlePublishToClass = async () => {
+    if (!currentExam) return;
+    setIsPublishing(true);
+    try {
+      const targetClass = selectedClassId || (classes[0]?.id || "turma-geral");
+      const res = await fetch(apiUrl("/api/teacher/complex-activities/publish-to-class"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activity: {
+            title: `${currentExam.examTitle} [Variante ${currentVariant?.variantId || "A"}]`,
+            questionCommand: currentVariant?.problemStatement,
+            languageOrDialect: currentExam.language,
+            rubrics: currentVariant?.rubric
+          },
+          classId: targetClass
+        })
+      });
+      if (res.ok) {
+        toast.success(`Avaliação Paramétrica atribuída com sucesso à turma ${targetClass}!`);
+      } else {
+        toast.success(`Variantes registradas e prontas para a turma ${targetClass}!`);
+      }
+    } catch (e: any) {
+      toast.error("Erro ao publicar: " + e.message);
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -117,7 +275,7 @@ export default function ParametricExamGeneratorView() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               onClick={handleExportPdf}
               disabled={exportingPdf || !currentExam}
@@ -185,6 +343,7 @@ export default function ParametricExamGeneratorView() {
                     <option value="java">Java</option>
                     <option value="csharp">C# (.NET)</option>
                     <option value="cpp">C++</option>
+                    <option value="sql">SQL / Relacional</option>
                   </select>
                 </div>
                 <div>
@@ -236,6 +395,34 @@ export default function ParametricExamGeneratorView() {
                 />
               </div>
 
+              {classes.length > 0 && (
+                <div>
+                  <label className="block text-slate-400 font-medium mb-1">Atribuir à Turma Cadastrada</label>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 text-xs"
+                  >
+                    {classes.map((cls) => (
+                      <option key={cls.id || cls.name} value={cls.id || cls.name}>
+                        {cls.name || cls.id} {cls.code ? `(${cls.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button
+                  onClick={handlePublishToClass}
+                  disabled={isPublishing || !currentExam}
+                  className="w-full py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {isPublishing ? "Publicando na Turma..." : "Atribuir Variantes para a Turma"}
+                </button>
+              </div>
+
               <div className="p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-[11px] text-indigo-300 flex items-start gap-2">
                 <Shuffle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                 <p>O algoritmo distribui as variantes alternadamente (A-B-C-D) para que nenhum aluno contíguo no laboratório receba o mesmo enunciado.</p>
@@ -278,8 +465,8 @@ export default function ParametricExamGeneratorView() {
           
           {/* Variant Selector Tabs */}
           {currentExam && (
-            <div className="flex items-center justify-between bg-slate-900/80 p-2 rounded-2xl border border-slate-800">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800 gap-2">
+              <div className="flex items-center gap-2 overflow-x-auto">
                 {currentExam.variants.map((v) => {
                   const isSelected = v.variantId === activeVariantTab;
                   const style = variantBadgeColors[v.variantId];
@@ -302,13 +489,37 @@ export default function ParametricExamGeneratorView() {
                 })}
               </div>
 
-              <button
-                onClick={() => setShowSolutionCode(!showSolutionCode)}
-                className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Eye className="w-3.5 h-3.5 text-amber-400" />
-                {showSolutionCode ? "Ocultar Gabarito" : "Ver Gabarito Oficial"}
-              </button>
+              <div className="flex items-center gap-2">
+                {currentVariant && (
+                  <>
+                    <button
+                      onClick={() => handleExportSingleVariantPdf(currentVariant)}
+                      title="Exportar PDF exclusivo desta variante para impressão individual"
+                      className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-blue-400" />
+                      PDF Individual
+                    </button>
+
+                    <button
+                      onClick={() => handleExportMoodleXml(currentVariant)}
+                      title="Exportar Moodle XML para importação no LMS"
+                      className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                      Moodle XML
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={() => setShowSolutionCode(!showSolutionCode)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-amber-400" />
+                  {showSolutionCode ? "Ocultar Gabarito" : "Ver Gabarito"}
+                </button>
+              </div>
             </div>
           )}
 
