@@ -85,6 +85,7 @@ const IotIndustrySimulatorView = React.lazy(() => import("./components/IotIndust
 const ParametricExamGeneratorView = React.lazy(() => import("./components/ParametricExamGeneratorView"));
 const GitAutoGradingStudioView = React.lazy(() => import("./components/GitAutoGradingStudioView"));
 const SocraticTutorScaffoldingView = React.lazy(() => import("./components/SocraticTutorScaffoldingView"));
+const StudentAcademyMasteryView = React.lazy(() => import("./components/StudentAcademyMasteryView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2721,6 +2722,10 @@ export default function App() {
 
           {currentTab === "student_portal" && (
             <StudentPortalView />
+          )}
+
+          {currentTab === "academy_mastery" && (
+            <StudentAcademyMasteryView />
           )}
 
           {currentTab === "generator" && featureFlags.ENABLE_ACTIVITY_GENERATOR && (

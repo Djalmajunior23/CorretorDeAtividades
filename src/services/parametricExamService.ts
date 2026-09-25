@@ -316,113 +316,179 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
   }
 
   /**
-   * Generates a Master PDF dossier containing:
-   * 1. Cover & Student Allocation Matrix
-   * 2. Separate printable exam papers for each variant
-   * 3. Master Teacher Answer Key with test cases and solution code.
+   * Generates a Master PDF dossier strictly adhering to the SENAI Institutional Standard:
+   * 1. Official Institutional Cover, Exam Application Protocol & Anti-Cheat Seating Grid
+   * 2. Full individual exam papers for each variant (A, B, C, D) with SENAI header, SAEP/CHA matrix and numbered code sheet
+   * 3. Standardized Student Answer Sheet with line numbers
+   * 4. Master Teacher Answer Key with detailed solution code, Big-O complexity analysis and hidden test cases.
    */
   static async generateMasterExamPdf(exam: ParametricExamMaster): Promise<Buffer> {
     const doc = new jsPDF();
+    const totalVariants = exam.variants.length;
 
-    // -------------------------------------------------------------
-    // PAGE 1: COVER & DISTRIBUTION MATRIX
-    // -------------------------------------------------------------
-    doc.setFillColor(15, 23, 42); // slate-900
+    // =========================================================================
+    // PAGE 1: SENAI INSTITUTIONAL COVER & SEATING / APPLICATION PROTOCOL
+    // =========================================================================
+    // Institutional Header Bar
+    doc.setFillColor(0, 51, 153); // SENAI Blue (#003399)
     doc.rect(0, 0, 210, 32, "F");
-
-    doc.setTextColor(56, 189, 248); // sky-400
-    doc.setFontSize(9);
-    doc.text("SENAI • SISTEMA INTEGRADO DE AVALIAÇÕES TÉCNICAS", 14, 12);
+    doc.setFillColor(255, 204, 0); // SENAI Yellow Accent
+    doc.rect(0, 32, 210, 2.5, "F");
 
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.text("DOSSIÊ OFICIAL DE AVALIAÇÃO PARAMÉTRICA (ANTI-COLA)", 14, 22);
+    doc.setFontSize(8);
+    doc.text("SERVIÇO NACIONAL DE APRENDIZAGEM INDUSTRIAL — SENAI / DR", 14, 11);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("DOSSIÊ OFICIAL DE AVALIAÇÃO PRÁTICA PARAMÉTRICA (ANTI-COLA)", 14, 21);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("SISTEMA INTEGRADO DE AVALIAÇÕES TÉCNICAS • PADRÃO SAEP / MATRIZ CHA", 14, 28);
 
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(10);
-    doc.text(`Avaliação: ${exam.examTitle}`, 14, 42);
-    doc.text(`Curso: ${exam.courseName} | Disciplina: ${exam.subject}`, 14, 48);
-    doc.text(`Duração Oficial: ${exam.durationMinutes} minutos | Total de Variantes: ${exam.totalVariants} (A, B, C, D)`, 14, 54);
-    doc.text(`Linguagem: ${exam.language.toUpperCase()} | Gerado em: ${new Date(exam.createdAt).toLocaleString("pt-BR")}`, 14, 60);
-
-    doc.setDrawColor(226, 232, 240);
-    doc.line(14, 66, 196, 66);
+    // Exam Metadata Box
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, 39, 182, 38, 2, 2, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, 39, 182, 38, 2, 2, "S");
 
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(11);
-    doc.text("Matriz de Alocação e Distribuição Individual dos Estudantes:", 14, 74);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Avaliação: ${exam.examTitle}`, 18, 46);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Curso: ${exam.courseName}`, 18, 52);
+    doc.text(`Unidade Curricular / Módulo: ${exam.subject}`, 18, 58);
+    doc.text(`Duração Máxima: ${exam.durationMinutes} minutos | Valor Total: 100,0 Pontos | Média Mínima: 60,0`, 18, 64);
+    doc.text(`Linguagem Oficial: ${exam.language.toUpperCase()} | Variantes Geradas: ${totalVariants} (A, B, C, D)`, 18, 70);
+
+    // Application Protocol Table
+    doc.setTextColor(0, 51, 153);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("1. Mapa de Sala e Alocação Anti-Cola dos Estudantes (Layout Xadrez):", 14, 84);
 
     const allocationRows = exam.studentAssignments.map(sa => [
-      sa.seatNumber ? `#${sa.seatNumber}` : "-",
+      sa.seatNumber ? `Posto #${sa.seatNumber}` : "-",
       sa.studentName,
       `VARIANTE ${sa.assignedVariant}`,
-      sa.uniqueExamToken
+      sa.uniqueExamToken,
+      "[   ] Presente  [   ] Ausente"
     ]);
 
     safeAutoTable(doc, {
-      startY: 78,
-      head: [["Carteira", "Nome do Estudante", "Variante Atribuída", "Código do Token"]],
+      startY: 88,
+      head: [["Carteira / Posto", "Nome do Estudante", "Caderno Atribuído", "Token de Integridade", "Frequência / Assinatura"]],
       body: allocationRows,
       theme: "grid",
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
-      styles: { fontSize: 8, cellPadding: 2.5 },
+      headStyles: { fillColor: [0, 51, 153], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5 },
+      styles: { fontSize: 7, cellPadding: 2 },
       alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
-    // -------------------------------------------------------------
-    // PAGES FOR EACH VARIANT: PRINTABLE EXAM PAPER
-    // -------------------------------------------------------------
+    const finalYProtocol = getAutoTableFinalY(doc, 220);
+    
+    // Official Exam Protocol Signatures Box
+    if (finalYProtocol < 240) {
+      doc.setFillColor(241, 245, 249);
+      doc.roundedRect(14, finalYProtocol + 6, 182, 34, 2, 2, "F");
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(14, finalYProtocol + 6, 182, 34, 2, 2, "S");
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("TERMO DE APLICAÇÃO E ENCERRAMENTO DA AVALIAÇÃO:", 18, finalYProtocol + 12);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text("Certifico que a aplicação ocorreu em conformidade com as diretrizes do SENAI, sem ocorrências de fraude.", 18, finalYProtocol + 18);
+      doc.text("Docente Aplicador: _____________________________________________   Assinatura: ________________________", 18, finalYProtocol + 26);
+      doc.text("Horário de Início: ____:____  |  Horário de Término: ____:____  |  Data: ___/___/2026", 18, finalYProtocol + 33);
+    }
+
+    // =========================================================================
+    // INDIVIDUAL EXAM PAPERS FOR EACH VARIANT (A, B, C, D)
+    // =========================================================================
     exam.variants.forEach((variant) => {
       doc.addPage();
 
-      doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, 210, 28, "F");
-
-      doc.setTextColor(56, 189, 248);
-      doc.setFontSize(8);
-      doc.text("CADERNO DE QUESTÃO PRÁTICA • USO INDIVIDUAL DO ESTUDANTE", 14, 10);
+      // Top Institutional Header
+      doc.setFillColor(0, 51, 153);
+      doc.rect(0, 0, 210, 26, "F");
+      doc.setFillColor(255, 204, 0);
+      doc.rect(0, 26, 210, 2, "F");
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(13);
-      doc.text(`FOLHA DE PROVA • VARIANTE ${variant.variantId}`, 14, 20);
+      doc.setFontSize(7.5);
+      doc.text(`SENAI • ${exam.courseName.toUpperCase()}`, 14, 9);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(`AVALIAÇÃO PRÁTICA FORMATIVA • CADERNO [VARIANTE ${variant.variantId}]`, 14, 18);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.text(`UNIDADE CURRICULAR: ${exam.subject.toUpperCase()} • DURAÇÃO: ${exam.durationMinutes} MIN • VALOR: 100,0 PTS`, 14, 24);
 
-      // Student fill-in box
-      doc.setFillColor(241, 245, 249);
-      doc.rect(14, 34, 182, 20, "F");
+      // Student Identification Box (Official SENAI Format)
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 32, 182, 22, 2, 2, "F");
       doc.setDrawColor(203, 213, 225);
-      doc.rect(14, 34, 182, 20, "S");
-
-      doc.setTextColor(71, 85, 105);
-      doc.setFontSize(8);
-      doc.text("Nome do Estudante: __________________________________________________", 18, 42);
-      doc.text("Assinatura: ____________________________________   Data: ___/___/______", 18, 49);
+      doc.roundedRect(14, 32, 182, 22, 2, 2, "S");
 
       doc.setTextColor(15, 23, 42);
-      doc.setFontSize(11);
-      doc.text(`Enunciado (${variant.domainScenario}):`, 14, 62);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("Nome do Estudante: __________________________________________________  Matrícula: _____________", 18, 38);
+      doc.text("Data: ___/___/2026   Posto/Carteira: [       ]   Assinatura: _______________________________________", 18, 45);
+      doc.text("Resultado Oficial:  [  ] APTO (>=60,0)   [  ] EM DESENVOLVIMENTO (<60,0)   Nota: [        /100,0]", 18, 51);
 
-      doc.setTextColor(51, 65, 85);
-      doc.setFontSize(9);
+      // Instructions Box
+      doc.setFillColor(254, 243, 199); // Amber-100
+      doc.roundedRect(14, 57, 182, 16, 1.5, 1.5, "F");
+      doc.setDrawColor(245, 158, 11);
+      doc.roundedRect(14, 57, 182, 16, 1.5, 1.5, "S");
+
+      doc.setTextColor(146, 64, 14);
+      doc.setFontSize(6.8);
+      doc.setFont("helvetica", "bold");
+      doc.text("INSTRUÇÕES OBRIGATÓRIAS AO ESTUDANTE (PADRÃO SENAI):", 18, 62);
+      doc.setFont("helvetica", "normal");
+      doc.text("1. Prova individual. O código será submetido a testes públicos e testes cegos de integridade algorítmica.", 18, 66);
+      doc.text("2. Respeite as restrições de complexidade de tempo/espaço e elabore o código com indentação e boas práticas.", 18, 70);
+
+      // Problem Statement & Industrial Context
+      doc.setTextColor(0, 51, 153);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Situação de Aprendizagem Industrial — ${variant.domainScenario}`, 14, 79);
+
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
       const splitStatement = doc.splitTextToSize(variant.problemStatement, 182);
-      doc.text(splitStatement, 14, 68);
+      doc.text(splitStatement, 14, 84);
 
-      const nextY = 68 + splitStatement.length * 4.5;
+      let currentY = 84 + splitStatement.length * 4;
 
+      // Technical Constraints & Formatting
       doc.setTextColor(15, 23, 42);
-      doc.setFontSize(9);
-      doc.text("Restrições & Formato:", 14, nextY + 4);
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("Requisitos Técnicos & Restrições:", 14, currentY + 3);
 
       doc.setTextColor(71, 85, 105);
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
       variant.constraints.forEach((c, idx) => {
-        doc.text(`• ${c}`, 18, nextY + 9 + idx * 4);
+        doc.text(`• ${c}`, 18, currentY + 8 + idx * 3.8);
       });
 
-      const testsStartY = nextY + 12 + variant.constraints.length * 4;
+      const testsStartY = currentY + 10 + variant.constraints.length * 3.8;
 
+      // Public Test Cases Table
       doc.setTextColor(15, 23, 42);
-      doc.setFontSize(9);
-      doc.text("Casos de Teste Públicos:", 14, testsStartY);
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("Casos de Teste Públicos (Exemplos de Validação):", 14, testsStartY);
 
       const publicTests = variant.testCases.filter(t => !t.isHidden).map(t => [
         t.name,
@@ -433,72 +499,98 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
 
       safeAutoTable(doc, {
         startY: testsStartY + 3,
-        head: [["Caso de Teste", "Entrada", "Saída Esperada", "Observação"]],
+        head: [["Caso de Teste", "Entrada", "Saída Esperada", "Observação / Justificativa"]],
         body: publicTests,
-        theme: "plain",
-        headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: "bold" },
-        styles: { fontSize: 7.5, cellPadding: 2 },
+        theme: "grid",
+        headStyles: { fillColor: [0, 51, 153], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+        styles: { fontSize: 6.8, cellPadding: 1.8 },
         alternateRowStyles: { fillColor: [248, 250, 252] }
       });
 
-      // Space for draft / solution
+      // Numbered Answer Sheet / Draft Area
       const finalY = getAutoTableFinalY(doc, 180);
-      doc.setFillColor(250, 250, 250);
-      doc.rect(14, finalY + 6, 182, Math.max(30, 280 - (finalY + 12)), "F");
+      const remainingHeight = Math.max(45, 282 - (finalY + 8));
+
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(14, finalY + 4, 182, remainingHeight, 2, 2, "F");
       doc.setDrawColor(203, 213, 225);
-      doc.rect(14, finalY + 6, 182, Math.max(30, 280 - (finalY + 12)), "S");
-      doc.setTextColor(148, 163, 184);
-      doc.setFontSize(8);
-      doc.text("Espaço para Rascunho / Assinatura do Código da Solução:", 18, finalY + 12);
+      doc.roundedRect(14, finalY + 4, 182, remainingHeight, 2, 2, "S");
+
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`FOLHA DE RESPOSTA / CÓDIGO DA SOLUÇÃO [VARIANTE ${variant.variantId}]:`, 18, finalY + 10);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.text("(Transcreva aqui a implementação da função com indentação e tratamento de casos de borda)", 105, finalY + 10);
+
+      // Draw subtle numbered code lines
+      const lineCount = Math.min(14, Math.floor((remainingHeight - 14) / 5));
+      for (let i = 1; i <= lineCount; i++) {
+        const lineY = finalY + 14 + (i * 4.8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(String(i).padStart(2, "0") + " |", 18, lineY);
+        doc.setDrawColor(241, 245, 249);
+        doc.line(26, lineY, 192, lineY);
+      }
     });
 
-    // -------------------------------------------------------------
-    // FINAL PAGE: TEACHER MASTER ANSWER KEY (GABARITO OFICIAL)
-    // -------------------------------------------------------------
+    // =========================================================================
+    // FINAL PAGE: TEACHER MASTER ANSWER KEY & MATRIZ CHA (CONFIDENCIAL)
+    // =========================================================================
     doc.addPage();
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, 0, 210, 28, "F");
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 210, 26, "F");
+    doc.setFillColor(239, 68, 68); // Red-500 Confidential bar
+    doc.rect(0, 26, 210, 2, "F");
 
-    doc.setTextColor(245, 158, 11); // amber-500
-    doc.setFontSize(8);
-    doc.text("DOCUMENTO CONFIDENCIAL • APENAS PARA O CORPO DOCENTE", 14, 10);
+    doc.setTextColor(248, 113, 113);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("DOCUMENTO DE USO ESTRITO DO DOCENTE • GABARITO CONFIDENCIAL", 14, 9);
 
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13);
-    doc.text("GABARITO MESTRE & MATRIZ DE CORREÇÃO (TODAS AS VARIANTES)", 14, 20);
+    doc.setFontSize(12);
+    doc.text("GABARITO MESTRE, MATRIZ SAEP/CHA & TESTES OCULTOS (TODAS AS VARIANTES)", 14, 18);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`AVALIAÇÃO: ${exam.examTitle} • MATRIZ OFICIAL DE CORREÇÃO`, 14, 24);
 
-    let currentY = 36;
+    let currentY = 34;
     exam.variants.forEach((v) => {
-      if (currentY > 240) {
+      if (currentY > 230) {
         doc.addPage();
         currentY = 20;
       }
 
-      doc.setTextColor(15, 23, 42);
-      doc.setFontSize(10);
-      doc.text(`[GABARITO VARIANTE ${v.variantId}] - ${v.title}`, 14, currentY);
+      doc.setTextColor(0, 51, 153);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`[GABARITO OFICIAL - VARIANTE ${v.variantId}] : ${v.title}`, 14, currentY);
 
       doc.setTextColor(71, 85, 105);
-      doc.setFontSize(7.5);
-      doc.text(`Função Alvo: ${v.variableDictionary.fnName || "Solução"} | Assinatura Antifraude: ${v.antiPlagiarismChecksum}`, 14, currentY + 5);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Cenário: ${v.domainScenario} | Função: ${v.variableDictionary.fnName || "Solução"} | Assinatura: ${v.antiPlagiarismChecksum}`, 14, currentY + 4.5);
 
       const allTests = v.testCases.map(tc => [
         tc.name,
         tc.input,
         tc.expectedOutput,
-        tc.isHidden ? "SIM (Oculto)" : "NÃO (Público)"
+        tc.isHidden ? "SIM (Oculto - Auditoria)" : "NÃO (Público)"
       ]);
 
       safeAutoTable(doc, {
-        startY: currentY + 8,
+        startY: currentY + 7,
         head: [["Caso de Teste", "Entrada", "Saída Esperada", "Oculto na Prova?"]],
         body: allTests,
         theme: "grid",
-        headStyles: { fillColor: [51, 65, 85], textColor: [255, 255, 255] },
-        styles: { fontSize: 7, cellPadding: 1.8 }
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 6.8, fontStyle: "bold" },
+        styles: { fontSize: 6.5, cellPadding: 1.5 },
+        alternateRowStyles: { fillColor: [248, 250, 252] }
       });
 
-      currentY = getAutoTableFinalY(doc, currentY + 30) + 10;
+      currentY = getAutoTableFinalY(doc, currentY + 30) + 8;
     });
 
     const arrayBuffer = doc.output("arraybuffer");
@@ -506,62 +598,90 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
   }
 
   /**
-   * Generates a single-variant printable PDF for an individual student or seat.
+   * Generates a single-variant printable PDF strictly formatted to the SENAI standard.
    */
-  static exportSingleVariantPdf(variant: ParametricVariant, examInfo?: { examTitle?: string; courseName?: string; durationMinutes?: number }): Buffer {
+  static exportSingleVariantPdf(variant: ParametricVariant, examInfo?: { examTitle?: string; courseName?: string; durationMinutes?: number; subject?: string }): Buffer {
     const doc = new jsPDF();
     const title = examInfo?.examTitle || variant.title;
-    const course = examInfo?.courseName || "Técnico em Desenvolvimento de Sistemas";
+    const course = examInfo?.courseName || "Técnico em Desenvolvimento de Sistemas - SENAI";
+    const subject = examInfo?.subject || "Programação de Soluções Computacionais";
     const duration = examInfo?.durationMinutes || 90;
 
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, 210, 28, "F");
-
-    doc.setTextColor(56, 189, 248);
-    doc.setFontSize(8);
-    doc.text(`SENAI • ${course.toUpperCase()} • DURAÇÃO: ${duration} MIN`, 14, 10);
+    // Header Bar
+    doc.setFillColor(0, 51, 153);
+    doc.rect(0, 0, 210, 26, "F");
+    doc.setFillColor(255, 204, 0);
+    doc.rect(0, 26, 210, 2, "F");
 
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13);
-    doc.text(`AVALIAÇÃO PRÁTICA • CADERNO INDIVIDUAL [VARIANTE ${variant.variantId}]`, 14, 20);
+    doc.setFontSize(7.5);
+    doc.text(`SERVIÇO NACIONAL DE APRENDIZAGEM INDUSTRIAL — SENAI • ${course.toUpperCase()}`, 14, 9);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`AVALIAÇÃO PRÁTICA INDIVIDUAL • CADERNO [VARIANTE ${variant.variantId}]`, 14, 18);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`UNIDADE CURRICULAR: ${subject.toUpperCase()} • DURAÇÃO: ${duration} MIN • VALOR TOTAL: 100,0 PONTOS`, 14, 24);
 
-    // Box de Identificação
-    doc.setFillColor(241, 245, 249);
-    doc.roundedRect(14, 34, 182, 20, 2, 2, "F");
+    // Student Identification Box
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, 32, 182, 22, 2, 2, "F");
     doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(14, 34, 182, 20, 2, 2, "S");
-
-    doc.setTextColor(71, 85, 105);
-    doc.setFontSize(8);
-    doc.text("Nome do Estudante: __________________________________________________  Matrícula: _____________", 18, 42);
-    doc.text("Assinatura: ____________________________________   Data: ___/___/______   Nota: [       /100]", 18, 49);
+    doc.roundedRect(14, 32, 182, 22, 2, 2, "S");
 
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(11);
-    doc.text(`${title} (${variant.domainScenario})`, 14, 62);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Nome do Estudante: __________________________________________________  Matrícula: _____________", 18, 38);
+    doc.text("Data: ___/___/2026   Posto/Carteira: [       ]   Assinatura: _______________________________________", 18, 45);
+    doc.text("Resultado Oficial:  [  ] APTO (>=60,0)   [  ] EM DESENVOLVIMENTO (<60,0)   Nota: [        /100,0]", 18, 51);
 
-    doc.setTextColor(51, 65, 85);
-    doc.setFontSize(8.5);
+    // Instructions Box
+    doc.setFillColor(254, 243, 199);
+    doc.roundedRect(14, 57, 182, 16, 1.5, 1.5, "F");
+    doc.setDrawColor(245, 158, 11);
+    doc.roundedRect(14, 57, 182, 16, 1.5, 1.5, "S");
+
+    doc.setTextColor(146, 64, 14);
+    doc.setFontSize(6.8);
+    doc.setFont("helvetica", "bold");
+    doc.text("INSTRUÇÕES OBRIGATÓRIAS AO ESTUDANTE (PADRÃO SENAI):", 18, 62);
+    doc.setFont("helvetica", "normal");
+    doc.text("1. Prova individual. O código será submetido a testes públicos e testes cegos de integridade algorítmica.", 18, 66);
+    doc.text("2. Respeite as restrições de complexidade de tempo/espaço e elabore o código com indentação e boas práticas.", 18, 70);
+
+    // Problem Statement
+    doc.setTextColor(0, 51, 153);
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Situação de Aprendizagem Industrial — ${variant.domainScenario}`, 14, 79);
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
     const splitStatement = doc.splitTextToSize(variant.problemStatement, 182);
-    doc.text(splitStatement, 14, 68);
+    doc.text(splitStatement, 14, 84);
 
-    const nextY = 68 + splitStatement.length * 4.5;
+    const nextY = 84 + splitStatement.length * 4;
 
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9);
-    doc.text("Restrições & Formato:", 14, nextY + 4);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Requisitos Técnicos & Restrições:", 14, nextY + 3);
 
     doc.setTextColor(71, 85, 105);
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
     variant.constraints.forEach((c, idx) => {
-      doc.text(`• ${c}`, 18, nextY + 9 + idx * 4);
+      doc.text(`• ${c}`, 18, nextY + 8 + idx * 3.8);
     });
 
-    const testsStartY = nextY + 12 + variant.constraints.length * 4;
+    const testsStartY = nextY + 10 + variant.constraints.length * 3.8;
 
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9);
-    doc.text("Casos de Teste Públicos da Variante:", 14, testsStartY);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Casos de Teste Públicos (Exemplos de Validação):", 14, testsStartY);
 
     const publicTests = variant.testCases.filter(t => !t.isHidden).map(t => [
       t.name,
@@ -572,19 +692,88 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
 
     safeAutoTable(doc, {
       startY: testsStartY + 3,
-      head: [["Caso de Teste", "Entrada", "Saída Esperada", "Observação"]],
+      head: [["Caso de Teste", "Entrada", "Saída Esperada", "Observação / Justificativa"]],
       body: publicTests,
-      theme: "plain",
-      headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: "bold" },
-      styles: { fontSize: 7.5, cellPadding: 2 }
+      theme: "grid",
+      headStyles: { fillColor: [0, 51, 153], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+      styles: { fontSize: 6.8, cellPadding: 1.8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
     const finalY = getAutoTableFinalY(doc, 180);
-    doc.setFillColor(250, 250, 250);
-    doc.roundedRect(14, finalY + 6, 182, Math.max(30, 280 - (finalY + 12)), 2, 2, "FD");
-    doc.setTextColor(148, 163, 184);
-    doc.setFontSize(8);
-    doc.text("Espaço para Rascunho / Assinatura do Código da Solução:", 18, finalY + 12);
+    const remainingHeight = Math.max(45, 282 - (finalY + 8));
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, finalY + 4, 182, remainingHeight, 2, 2, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, finalY + 4, 182, remainingHeight, 2, 2, "S");
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.text(`FOLHA DE RESPOSTA / CÓDIGO DA SOLUÇÃO [VARIANTE ${variant.variantId}]:`, 18, finalY + 10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.text("(Transcreva aqui a implementação da função com indentação e tratamento de casos de borda)", 105, finalY + 10);
+
+    const lineCount = Math.min(14, Math.floor((remainingHeight - 14) / 5));
+    for (let i = 1; i <= lineCount; i++) {
+      const lineY = finalY + 14 + (i * 4.8);
+      doc.setTextColor(148, 163, 184);
+      doc.text(String(i).padStart(2, "0") + " |", 18, lineY);
+      doc.setDrawColor(241, 245, 249);
+      doc.line(26, lineY, 192, lineY);
+    }
+
+    return Buffer.from(doc.output("arraybuffer"));
+  }
+
+  /**
+   * Generates a separate, official Student Answer Sheet (Folha de Respostas Padronizada SENAI).
+   */
+  static exportAnswerSheetPdf(examInfo: { examTitle: string; courseName: string; variantId: ExamVariantLetter }): Buffer {
+    const doc = new jsPDF();
+    doc.setFillColor(0, 51, 153);
+    doc.rect(0, 0, 210, 26, "F");
+    doc.setFillColor(255, 204, 0);
+    doc.rect(0, 26, 210, 2, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7.5);
+    doc.text(`SERVIÇO NACIONAL DE APRENDIZAGEM INDUSTRIAL — SENAI • ${examInfo.courseName.toUpperCase()}`, 14, 9);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`FOLHA OFICIAL DE RESPOSTAS E CÓDIGO [VARIANTE ${examInfo.variantId}]`, 14, 18);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`AVALIAÇÃO: ${examInfo.examTitle.toUpperCase()} • DOCUMENTO VÁLIDO PARA CORREÇÃO`, 14, 24);
+
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, 32, 182, 22, 2, 2, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, 32, 182, 22, 2, 2, "S");
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Nome do Estudante: __________________________________________________  Matrícula: _____________", 18, 38);
+    doc.text("Data: ___/___/2026   Posto/Carteira: [       ]   Assinatura: _______________________________________", 18, 45);
+    doc.text("Resultado Oficial:  [  ] APTO (>=60,0)   [  ] EM DESENVOLVIMENTO (<60,0)   Nota: [        /100,0]", 18, 51);
+
+    // Numbered Grid (30 lines)
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 58, 182, 224, 2, 2, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, 58, 182, 224, 2, 2, "S");
+
+    for (let i = 1; i <= 30; i++) {
+      const lineY = 64 + (i * 7);
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(7);
+      doc.text(String(i).padStart(2, "0") + " |", 18, lineY);
+      doc.setDrawColor(241, 245, 249);
+      doc.line(26, lineY, 192, lineY);
+    }
 
     return Buffer.from(doc.output("arraybuffer"));
   }
@@ -597,17 +786,19 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
     return `<?xml version="1.0" encoding="UTF-8"?>
 <quiz>
   <question type="essay">
-    <name><text>${sanitize(variant.title)}</text></name>
+    <name><text>[SENAI] ${sanitize(variant.title)}</text></name>
     <questiontext format="html">
       <text><![CDATA[
-        <h3>${sanitize(variant.title)}</h3>
-        <p><strong>Cenário:</strong> ${sanitize(variant.domainScenario)}</p>
-        <p>${sanitize(variant.problemStatement)}</p>
-        <hr/>
-        <p><strong>Restrições:</strong></p>
-        <ul>${variant.constraints.map(c => `<li>${sanitize(c)}</li>`).join("")}</ul>
-        <p><strong>Casos de Teste Públicos:</strong></p>
-        <ul>${variant.testCases.filter(t => !t.isHidden).map(t => `<li><code>${sanitize(t.input)}</code> &rarr; <code>${sanitize(t.expectedOutput)}</code></li>`).join("")}</ul>
+        <div style="font-family: sans-serif; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px;">
+          <h3 style="color: #003399;">${sanitize(variant.title)}</h3>
+          <p><strong>Cenário Industrial:</strong> ${sanitize(variant.domainScenario)}</p>
+          <p>${sanitize(variant.problemStatement)}</p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0;"/>
+          <p><strong>Requisitos e Restrições:</strong></p>
+          <ul>${variant.constraints.map(c => `<li>${sanitize(c)}</li>`).join("")}</ul>
+          <p><strong>Casos de Teste Públicos:</strong></p>
+          <ul>${variant.testCases.filter(t => !t.isHidden).map(t => `<li><code>${sanitize(t.input)}</code> &rarr; <code>${sanitize(t.expectedOutput)}</code></li>`).join("")}</ul>
+        </div>
       ]]></text>
     </questiontext>
     <generalfeedback format="html">

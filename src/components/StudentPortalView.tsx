@@ -17,11 +17,13 @@ import {
   Layers, 
   ChevronRight, 
   RefreshCw,
-  Eye
+  Eye,
+  Brain
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { apiUrl } from "../config/api";
+import { StudentAcademyMasteryView } from "./StudentAcademyMasteryView";
 
 interface StudentPortalViewProps {
   initialStudentId?: string;
@@ -34,7 +36,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(initialStudentId);
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId);
-  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades" | "academy_mastery">("pending");
   const [loading, setLoading] = useState<boolean>(true);
 
   // Portal data
@@ -380,6 +382,18 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           <Award className="w-4 h-4" />
           Meu Boletim & Feedback
         </button>
+
+        <button
+          onClick={() => setActiveTab("academy_mastery")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            activeTab === "academy_mastery" 
+              ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold shadow-md shadow-amber-500/30" 
+              : "bg-slate-900 text-amber-400 hover:text-amber-300 hover:bg-slate-800 border border-amber-500/20"
+          }`}
+        >
+          <Brain className="w-4 h-4" />
+          Academia de Aprendizado Profundo (IA)
+        </button>
       </div>
 
       {/* Tab Contents */}
@@ -536,6 +550,15 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </table>
           </div>
         </div>
+      )}
+
+      {/* Tab 4: Academia de Aprendizado Profundo & Domínio Cognitivo */}
+      {activeTab === "academy_mastery" && (
+        <StudentAcademyMasteryView 
+          studentId={selectedStudentId}
+          studentName={studentProfile.name}
+          courseName={studentProfile.course}
+        />
       )}
 
       {/* Interactive Submission Modal */}

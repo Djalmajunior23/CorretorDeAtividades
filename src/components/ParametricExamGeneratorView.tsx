@@ -11,13 +11,14 @@ import {
   Eye, 
   Code2, 
   Users, 
-  RefreshCw,
-  Terminal,
-  Clock,
-  HelpCircle,
-  AlertTriangle,
-  Send,
-  BookOpen
+  RefreshCw, 
+  Terminal, 
+  Clock, 
+  HelpCircle, 
+  AlertTriangle, 
+  Send, 
+  BookOpen,
+  FileCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -197,6 +198,28 @@ export default function ParametricExamGeneratorView() {
       toast.success(`PDF Individual da Variante ${variant.variantId} exportado!`);
     } catch (err: any) {
       toast.error("Erro ao gerar PDF da variante: " + err.message);
+    }
+  };
+
+  const handleExportAnswerSheetPdf = (variantId: ExamVariantLetter) => {
+    try {
+      const pdfBuffer = ParametricExamService.exportAnswerSheetPdf({
+        examTitle,
+        courseName,
+        variantId
+      });
+      const blob = new Blob([new Uint8Array(pdfBuffer as any)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Folha_Respostas_SENAI_Variante_${variantId}_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Folha de Respostas Oficial SENAI (Variante ${variantId}) exportada!`);
+    } catch (err: any) {
+      toast.error("Erro ao gerar Folha de Respostas: " + err.message);
     }
   };
 
@@ -494,11 +517,20 @@ export default function ParametricExamGeneratorView() {
                   <>
                     <button
                       onClick={() => handleExportSingleVariantPdf(currentVariant)}
-                      title="Exportar PDF exclusivo desta variante para impressão individual"
+                      title="Exportar Caderno de Prova individual desta variante no padrão SENAI"
                       className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
                     >
                       <FileText className="w-3.5 h-3.5 text-blue-400" />
-                      PDF Individual
+                      Caderno Individual
+                    </button>
+
+                    <button
+                      onClick={() => handleExportAnswerSheetPdf(currentVariant.variantId)}
+                      title="Exportar Folha Oficial de Respostas Pautada SENAI"
+                      className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileCheck className="w-3.5 h-3.5 text-amber-400" />
+                      Folha de Respostas
                     </button>
 
                     <button

@@ -39,6 +39,7 @@ import { DatabaseModelAssessmentService } from "./src/services/databaseModelAsse
 import { TeacherPowerhouseService } from "./src/services/teacherPowerhouseService";
 import { ComplexActivityGeneratorService } from "./src/services/complexActivityService";
 import { AdvancedItemBankService } from "./src/services/advancedItemBankService";
+import { DeepLearningAcademyService, MasteryPassportReport } from "./src/services/deepLearningAcademyService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -7703,6 +7704,144 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       res.setHeader("Content-Type", "application/xml");
       res.setHeader("Content-Disposition", `attachment; filename=item_${question.id || "export"}.xml`);
       res.send(qtiXml);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // CIBERACADEMY • DEEP LEARNING & STUDENT MASTERY ENGINE APIS
+  // =========================================================================
+
+  // GET: Conceitos Estruturantes de Domínio
+  app.get("/api/academy/concepts", (req, res) => {
+    try {
+      const nodes = DeepLearningAcademyService.getInitialConceptNodes();
+      res.json({ success: true, concepts: nodes, total: nodes.length });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Iniciar Sessão Socrática de Aprendizado
+  app.post("/api/academy/socratic/start", async (req, res) => {
+    try {
+      const { studentId = "st-01", conceptId = "node_big_o", conceptTitle = "Análise Assintótica Big-O", providerConfig } = req.body;
+      const session = await DeepLearningAcademyService.startSocraticInquiry({
+        studentId,
+        conceptId,
+        conceptTitle,
+        providerConfig
+      });
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Avaliar Resposta do Aluno na Sabatina Socrática
+  app.post("/api/academy/socratic/evaluate", async (req, res) => {
+    try {
+      const { session, studentResponse, providerConfig } = req.body;
+      if (!session || !studentResponse) {
+        return res.status(400).json({ success: false, error: "session e studentResponse são obrigatórios." });
+      }
+      const updatedSession = await DeepLearningAcademyService.evaluateSocraticStep({
+        session,
+        studentResponse,
+        providerConfig
+      });
+      res.json({ success: true, session: updatedSession });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Simulador Mental de Memória & Call Stack
+  app.post("/api/academy/debugger/simulate", (req, res) => {
+    try {
+      const { codeSnippet = "demo", language = "typescript" } = req.body;
+      const steps = DeepLearningAcademyService.simulateMentalDebugger(codeSnippet, language);
+      res.json({ success: true, steps });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // GET: Baralho de Repetição Espaçada (SM-2 Active Recall)
+  app.get("/api/academy/spaced-repetition/deck", (req, res) => {
+    try {
+      const deck = DeepLearningAcademyService.getSpacedRepetitionDeck();
+      res.json({ success: true, cards: deck, total: deck.length });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Revisar Carta de Repetição Espaçada (Leitner SM-2)
+  app.post("/api/academy/spaced-repetition/review", (req, res) => {
+    try {
+      const { card, quality = 3 } = req.body;
+      if (!card) return res.status(400).json({ success: false, error: "card é obrigatório." });
+      const updatedCard = DeepLearningAcademyService.reviewCard(card, quality);
+      res.json({ success: true, card: updatedCard });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // GET: Desafios de Trade-offs e Refatoração
+  app.get("/api/academy/trade-offs/challenges", (req, res) => {
+    try {
+      const challenges = DeepLearningAcademyService.getTradeOffChallenges();
+      res.json({ success: true, challenges });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Passaporte Oficial de Domínio SENAI (PDF)
+  app.post("/api/academy/export-passport-pdf", (req, res) => {
+    try {
+      const { passport } = req.body;
+      const reportData: MasteryPassportReport = passport || {
+        studentId: "st-01",
+        studentName: "Ana Beatriz Silva",
+        courseName: "Técnico em Desenvolvimento de Sistemas - SENAI",
+        overallMasteryPercentage: 88,
+        deepConcepts: [
+          { concept: "Análise Assintótica Big-O", score: 92, level: "Mastery" },
+          { concept: "Concorrência & Event Loop", score: 85, level: "Advanced" },
+          { concept: "Princípios SOLID & Clean Architecture", score: 90, level: "Mastery" }
+        ],
+        verifiedHours: 36,
+        socraticSynthesesCount: 8,
+        pedagogicalEndorsement: "O estudante demonstrou excelência técnica e domínio de raciocínio causal nos critérios de validação SAEP/CHA.",
+        hashVerification: `SENAI-MASTERY-${Date.now().toString(36).toUpperCase()}`,
+        issuedAt: new Date().toISOString()
+      };
+
+      const pdfBuffer = DeepLearningAcademyService.exportMasteryPassportPdf(reportData);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=passaporte_dominio_${reportData.studentId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Folha de Respostas Padronizada SENAI para Prova Paramétrica
+  app.post("/api/parametric-exam/export-answersheet-pdf", (req, res) => {
+    try {
+      const { examTitle = "Avaliação Prática SENAI", courseName = "Técnico em Desenvolvimento de Sistemas", variantId = "A" } = req.body;
+      const pdfBuffer = ParametricExamService.exportAnswerSheetPdf({
+        examTitle,
+        courseName,
+        variantId
+      });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=folha_respostas_variante_${variantId}.pdf`);
+      res.send(pdfBuffer);
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

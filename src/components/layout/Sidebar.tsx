@@ -88,6 +88,7 @@ export default function Sidebar({
     { id: "evidences", label: "Evidências", icon: FileCheck, desc: "Histórico Pedagógico", visible: true },
     { id: "activities", label: "Atividades", icon: Zap, desc: "Controle de Entregas, IA & Autor", visible: true },
     { id: "student_portal", label: "Portal do Aluno", icon: GraduationCap, desc: "Visão do Estudante & Submissão", visible: true },
+    { id: "academy_mastery", label: "CiberAcademy Profundo", icon: Brain, desc: "Modelos Mentais, Socrático & SM-2", visible: true },
     { id: "question_bank", label: "Banco de Questões", icon: Database, desc: "Questões e Desafios IA", visible: true },
     { id: "batch", label: "Correção em Lote", icon: Layers, desc: "Processamento Massivo ZIP", visible: true },
     { id: "similarity", label: "Similaridade", icon: FileSearch, desc: "Análise de Códigos", visible: true },
