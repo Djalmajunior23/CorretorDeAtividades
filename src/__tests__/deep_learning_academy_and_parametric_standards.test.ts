@@ -65,6 +65,87 @@ describe("CiberAcademy Deep Learning & SENAI Parametric Exam Standards Test Suit
       expect(pdfBuffer.length).toBeGreaterThan(5000);
     });
 
+    it("Deve gerar simulado com QUANTIDADE EXATA DE QUESTÕES solicitada e 4 ALTERNATIVAS (A, B, C, D) em várias linguagens de programação", async () => {
+      const requestedQuestions = 12;
+      const languages = ["python", "javascript", "typescript", "java", "sql", "csharp", "cpp", "go"];
+
+      const exam = await ParametricExamService.generateParametricExam({
+        examTitle: "Simulado Técnico Multi-Linguagens SENAI",
+        courseName: "Técnico em Desenvolvimento de Sistemas",
+        subject: "Linguagens de Programação & Estruturas de Dados",
+        basePrompt: "Simulado completo cobrindo sintaxe, POO, closures e consultas relacionais",
+        questionCount: requestedQuestions,
+        selectedLanguages: languages,
+        variantCount: 4,
+        durationMinutes: 120,
+        students: [
+          { id: "st-01", name: "Ana Beatriz Silva", enrollmentCode: "SENAI-2026-001" },
+          { id: "st-02", name: "Carlos Eduardo Santos", enrollmentCode: "SENAI-2026-002" },
+          { id: "st-03", name: "Mariana Oliveira", enrollmentCode: "SENAI-2026-003" }
+        ]
+      });
+
+      expect(exam.questionCount).toBe(requestedQuestions);
+      expect(exam.variants.length).toBe(4);
+
+      // Verify each variant has the exact requested number of questions
+      exam.variants.forEach(variant => {
+        expect(variant.questions.length).toBe(requestedQuestions);
+
+        // Verify each question has exactly 4 options (A, B, C, D) with 1 correct
+        variant.questions.forEach(q => {
+          expect(q.options.length).toBe(4);
+          expect(q.options.map(o => o.letter)).toEqual(["A", "B", "C", "D"]);
+          
+          const correctOptions = q.options.filter(o => o.isCorrect);
+          expect(correctOptions.length).toBe(1);
+          expect(q.correctOption).toBe(correctOptions[0].letter);
+          expect(q.explanation).toBeDefined();
+        });
+      });
+
+      // Verify multi-language distribution
+      const generatedLanguages = new Set(exam.variants[0].questions.map(q => q.language));
+      expect(generatedLanguages.size).toBeGreaterThanOrEqual(3);
+    });
+
+    it("Deve gerar Cadernos Individuais de Prova para os alunos selecionados da turma e permitir exportação em lote", async () => {
+      const selectedClassStudents = [
+        { id: "std-01", name: "Gabriel Monteiro Cruz", enrollmentCode: "MAT-2026-101" },
+        { id: "std-02", name: "Helena Beatriz Barbosa", enrollmentCode: "MAT-2026-102" },
+        { id: "std-03", name: "Isabela Ferreira Ramos", enrollmentCode: "MAT-2026-103" }
+      ];
+
+      const exam = await ParametricExamService.generateParametricExam({
+        examTitle: "Avaliação Oficial da Turma DS-2026",
+        courseName: "Técnico em Desenvolvimento de Sistemas",
+        subject: "Desenvolvimento de Software",
+        basePrompt: "Prova bimestral de algoritmos e linguagens",
+        questionCount: 8,
+        selectedLanguages: ["python", "javascript", "java", "sql"],
+        classId: "turma-ds-01",
+        className: "Turma DS-101 Noite",
+        students: selectedClassStudents
+      });
+
+      // Verify individual booklets generated for each student
+      expect(exam.studentBooklets.length).toBe(3);
+      expect(exam.studentBooklets[0].studentName).toBe("Gabriel Monteiro Cruz");
+      expect(exam.studentBooklets[0].enrollmentCode).toBe("MAT-2026-101");
+      expect(exam.studentBooklets[0].questions.length).toBe(8);
+      expect(exam.studentBooklets[0].uniqueExamToken).toContain("EXAM-");
+
+      // Verify single student booklet PDF export
+      const singleBookletPdf = ParametricExamService.exportStudentIndividualBookletPdf(exam.studentBooklets[0]);
+      expect(singleBookletPdf).toBeInstanceOf(Buffer);
+      expect(singleBookletPdf.length).toBeGreaterThan(3000);
+
+      // Verify all class booklets batch PDF export
+      const allClassBookletsPdf = ParametricExamService.exportAllClassBookletsPdf(exam.studentBooklets);
+      expect(allClassBookletsPdf).toBeInstanceOf(Buffer);
+      expect(allClassBookletsPdf.length).toBeGreaterThan(singleBookletPdf.length);
+    });
+
     it("Deve gerar Caderno Individual de Prova e Folha Oficial de Respostas Pautada", () => {
       const variant = {
         variantId: "A" as const,
@@ -84,7 +165,10 @@ describe("CiberAcademy Deep Learning & SENAI Parametric Exam Standards Test Suit
           { id: "r1", criterion: "Conhecimentos CHA", weight: 40, description: "Lógica e sintaxe" }
         ],
         antiPlagiarismChecksum: "sig_A_12345",
-        variableDictionary: { fnName: "resolver" }
+        variableDictionary: { fnName: "resolver" },
+        questions: [],
+        questionCount: 0,
+        answerKeyMap: {}
       };
 
       const singlePdf = ParametricExamService.exportSingleVariantPdf(variant, {

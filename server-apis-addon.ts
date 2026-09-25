@@ -7157,6 +7157,32 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
+  app.post("/api/parametric-exam/export-student-booklet-pdf", async (req, res) => {
+    try {
+      const { booklet } = req.body;
+      if (!booklet) return res.status(400).json({ error: "Booklet data is required" });
+      const pdfBuffer = ParametricExamService.exportStudentIndividualBookletPdf(booklet);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=caderno_aluno_${booklet.studentId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/parametric-exam/export-batch-booklets-pdf", async (req, res) => {
+    try {
+      const { booklets } = req.body;
+      if (!booklets || !Array.isArray(booklets)) return res.status(400).json({ error: "Booklets array is required" });
+      const pdfBuffer = ParametricExamService.exportAllClassBookletsPdf(booklets);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=cadernos_turma_completa.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ==========================================
   // MODULE 18: GITHUB / GITLAB CI/CD AUTO-GRADING
   // ==========================================
