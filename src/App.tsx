@@ -65,6 +65,7 @@ const StudentPortalView = React.lazy(() => import("./components/StudentPortalVie
 const SkillTreePortfolioView = React.lazy(() => import("./components/SkillTreePortfolioView"));
 const TeacherAiPowerhouseView = React.lazy(() => import("./components/TeacherAiPowerhouseView"));
 const ComplexActivityGeneratorView = React.lazy(() => import("./components/ComplexActivityGeneratorView"));
+const AdvancedItemBankStudioView = React.lazy(() => import("./components/AdvancedItemBankStudioView"));
 const TechInterviewSimulatorView = React.lazy(() => import("./components/TechInterviewSimulatorView"));
 const CognitiveTelemetryRadarView = React.lazy(() => import("./components/CognitiveTelemetryRadarView"));
 const CapstoneProjectArchitectView = React.lazy(() => import("./components/CapstoneProjectArchitectView"));
@@ -2688,6 +2689,10 @@ export default function App() {
 
            {currentTab === "complex_activities" && (
              <ComplexActivityGeneratorView />
+           )}
+
+           {currentTab === "item_bank_studio" && (
+             <AdvancedItemBankStudioView />
            )}
 
           {currentTab === "avaliacoes" && (

@@ -38,6 +38,7 @@ import { SocraticScaffoldingService } from "./src/services/socraticScaffoldingSe
 import { DatabaseModelAssessmentService } from "./src/services/databaseModelAssessmentService";
 import { TeacherPowerhouseService } from "./src/services/teacherPowerhouseService";
 import { ComplexActivityGeneratorService } from "./src/services/complexActivityService";
+import { AdvancedItemBankService } from "./src/services/advancedItemBankService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -7556,6 +7557,152 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         message: `Atividade "${activity.title}" atribuída com sucesso à turma ${classId}!`,
         publishedAt: new Date().toISOString()
       });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // ADVANCED ITEM BANK & QUESTION ENGINEERING SUITE (6 EVOLUTIONARY MODULES)
+  // =========================================================================
+
+  // 19. TRI & Calibração Psicométrica de Itens
+  app.post("/api/teacher/item-bank/tri-calibrate", async (req, res) => {
+    try {
+      const { itemId = "item_101", itemTitle = "Questão Analisada", submissions = [] } = req.body;
+      const metrics = AdvancedItemBankService.calculateItemTriMetrics({
+        itemId,
+        itemTitle,
+        submissions
+      });
+      res.json({ success: true, metrics });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 20. Múltipla Escolha Diagnóstica (Distratores Cognitivos)
+  app.post("/api/teacher/item-bank/generate-diagnostic-mcq", async (req, res) => {
+    try {
+      const { topic, subtopic, bloomLevel, targetCompetency, providerConfig } = req.body;
+      const question = await AdvancedItemBankService.generateDiagnosticMcq({
+        topic,
+        subtopic,
+        bloomLevel,
+        targetCompetency,
+        providerConfig
+      });
+      res.json({ success: true, question });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 21. Polimorfismo Paramétrico & Anti-Cola
+  app.post("/api/teacher/item-bank/generate-parametric", async (req, res) => {
+    try {
+      const { title, scenarioTemplate, studentList = [], formulaType = "FINANCE_INTEREST" } = req.body;
+      const template = AdvancedItemBankService.generateParametricInstances({
+        title,
+        scenarioTemplate,
+        studentList: studentList.length > 0 ? studentList : [
+          { id: "aluno_01", name: "Ana Beatriz" },
+          { id: "aluno_02", name: "Carlos Eduardo" },
+          { id: "aluno_03", name: "Daniela Rocha" }
+        ],
+        formulaType
+      });
+      res.json({ success: true, template });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 22. Ingestão OCR & Multi-Fonte
+  app.post("/api/teacher/item-bank/ocr-ingest", async (req, res) => {
+    try {
+      const { rawTextOrOcr, sourceType, targetCourse, providerConfig } = req.body;
+      const result = await AdvancedItemBankService.ingestMultiSourceExam({
+        rawTextOrOcr,
+        sourceType,
+        targetCourse,
+        providerConfig
+      });
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 23. Montador Algorítmico de Provas Balanceadas (Cadernos A, B, C, D)
+  app.post("/api/teacher/item-bank/assemble-exam", async (req, res) => {
+    try {
+      const { examTitle, courseName, classId, durationMinutes, distribution, availableBankItems = [] } = req.body;
+      const booklets = AdvancedItemBankService.assembleBalancedExam({
+        examTitle: examTitle || "Avaliação Integrada SAEP",
+        courseName: courseName || "Desenvolvimento de Sistemas",
+        classId: classId || "Turma DS-1A",
+        durationMinutes: durationMinutes || 90,
+        distribution: distribution || { easyPct: 30, mediumPct: 50, hardPct: 20 },
+        availableBankItems
+      });
+      res.json({ success: true, booklets });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 24. Exportar Caderno de Prova em PDF Oficial SENAI
+  app.post("/api/teacher/item-bank/export-assembled-exam-pdf", async (req, res) => {
+    try {
+      const { booklet } = req.body;
+      if (!booklet) return res.status(400).json({ success: false, error: "Booklet data is required" });
+
+      const pdfBuffer = AdvancedItemBankService.exportExamBookletToPdf(booklet);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=Caderno_Prova_Versao_${booklet.versionLetter || "A"}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 25. Desafio Code Bug Hunt & Refactoring Lab
+  app.post("/api/teacher/item-bank/generate-bughunt", async (req, res) => {
+    try {
+      const { topic, language, targetedBugTypes, providerConfig } = req.body;
+      const challenge = await AdvancedItemBankService.generateBugHuntChallenge({
+        topic,
+        language,
+        targetedBugTypes,
+        providerConfig
+      });
+      res.json({ success: true, challenge });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 26. Exportar Questões para QTI 2.1 / Moodle XML
+  app.post("/api/teacher/item-bank/export-qti", async (req, res) => {
+    try {
+      const { question } = req.body;
+      if (!question) return res.status(400).json({ success: false, error: "Question data is required" });
+
+      const qtiXml = `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+  <item ident="${question.id || "item_qti"}" title="${question.topic || "Questão"}">
+    <presentation>
+      <material>
+        <mattext texttype="text/html"><![CDATA[<p>${question.questionStem || question.commandText || ""}</p>]]></mattext>
+      </material>
+    </presentation>
+  </item>
+</questestinterop>`;
+
+      res.setHeader("Content-Type", "application/xml");
+      res.setHeader("Content-Disposition", `attachment; filename=item_${question.id || "export"}.xml`);
+      res.send(qtiXml);
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
