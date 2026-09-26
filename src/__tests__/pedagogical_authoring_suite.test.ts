@@ -159,9 +159,67 @@ describe("Pedagogical Authoring Suite - Test Suite", () => {
     });
   });
 
-  // 6. PACOTE MESTRE INTEGRADO (1-CLICK MASTER TEACHING PACK)
-  describe("6. Master Teaching Pack (1-Click Generation)", () => {
-    it("Deve gerar o Pacote Mestre Integrado com todos os 5 artefatos sincronizados em 1 chamada", async () => {
+  // 6. ATIVIDADES PRÁTICAS CONTEXTUALIZADAS
+  describe("6. Practical Activities & Contextual Statements", () => {
+    it("Deve gerar Atividade Prática com enunciado industrial, requisitos, restrições, esqueleto starter e testes", async () => {
+      const activity = await PedagogicalAuthoringSuiteService.generatePracticalActivity({
+        theme: "Algoritmos de Ordenação e Otimização",
+        courseName: "Técnico SENAI",
+        subject: "Estruturas de Dados",
+        language: "typescript",
+        difficulty: "Intermediário"
+      });
+
+      expect(activity).toBeDefined();
+      expect(activity.title).toContain("Atividade Prática");
+      expect(activity.contextualStatement).toBeDefined();
+      expect(activity.functionalRequirements.length).toBeGreaterThanOrEqual(2);
+      expect(activity.technicalConstraints.length).toBeGreaterThanOrEqual(2);
+      expect(activity.starterCodeTemplate).toBeDefined();
+      expect(activity.solutionCode).toBeDefined();
+      expect(activity.automatedTestCases.length).toBeGreaterThan(0);
+      expect(activity.evaluationRubric.length).toBeGreaterThan(0);
+
+      // PDF Export
+      const pdfBuffer = PedagogicalAuthoringSuiteService.exportPracticalActivityPdf(activity);
+      expect(pdfBuffer).toBeInstanceOf(Buffer);
+      expect(pdfBuffer.length).toBeGreaterThan(2000);
+    });
+  });
+
+  // 7. SIMULADOS & QUESTÕES DE 4 ALTERNATIVAS (A, B, C, D)
+  describe("7. Simulated Exams (4 Alternatives A, B, C, D)", () => {
+    it("Deve gerar Simulado com questões objetivas de estritamente 4 opções e gabarito justificado", async () => {
+      const exam = await PedagogicalAuthoringSuiteService.generateSimulatedExam({
+        theme: "Arquitetura e Boas Práticas Clean Code",
+        courseName: "Técnico SENAI",
+        subject: "Engenharia de Software",
+        language: "typescript",
+        questionCount: 4,
+        difficulty: "Intermediário"
+      });
+
+      expect(exam).toBeDefined();
+      expect(exam.multipleChoiceQuestions.length).toBe(4);
+
+      exam.multipleChoiceQuestions.forEach(q => {
+        expect(q.options.length).toBe(4);
+        expect(q.options.map(o => o.letter)).toEqual(["A", "B", "C", "D"]);
+        expect(["A", "B", "C", "D"]).toContain(q.correctLetter);
+        expect(q.explanation).toBeDefined();
+        expect(q.bloomTaxonomy).toBeDefined();
+      });
+
+      // PDF Export
+      const pdfBuffer = PedagogicalAuthoringSuiteService.exportSimulatedExamPdf(exam);
+      expect(pdfBuffer).toBeInstanceOf(Buffer);
+      expect(pdfBuffer.length).toBeGreaterThan(2500);
+    });
+  });
+
+  // 8. PACOTE MESTRE INTEGRADO COMPLETO (7 EM 1)
+  describe("8. Master Teaching Pack (All Resources Synchronized)", () => {
+    it("Deve gerar o Pacote Mestre Integrado com todos os 7 artefatos sincronizados", async () => {
       const pack = await PedagogicalAuthoringSuiteService.generateMasterTeachingPack({
         theme: "Construção de APIs REST com PostgreSQL e Validação Estrita",
         courseName: "Técnico SENAI",
@@ -175,6 +233,9 @@ describe("Pedagogical Authoring Suite - Test Suite", () => {
       expect(pack.debugLab).toBeDefined();
       expect(pack.caseStudy).toBeDefined();
       expect(pack.guidedResearch).toBeDefined();
+      expect(pack.practicalActivity).toBeDefined();
+      expect(pack.simulatedExam).toBeDefined();
+      expect(pack.simulatedExam.multipleChoiceQuestions.length).toBeGreaterThanOrEqual(4);
     });
   });
 

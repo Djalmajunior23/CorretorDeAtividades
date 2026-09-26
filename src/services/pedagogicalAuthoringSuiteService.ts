@@ -184,7 +184,75 @@ export interface GuidedResearchQuest {
 }
 
 // =============================================================================
-// 6. PACOTE MESTRE INTEGRADO (1-CLICK MASTER TEACHING PACK)
+// 6. ATIVIDADES PRÁTICAS & ENUNCIADOS CONTEXTUALIZADOS
+// =============================================================================
+export interface PracticalActivityTestCase {
+  input: string;
+  expectedOutput: string;
+  description: string;
+  isHidden?: boolean;
+}
+
+export interface PracticalActivityRubricItem {
+  criterion: string;
+  points: number;
+  description: string;
+}
+
+export interface PracticalActivity {
+  id: string;
+  title: string;
+  courseName: string;
+  subject: string;
+  language: string;
+  difficulty: "Iniciante" | "Intermediário" | "Avançado" | "Especialista";
+  estimatedMinutes: number;
+  contextualStatement: string;
+  functionalRequirements: string[];
+  technicalConstraints: string[];
+  starterCodeTemplate: string;
+  solutionCode: string;
+  automatedTestCases: PracticalActivityTestCase[];
+  evaluationRubric: PracticalActivityRubricItem[];
+  createdAt: string;
+}
+
+// =============================================================================
+// 7. SIMULADOS & QUESTÕES DE 4 ALTERNATIVAS (A, B, C, D)
+// =============================================================================
+export interface SimulatedMultipleChoiceQuestion {
+  id: string;
+  questionNumber: number;
+  statement: string;
+  codeSnippet?: string;
+  options: Array<{ letter: "A" | "B" | "C" | "D"; text: string }>;
+  correctLetter: "A" | "B" | "C" | "D";
+  explanation: string;
+  bloomTaxonomy: string;
+}
+
+export interface SimulatedOpenQuestion {
+  id: string;
+  questionNumber: number;
+  statement: string;
+  expectedAnswerKey: string;
+  rubricPoints: number;
+}
+
+export interface SimulatedExam {
+  id: string;
+  title: string;
+  courseName: string;
+  subject: string;
+  language: string;
+  durationMinutes: number;
+  multipleChoiceQuestions: SimulatedMultipleChoiceQuestion[];
+  openAnalyticalQuestions: SimulatedOpenQuestion[];
+  createdAt: string;
+}
+
+// =============================================================================
+// 8. PACOTE MESTRE INTEGRADO (1-CLICK MASTER TEACHING PACK)
 // =============================================================================
 export interface MasterTeachingPack {
   id: string;
@@ -196,6 +264,8 @@ export interface MasterTeachingPack {
   debugLab: DebugLabScenario;
   caseStudy: CaseStudyScenario;
   guidedResearch: GuidedResearchQuest;
+  practicalActivity: PracticalActivity;
+  simulatedExam: SimulatedExam;
   createdAt: string;
 }
 
@@ -1016,7 +1086,405 @@ Retorne ESTRITAMENTE um JSON no formato:
   }
 
   // ===========================================================================
-  // 6. GERADOR DE PACOTE MESTRE INTEGRADO (1-CLICK MASTER TEACHING PACK)
+  // 6. GERADOR DE ATIVIDADES PRÁTICAS & ENUNCIADOS CONTEXTUALIZADOS
+  // ===========================================================================
+  static async generatePracticalActivity(params: {
+    theme: string;
+    courseName?: string;
+    subject?: string;
+    language?: string;
+    difficulty?: "Iniciante" | "Intermediário" | "Avançado" | "Especialista";
+    specificInstructions?: string;
+    providerConfig?: CustomAIRequestOptions;
+  }): Promise<PracticalActivity> {
+    const id = `pact_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const courseName = params.courseName || "Técnico em Desenvolvimento de Sistemas - SENAI";
+    const subject = params.subject || "Desenvolvimento de Soluções Computacionais";
+    const lang = params.language || "typescript";
+    const difficulty = params.difficulty || "Intermediário";
+
+    let activity: PracticalActivity | null = null;
+
+    try {
+      const prompt = `
+Você é o Especialista em Engenharia Pedagógica do SENAI.
+Crie uma ATIVIDADE PRÁTICA DE PROGRAMAÇÃO rica, altamente contextualizada no mundo real da indústria sobre:
+"${params.theme}"
+
+Curso: ${courseName}
+Unidade Curricular: ${subject}
+Linguagem: ${lang}
+Dificuldade: ${difficulty}
+Diretrizes: ${params.specificInstructions || "Foco em Clean Code, tratamento de exceções e testes unitários."}
+
+ESTRUTURA OBRIGATÓRIA:
+1. Enunciado Contextualizado ("contextualStatement") com uma demanda de empresa real.
+2. 4 Requisitos Funcionais ("functionalRequirements").
+3. 3 Restrições Técnicas ("technicalConstraints").
+4. Esqueleto Inicial ("starterCodeTemplate") com assinaturas de funções e comentários TODO.
+5. Solução Completa de Referência ("solutionCode").
+6. 3 Casos de Testes Automatizados ("automatedTestCases") com inputs e outputs esperados.
+7. Rubrica de Avaliação com 3 critérios pontuados totalizando 100 pontos ("evaluationRubric").
+
+Retorne ESTRITAMENTE um JSON no formato:
+{
+  "title": "Atividade Prática: ...",
+  "estimatedMinutes": 60,
+  "contextualStatement": "...",
+  "functionalRequirements": ["RF01: ...", "RF02: ...", "RF03: ...", "RF04: ..."],
+  "technicalConstraints": ["RT01: ...", "RT02: ...", "RT03: ..."],
+  "starterCodeTemplate": "// Código inicial com TODOs",
+  "solutionCode": "// Solução completa",
+  "automatedTestCases": [
+    { "input": "...", "expectedOutput": "...", "description": "...", "isHidden": false }
+  ],
+  "evaluationRubric": [
+    { "criterion": "Correção Funcional", "points": 50, "description": "Atende a todos os requisitos." },
+    { "criterion": "Clean Code & Tipagem", "points": 30, "description": "Código legível e padronizado." },
+    { "criterion": "Tratamento de Exceções", "points": 20, "description": "Valida dados inválidos." }
+  ]
+}
+`;
+      const provider = ProviderFactory.createCustomProvider(params.providerConfig);
+      const aiResponse = await provider.generateContent(prompt, { temperature: 0.3, max_tokens: 6000 });
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        activity = {
+          id,
+          title: parsed.title || `Atividade Prática: Implementação de ${params.theme}`,
+          courseName,
+          subject,
+          language: lang,
+          difficulty,
+          estimatedMinutes: parsed.estimatedMinutes || 60,
+          contextualStatement: parsed.contextualStatement || `Implementação do módulo de ${params.theme} para automação de regras de negócio.`,
+          functionalRequirements: Array.isArray(parsed.functionalRequirements) ? parsed.functionalRequirements : [
+            "Implementar a função principal de processamento",
+            "Validar dados de entrada e lançar erros para valores inválidos",
+            "Formatar o resultado em estrutura padrão",
+            "Garantir imunidade a efeitos colaterais"
+          ],
+          technicalConstraints: Array.isArray(parsed.technicalConstraints) ? parsed.technicalConstraints : [
+            `Utilizar linguagem ${lang} com tipagem estrita`,
+            "Complexidade de tempo não superior a O(N log N)",
+            "Código modular e sem acoplamento direto"
+          ],
+          starterCodeTemplate: parsed.starterCodeTemplate || `// ${lang.toUpperCase()} - Esqueleto Inicial\nexport function executar(dados: any) {\n  // TODO: Implemente a lógica aqui\n}`,
+          solutionCode: parsed.solutionCode || `// Solução Canônica\nexport function executar(dados: any) {\n  return dados;\n}`,
+          automatedTestCases: Array.isArray(parsed.automatedTestCases) ? parsed.automatedTestCases : [],
+          evaluationRubric: Array.isArray(parsed.evaluationRubric) ? parsed.evaluationRubric : [],
+          createdAt: new Date().toISOString()
+        };
+      }
+    } catch {
+      // Fallback
+    }
+
+    if (!activity) {
+      activity = {
+        id,
+        title: `Atividade Prática: Sistema de Validação e Processamento de Dados (${params.theme})`,
+        courseName,
+        subject,
+        language: lang,
+        difficulty,
+        estimatedMinutes: 60,
+        contextualStatement: `Uma grande indústria parceira do SENAI está modernizando seu pipeline digital. Você foi designado para codificar o componente de ${params.theme}, garantindo integridade de dados, alta performance e tratamento contra falhas em tempo de execução.`,
+        functionalRequirements: [
+          "RF01: Validar payload de entrada rejeitando estruturas nulas, vazias ou com tipos corrompidos.",
+          "RF02: Executar as transformações de regras de negócio conforme a especificação do domínio.",
+          "RF03: Retornar o resultado padronizado com métricas de tempo de execução e status de sucesso.",
+          "RF04: Em caso de erro, propagar uma exceção semântica com código descritivo do motivo."
+        ],
+        technicalConstraints: [
+          `RT01: Implementação obrigatória em ${lang.toUpperCase()} seguindo os padrões Clean Code.`,
+          "RT02: Proibido o uso de mutações globais ou variáveis de escopo compartilhado.",
+          "RT03: Todas as funções devem ser puras e acompanhadas de comentários de cabeçalho."
+        ],
+        starterCodeTemplate: `/**
+ * ATIVIDADE PRÁTICA SENAI: ${params.theme}
+ * Estudante: _____________________________________ Data: ___/___/______
+ */
+
+export interface EntradaProcessamento {
+  id: string;
+  itens: Array<{ sku: string; quantidade: number; precoUnitario: number }>;
+  descontoPercentual?: number;
+}
+
+export interface ResultadoProcessamento {
+  sucesso: boolean;
+  totalBruto: number;
+  totalLiquido: number;
+  descontoAplicado: number;
+  dataProcessamento: string;
+}
+
+export function processarLote(entrada: EntradaProcessamento): ResultadoProcessamento {
+  // TODO 1: Validar campos obrigatórios (id, itens não vazios, valores positivos)
+  // TODO 2: Calcular total bruto e aplicar desconto se fornecido (máximo 25%)
+  // TODO 3: Retornar o objeto ResultadoProcessamento devidamente preenchido
+  
+  throw new Error("Método não implementado.");
+}`,
+        solutionCode: `/**
+ * GABARITO DE REFERÊNCIA SENAI
+ */
+export function processarLote(entrada: EntradaProcessamento): ResultadoProcessamento {
+  if (!entrada || !entrada.id || !Array.isArray(entrada.itens) || entrada.itens.length === 0) {
+    throw new Error("EntradaInválida: Estrutura de dados corrompida ou vazia.");
+  }
+
+  let totalBruto = 0;
+  for (const item of entrada.itens) {
+    if (item.quantidade <= 0 || item.precoUnitario < 0) {
+      throw new Error("ItemInválido: Quantidade e preço unitário devem ser estritamente positivos.");
+    }
+    totalBruto += item.quantidade * item.precoUnitario;
+  }
+
+  const taxaDesc = Math.min(Math.max(entrada.descontoPercentual || 0, 0), 25) / 100;
+  const descontoAplicado = Number((totalBruto * taxaDesc).toFixed(2));
+  const totalLiquido = Number((totalBruto - descontoAplicado).toFixed(2));
+
+  return {
+    sucesso: true,
+    totalBruto: Number(totalBruto.toFixed(2)),
+    totalLiquido,
+    descontoAplicado,
+    dataProcessamento: new Date().toISOString()
+  };
+}`,
+        automatedTestCases: [
+          {
+            input: JSON.stringify({ id: "lote_01", itens: [{ sku: "A1", quantidade: 2, precoUnitario: 50.0 }], descontoPercentual: 10 }),
+            expectedOutput: JSON.stringify({ totalBruto: 100, totalLiquido: 90, descontoAplicado: 10 }),
+            description: "Cenário Padrão com Desconto Válido de 10%",
+            isHidden: false
+          },
+          {
+            input: JSON.stringify({ id: "lote_02", itens: [{ sku: "B2", quantidade: -1, precoUnitario: 30.0 }] }),
+            expectedOutput: "Error: ItemInválido",
+            description: "Validação de Erro com Quantidade Negativa",
+            isHidden: false
+          },
+          {
+            input: JSON.stringify({ id: "lote_03", itens: [{ sku: "C3", quantidade: 10, precoUnitario: 20.0 }], descontoPercentual: 50 }),
+            expectedOutput: JSON.stringify({ totalBruto: 200, totalLiquido: 150, descontoAplicado: 50 }),
+            description: "Cenário de Borda com Desconto Limitado ao Teto de 25%",
+            isHidden: true
+          }
+        ],
+        evaluationRubric: [
+          { criterion: "Atendimento aos Requisitos Funcionais (Passagem nos Testes)", points: 40, description: "Passa em 100% dos casos de teste públicos e ocultos." },
+          { criterion: "Robustez, Validação de Tipos e Tratamento de Exceções", points: 30, description: "Trata entradas nulas, vazias e valores fora de domínio com erros claros." },
+          { criterion: "Clean Code, Legibilidade e Padrões Arquiteturais", points: 30, description: "Código modular, nomes expressivos, sem duplicações e imutável." }
+        ],
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    return activity;
+  }
+
+  // ===========================================================================
+  // 7. GERADOR DE SIMULADOS & QUESTÕES DE 4 ALTERNATIVAS (A, B, C, D)
+  // ===========================================================================
+  static async generateSimulatedExam(params: {
+    theme: string;
+    courseName?: string;
+    subject?: string;
+    language?: string;
+    questionCount?: number;
+    difficulty?: string;
+    providerConfig?: CustomAIRequestOptions;
+  }): Promise<SimulatedExam> {
+    const id = `sexam_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const courseName = params.courseName || "Técnico em Desenvolvimento de Sistemas - SENAI";
+    const subject = params.subject || "Avaliação Técnica e de Competências";
+    const lang = params.language || "typescript";
+    const count = Math.min(Math.max(params.questionCount || 4, 2), 10);
+    const difficulty = params.difficulty || "Intermediário";
+
+    let exam: SimulatedExam | null = null;
+
+    try {
+      const prompt = `
+Você é o Engenheiro de Avaliações Técnicas do SENAI.
+Crie um SIMULADO / AVALIAÇÃO com ${count} questões de múltipla escolha com EXATAMENTE 4 ALTERNATIVAS (A, B, C, D) e 2 questões abertas analíticas sobre o tema:
+"${params.theme}"
+
+Curso: ${courseName}
+Unidade Curricular: ${subject}
+Linguagem: ${lang}
+Dificuldade: ${difficulty}
+
+REGRAS RÍGIDAS PARA AS QUESTÕES DE MÚLTIPLA ESCOLHA:
+1. Cada questão DEVE ter rigorosamente 4 alternativas com as letras "A", "B", "C" e "D".
+2. Apenas UMA alternativa é correta.
+3. Forneça o snippet de código ilustrativo ("codeSnippet") quando aplicável.
+4. Forneça a explicação detalhada da resolução e distratores ("explanation").
+5. Classifique na Taxonomia de Bloom (Lembrar, Compreender, Aplicar, Analisar, Avaliar, Criar).
+
+Retorne ESTRITAMENTE um JSON no formato:
+{
+  "title": "Simulado Técnico: ...",
+  "durationMinutes": 60,
+  "multipleChoiceQuestions": [
+    {
+      "questionNumber": 1,
+      "statement": "...",
+      "codeSnippet": "...",
+      "options": [
+        { "letter": "A", "text": "..." },
+        { "letter": "B", "text": "..." },
+        { "letter": "C", "text": "..." },
+        { "letter": "D", "text": "..." }
+      ],
+      "correctLetter": "A",
+      "explanation": "A alternativa A é correta porque...",
+      "bloomTaxonomy": "Analisar"
+    }
+  ],
+  "openAnalyticalQuestions": [
+    {
+      "questionNumber": 1,
+      "statement": "...",
+      "expectedAnswerKey": "...",
+      "rubricPoints": 10
+    }
+  ]
+}
+`;
+      const provider = ProviderFactory.createCustomProvider(params.providerConfig);
+      const aiResponse = await provider.generateContent(prompt, { temperature: 0.3, max_tokens: 6000 });
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.multipleChoiceQuestions && Array.isArray(parsed.multipleChoiceQuestions)) {
+          exam = {
+            id,
+            title: parsed.title || `Simulado Preparatório: ${params.theme}`,
+            courseName,
+            subject,
+            language: lang,
+            durationMinutes: parsed.durationMinutes || 60,
+            multipleChoiceQuestions: parsed.multipleChoiceQuestions.map((q: any, i: number) => ({
+              id: `q_mc_${i + 1}`,
+              questionNumber: i + 1,
+              statement: q.statement || `Questão sobre ${params.theme}`,
+              codeSnippet: q.codeSnippet,
+              options: Array.isArray(q.options) && q.options.length === 4 ? q.options : [
+                { letter: "A", text: "Opção A de resposta." },
+                { letter: "B", text: "Opção B de resposta." },
+                { letter: "C", text: "Opção C de resposta." },
+                { letter: "D", text: "Opção D de resposta." }
+              ],
+              correctLetter: q.correctLetter || "A",
+              explanation: q.explanation || "Resolução técnica da questão fundamentada nas boas práticas.",
+              bloomTaxonomy: q.bloomTaxonomy || "Aplicar"
+            })),
+            openAnalyticalQuestions: Array.isArray(parsed.openAnalyticalQuestions) ? parsed.openAnalyticalQuestions.map((oq: any, i: number) => ({
+              id: `q_open_${i + 1}`,
+              questionNumber: i + 1,
+              statement: oq.statement || `Explique o impacto de ${params.theme} na indústria.`,
+              expectedAnswerKey: oq.expectedAnswerKey || "Gabarito analítico esperado com critérios de pontuação.",
+              rubricPoints: oq.rubricPoints || 10
+            })) : [],
+            createdAt: new Date().toISOString()
+          };
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    if (!exam) {
+      exam = {
+        id,
+        title: `Simulado de Avaliação Técnica: ${params.theme}`,
+        courseName,
+        subject,
+        language: lang,
+        durationMinutes: 60,
+        multipleChoiceQuestions: [
+          {
+            id: "q_mc_1",
+            questionNumber: 1,
+            statement: `Considere o trecho de código abaixo implementando princípios de ${params.theme}. Qual será a saída ou comportamento esperado do sistema?`,
+            codeSnippet: `const valores = [10, 20, 30, 40];\nconst resultado = valores.map(v => v * 1.1).filter(v => v > 25);\nconsole.log(resultado.length);`,
+            options: [
+              { letter: "A", text: "O resultado impresso será 2 elementos ([33, 44])." },
+              { letter: "B", text: "O resultado impresso será 3 elementos ([22, 33, 44])." },
+              { letter: "C", text: "Ocorre um erro de tipo em tempo de execução por mutação inválida." },
+              { letter: "D", text: "O resultado impresso será 4 elementos sem filtragem." }
+            ],
+            correctLetter: "A",
+            explanation: "Após o map com 1.1, os valores tornam-se [11, 22, 33, 44]. Ao filtrar v > 25, restam apenas 33 e 44 (2 elementos).",
+            bloomTaxonomy: "Analisar"
+          },
+          {
+            id: "q_mc_2",
+            questionNumber: 2,
+            statement: `Ao projetar uma arquitetura corporativa para ${params.theme}, qual dos seguintes princípios garante a separação de responsabilidades (SRP)?`,
+            options: [
+              { letter: "A", text: "Concentrar rotas HTTP, validação de dados e consultas SQL no mesmo controlador." },
+              { letter: "B", text: "Isolar a lógica de negócio em casos de uso (Use Cases / Services) independentes de frameworks." },
+              { letter: "C", text: "Permitir que as entidades de banco acessem diretamente a camada de visualização." },
+              { letter: "D", text: "Desativar a tipagem estrita para acelerar o tempo de compilação." }
+            ],
+            correctLetter: "B",
+            explanation: "A Clean Architecture preconcebe que a regra de negócio central resida na camada de Use Cases / Domínio, totalmente desacoplada de frameworks.",
+            bloomTaxonomy: "Compreender"
+          },
+          {
+            id: "q_mc_3",
+            questionNumber: 3,
+            statement: `Em um cenário de alta concorrência com ${params.theme}, como o uso do padrão Circuit Breaker protege o ecossistema?`,
+            options: [
+              { letter: "A", text: "Interrompendo requisições em cascata para serviços downstream com falhas contínuas, retornando fallback imediato." },
+              { letter: "B", text: "Aumentando indefinidamente o tempo de timeout para que nenhuma requisição seja perdida." },
+              { letter: "C", text: "Duplicando todas as gravações no banco de dados para evitar inconsistências." },
+              { letter: "D", text: "Substituindo todas as chamadas assíncronas por chamadas bloqueantes síncronas." }
+            ],
+            correctLetter: "A",
+            explanation: "O Circuit Breaker abre o circuito após um número configurado de falhas consecutivas, prevenindo a exaustão de threads e colapso de infraestrutura.",
+            bloomTaxonomy: "Avaliar"
+          },
+          {
+            id: "q_mc_4",
+            questionNumber: 4,
+            statement: `Qual a importância da validação estrita de esquemas (ex: Zod, Joi, Bean Validation) na entrada de dados de ${params.theme}?`,
+            options: [
+              { letter: "A", text: "Garante que apenas tipos e valores em conformidade com as regras de negócio entrem no núcleo da aplicação." },
+              { letter: "B", text: "Substitui a necessidade de criar índices em bancos de dados relacionais." },
+              { letter: "C", text: "Evita que os estudantes tenham que escrever testes de unidade." },
+              { letter: "D", text: "Converte automaticamente qualquer código síncrono em multithreading." }
+            ],
+            correctLetter: "A",
+            explanation: "A validação na borda (Boundary Validation) blinda o domínio contra injeções maliciosas, dados incompletos ou tipos inesperados.",
+            bloomTaxonomy: "Aplicar"
+          }
+        ],
+        openAnalyticalQuestions: [
+          {
+            id: "q_open_1",
+            questionNumber: 1,
+            statement: `Explique como a adoção de testes unitários automatizados e Clean Architecture reduz o Custo de Mudança (Cost of Change) em sistemas que utilizam ${params.theme}.`,
+            expectedAnswerKey: "O estudante deve citar: 1) Desacoplamento de dependências externas; 2) Rapidez na detecção de regressões; 3) Documentação viva do comportamento do sistema.",
+            rubricPoints: 10
+          }
+        ],
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    return exam;
+  }
+
+  // ===========================================================================
+  // 8. GERADOR DE PACOTE MESTRE INTEGRADO (1-CLICK MASTER TEACHING PACK)
   // ===========================================================================
   static async generateMasterTeachingPack(params: {
     theme: string;
@@ -1029,13 +1497,23 @@ Retorne ESTRITAMENTE um JSON no formato:
     const courseName = params.courseName || "Técnico em Desenvolvimento de Sistemas - SENAI";
     const subject = params.subject || "Desenvolvimento de Soluções Computacionais";
 
-    // Generate all 5 artifacts in parallel for maximum speed
-    const [courseware, learningSituation, debugLab, caseStudy, guidedResearch] = await Promise.all([
+    // Generate all 7 artifacts in parallel for maximum speed and rich completeness
+    const [
+      courseware, 
+      learningSituation, 
+      debugLab, 
+      caseStudy, 
+      guidedResearch,
+      practicalActivity,
+      simulatedExam
+    ] = await Promise.all([
       this.generateCoursewareBooklet({ theme: params.theme, courseName, subject, language: params.language, providerConfig: params.providerConfig }),
       this.generateLearningSituation({ theme: params.theme, courseName, unitCurricular: subject, providerConfig: params.providerConfig }),
       this.generateDebugLab({ theme: params.theme, language: params.language, providerConfig: params.providerConfig }),
       this.generateCaseStudy({ theme: params.theme, providerConfig: params.providerConfig }),
-      this.generateGuidedResearch({ theme: params.theme, courseName, providerConfig: params.providerConfig })
+      this.generateGuidedResearch({ theme: params.theme, courseName, providerConfig: params.providerConfig }),
+      this.generatePracticalActivity({ theme: params.theme, courseName, subject, language: params.language, providerConfig: params.providerConfig }),
+      this.generateSimulatedExam({ theme: params.theme, courseName, subject, language: params.language, questionCount: 4, providerConfig: params.providerConfig })
     ]);
 
     return {
@@ -1048,6 +1526,8 @@ Retorne ESTRITAMENTE um JSON no formato:
       debugLab,
       caseStudy,
       guidedResearch,
+      practicalActivity,
+      simulatedExam,
       createdAt: new Date().toISOString()
     };
   }
@@ -1560,6 +2040,254 @@ Retorne ESTRITAMENTE um JSON no formato:
       doc.setFontSize(6.8);
       doc.text(`   Profundidade esperada: ${q.expectedAnalysisDepth}`, 18, currentY);
       currentY += 5;
+    });
+
+    return Buffer.from(doc.output("arraybuffer"));
+  }
+
+  /**
+   * Exporta a Atividade Prática em PDF Institucional SENAI.
+   */
+  static exportPracticalActivityPdf(activity: PracticalActivity): Buffer {
+    const doc = new jsPDF();
+
+    doc.setFillColor(0, 51, 153);
+    doc.rect(0, 0, 210, 28, "F");
+    doc.setFillColor(255, 204, 0);
+    doc.rect(0, 28, 210, 2, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7.5);
+    doc.text("SENAI • ATIVIDADE PRÁTICA DE LABORATÓRIO E DESENVOLVIMENTO", 14, 9);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(activity.title.toUpperCase(), 14, 18);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`CURSO: ${activity.courseName.toUpperCase()} | TEMPO ESTIMADO: ${activity.estimatedMinutes} MIN`, 14, 25);
+
+    let currentY = 36;
+
+    // Enunciado
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, currentY, 182, 24, 1.5, 1.5, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, currentY, 182, 24, 1.5, 1.5, "S");
+    doc.setTextColor(0, 51, 153);
+    doc.setFontSize(7.8);
+    doc.setFont("helvetica", "bold");
+    doc.text("CONTEXTO & DESAFIO INDUSTRIAL:", 18, currentY + 6);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(7.2);
+    const sp = doc.splitTextToSize(activity.contextualStatement, 174);
+    doc.text(sp, 18, currentY + 12);
+    currentY += 30;
+
+    // Requisitos Funcionais
+    doc.setTextColor(0, 51, 153);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("1. Requisitos Funcionais Obrigatórios:", 14, currentY);
+    currentY += 4.5;
+    activity.functionalRequirements.forEach((rf) => {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(7.2);
+      doc.setFont("helvetica", "normal");
+      doc.text(`• ${rf}`, 18, currentY);
+      currentY += 4.2;
+    });
+
+    currentY += 2;
+
+    // Restrições Técnicas
+    doc.setTextColor(0, 51, 153);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("2. Restrições Técnicas & Padrões de Qualidade:", 14, currentY);
+    currentY += 4.5;
+    activity.technicalConstraints.forEach((rt) => {
+      doc.setTextColor(71, 85, 105);
+      doc.setFontSize(7.2);
+      doc.setFont("helvetica", "normal");
+      doc.text(`• ${rt}`, 18, currentY);
+      currentY += 4.2;
+    });
+
+    currentY += 3;
+
+    // Casos de Teste
+    if (currentY > 210) { doc.addPage(); currentY = 20; }
+    doc.setTextColor(0, 51, 153);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("3. Bateria de Testes Automatizados de Aceite:", 14, currentY);
+    currentY += 4;
+
+    const tRows = activity.automatedTestCases.map(tc => [tc.description, tc.input, tc.expectedOutput, tc.isHidden ? "Oculto" : "Público"]);
+    safeAutoTable(doc, {
+      startY: currentY,
+      head: [["Cenário de Teste", "Entrada (Input)", "Saída Esperada (Output)", "Visibilidade"]],
+      body: tRows,
+      theme: "grid",
+      headStyles: { fillColor: [0, 51, 153], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+      styles: { fontSize: 6.8, cellPadding: 1.8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] }
+    });
+
+    currentY = getAutoTableFinalY(doc, currentY + 25) + 6;
+
+    // Rubrica de Avaliação
+    if (currentY > 210) { doc.addPage(); currentY = 20; }
+    doc.setTextColor(0, 51, 153);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("4. Rubrica de Avaliação Técnica (Pontuação):", 14, currentY);
+    currentY += 4;
+
+    const rRows = activity.evaluationRubric.map(r => [r.criterion, `${r.points} pts`, r.description]);
+    safeAutoTable(doc, {
+      startY: currentY,
+      head: [["Critério Avaliativo", "Pontos", "Descritor de Desempenho"]],
+      body: rRows,
+      theme: "grid",
+      headStyles: { fillColor: [0, 51, 153], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+      styles: { fontSize: 6.8, cellPadding: 1.8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] }
+    });
+
+    return Buffer.from(doc.output("arraybuffer"));
+  }
+
+  /**
+   * Exporta o Simulado com 4 Alternativas em PDF Institucional SENAI.
+   */
+  static exportSimulatedExamPdf(exam: SimulatedExam): Buffer {
+    const doc = new jsPDF();
+
+    doc.setFillColor(0, 51, 153);
+    doc.rect(0, 0, 210, 28, "F");
+    doc.setFillColor(255, 204, 0);
+    doc.rect(0, 28, 210, 2, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7.5);
+    doc.text("SENAI • SIMULADO DE AVALIAÇÃO TÉCNICA E COMPETÊNCIAS", 14, 9);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(exam.title.toUpperCase(), 14, 18);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`CURSO: ${exam.courseName.toUpperCase()} | DURAÇÃO: ${exam.durationMinutes} MIN | 4 ALTERNATIVAS (A, B, C, D)`, 14, 25);
+
+    let currentY = 36;
+
+    // Questões de Múltipla Escolha
+    exam.multipleChoiceQuestions.forEach((q) => {
+      if (currentY > 210) { doc.addPage(); currentY = 20; }
+
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, currentY, 182, 8, 1, 1, "F");
+      doc.setTextColor(0, 51, 153);
+      doc.setFontSize(7.8);
+      doc.setFont("helvetica", "bold");
+      doc.text(`QUESTÃO ${q.questionNumber} [Taxonomia de Bloom: ${q.bloomTaxonomy}]`, 18, currentY + 5.5);
+      currentY += 11;
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(7.2);
+      doc.setFont("helvetica", "normal");
+      const sp = doc.splitTextToSize(q.statement, 180);
+      doc.text(sp, 14, currentY);
+      currentY += sp.length * 3.8 + 2;
+
+      if (q.codeSnippet) {
+        doc.setFillColor(15, 23, 42);
+        const codeLines = q.codeSnippet.split("\n");
+        const boxH = Math.min(codeLines.length * 3.5 + 4, 30);
+        doc.rect(14, currentY, 182, boxH, "F");
+        doc.setTextColor(226, 232, 240);
+        doc.setFontSize(6.5);
+        doc.setFont("courier", "normal");
+        let cyCode = currentY + 3.5;
+        codeLines.slice(0, 8).forEach(l => {
+          doc.text(l.substring(0, 80), 18, cyCode);
+          cyCode += 3.2;
+        });
+        currentY += boxH + 4;
+      }
+
+      // Alternativas A, B, C, D
+      q.options.forEach((opt) => {
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "bold");
+        doc.text(`(${opt.letter})`, 18, currentY);
+        doc.setFont("helvetica", "normal");
+        const spOpt = doc.splitTextToSize(opt.text, 166);
+        doc.text(spOpt, 26, currentY);
+        currentY += spOpt.length * 3.6 + 1.5;
+      });
+
+      currentY += 4;
+    });
+
+    // Questões Abertas
+    if (exam.openAnalyticalQuestions && exam.openAnalyticalQuestions.length > 0) {
+      if (currentY > 200) { doc.addPage(); currentY = 20; }
+
+      doc.setFillColor(0, 51, 153);
+      doc.roundedRect(14, currentY, 182, 8, 1, 1, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7.8);
+      doc.setFont("helvetica", "bold");
+      doc.text("PARTE DISCURSIVA & QUESTÕES ANALÍTICAS", 18, currentY + 5.5);
+      currentY += 12;
+
+      exam.openAnalyticalQuestions.forEach((oq) => {
+        if (currentY > 220) { doc.addPage(); currentY = 20; }
+
+        doc.setTextColor(0, 51, 153);
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Questão Discursiva ${oq.questionNumber} (${oq.rubricPoints} pontos):`, 14, currentY);
+        currentY += 4.5;
+
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(7.2);
+        doc.setFont("helvetica", "normal");
+        const sp = doc.splitTextToSize(oq.statement, 180);
+        doc.text(sp, 14, currentY);
+        currentY += sp.length * 3.8 + 22; // Espaço para resposta manuscrita do aluno
+      });
+    }
+
+    // Gabarito Oficial (Última Página)
+    doc.addPage();
+    doc.setFillColor(0, 51, 153);
+    doc.rect(0, 0, 210, 22, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("GABARITO OFICIAL & MATRIZ DE RESOLUÇÃO DO PROFESSOR", 14, 14);
+
+    let gY = 32;
+    const gRows = exam.multipleChoiceQuestions.map(q => [
+      `Questão ${q.questionNumber}`,
+      q.correctLetter,
+      q.bloomTaxonomy,
+      q.explanation
+    ]);
+
+    safeAutoTable(doc, {
+      startY: gY,
+      head: [["Item", "Resp.", "Bloom", "Justificativa Técnica da Resolução"]],
+      body: gRows,
+      theme: "grid",
+      headStyles: { fillColor: [0, 51, 153], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+      styles: { fontSize: 6.8, cellPadding: 1.8 },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 14, fontStyle: "bold" }, 2: { cellWidth: 22 } },
+      alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
     return Buffer.from(doc.output("arraybuffer"));
