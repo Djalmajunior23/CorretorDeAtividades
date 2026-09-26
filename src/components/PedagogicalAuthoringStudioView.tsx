@@ -392,20 +392,12 @@ export default function PedagogicalAuthoringStudioView() {
     }
   };
 
-  // 4. EXPORTADORES PDF
+  // 4. EXPORTADORES PDF PROFISSIONAIS
   const handleExportActivityPdf = () => {
     if (!practicalActivity) return;
     try {
-      const buffer = PedagogicalAuthoringSuiteService.exportPracticalActivityPdf(practicalActivity);
-      const blob = new Blob([new Uint8Array(buffer as any)], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Atividade_Pratica_SENAI_${practicalActivity.title.replace(/\s+/g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Atividade_Pratica_SENAI_${practicalActivity.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+      PedagogicalAuthoringSuiteService.exportPracticalActivityPdf(practicalActivity, filename);
       toast.success("Atividade Prática em PDF exportada com sucesso!");
     } catch (e: any) {
       toast.error("Erro ao exportar atividade: " + e.message);
@@ -415,16 +407,8 @@ export default function PedagogicalAuthoringStudioView() {
   const handleExportExamPdf = () => {
     if (!simulatedExam) return;
     try {
-      const buffer = PedagogicalAuthoringSuiteService.exportSimulatedExamPdf(simulatedExam);
-      const blob = new Blob([new Uint8Array(buffer as any)], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Simulado_4_Alternativas_SENAI_${simulatedExam.title.replace(/\s+/g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Simulado_4_Alternativas_SENAI_${simulatedExam.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+      PedagogicalAuthoringSuiteService.exportSimulatedExamPdf(simulatedExam, filename);
       toast.success("Simulado de 4 Alternativas em PDF exportado com sucesso!");
     } catch (e: any) {
       toast.error("Erro ao exportar simulado: " + e.message);
@@ -434,16 +418,8 @@ export default function PedagogicalAuthoringStudioView() {
   const handleExportCoursewarePdf = () => {
     if (!courseware) return;
     try {
-      const buffer = PedagogicalAuthoringSuiteService.exportCoursewarePdf(courseware);
-      const blob = new Blob([new Uint8Array(buffer as any)], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Apostila_SENAI_${courseware.title.replace(/\s+/g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Apostila_SENAI_${courseware.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+      PedagogicalAuthoringSuiteService.exportCoursewarePdf(courseware, filename);
       toast.success("Apostila Didática em PDF exportada com sucesso!");
     } catch (e: any) {
       toast.error("Erro ao exportar apostila: " + e.message);
@@ -453,16 +429,8 @@ export default function PedagogicalAuthoringStudioView() {
   const handleExportSituationPdf = () => {
     if (!situation) return;
     try {
-      const buffer = PedagogicalAuthoringSuiteService.exportLearningSituationPdf(situation);
-      const blob = new Blob([new Uint8Array(buffer as any)], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Situacao_Aprendizagem_${situation.code}_SENAI.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Situacao_Aprendizagem_${situation.code.replace(/[^a-zA-Z0-9_-]/g, "_")}_SENAI.pdf`;
+      PedagogicalAuthoringSuiteService.exportLearningSituationPdf(situation, filename);
       toast.success("Situação de Aprendizagem Oficial em PDF exportada!");
     } catch (e: any) {
       toast.error("Erro ao exportar SA: " + e.message);
@@ -472,16 +440,8 @@ export default function PedagogicalAuthoringStudioView() {
   const handleExportDebugLabPdf = () => {
     if (!debugLab) return;
     try {
-      const buffer = PedagogicalAuthoringSuiteService.exportDebugLabPdf(debugLab);
-      const blob = new Blob([new Uint8Array(buffer as any)], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Debug_Lab_Forense_${debugLab.title.replace(/\s+/g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Debug_Lab_Forense_${debugLab.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+      PedagogicalAuthoringSuiteService.exportDebugLabPdf(debugLab, filename);
       toast.success("Roteiro do Debug Lab em PDF exportado com sucesso!");
     } catch (e: any) {
       toast.error("Erro ao exportar Debug Lab: " + e.message);
@@ -491,16 +451,8 @@ export default function PedagogicalAuthoringStudioView() {
   const handleExportCaseStudyPdf = () => {
     if (!caseStudy) return;
     try {
-      const buffer = PedagogicalAuthoringSuiteService.exportCaseStudyPdf(caseStudy);
-      const blob = new Blob([new Uint8Array(buffer as any)], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Estudo_de_Caso_Autopsia_${caseStudy.title.replace(/\s+/g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Estudo_de_Caso_Autopsia_${caseStudy.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+      PedagogicalAuthoringSuiteService.exportCaseStudyPdf(caseStudy, filename);
       toast.success("Estudo de Caso & ADR em PDF exportado!");
     } catch (e: any) {
       toast.error("Erro ao exportar Estudo de Caso: " + e.message);
@@ -510,16 +462,8 @@ export default function PedagogicalAuthoringStudioView() {
   const handleExportGuidedResearchPdf = () => {
     if (!guidedResearch) return;
     try {
-      const buffer = PedagogicalAuthoringSuiteService.exportGuidedResearchPdf(guidedResearch);
-      const blob = new Blob([new Uint8Array(buffer as any)], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Pesquisa_Guiada_${guidedResearch.title.replace(/\s+/g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Pesquisa_Guiada_${guidedResearch.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+      PedagogicalAuthoringSuiteService.exportGuidedResearchPdf(guidedResearch, filename);
       toast.success("Roteiro de Pesquisa Guiada em PDF exportado!");
     } catch (e: any) {
       toast.error("Erro ao exportar Pesquisa Guiada: " + e.message);
@@ -1173,6 +1117,24 @@ export default function PedagogicalAuthoringStudioView() {
         </div>
       )}
 
+      {activeTab === "activity" && !practicalActivity && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-12 text-center space-y-4">
+          <FileText className="w-12 h-12 text-blue-400 mx-auto opacity-60" />
+          <h3 className="text-lg font-bold text-white">Nenhuma Atividade Prática Gerada Ainda</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Gere uma atividade prática completa contextualizada no mundo real com requisitos funcionais, restrições técnicas, testes de aceite e starter code.
+          </p>
+          <button
+            onClick={() => handleGenerateSingleResource("activity")}
+            disabled={generatingSingle !== null}
+            className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-mono font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-blue-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            {generatingSingle === "activity" ? "Criando Atividade..." : "Criar Atividade Prática com os Assuntos"}
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* TAB 2: SIMULADO COM 4 ALTERNATIVAS (A, B, C, D) */}
       {/* ========================================================================= */}
@@ -1305,6 +1267,24 @@ export default function PedagogicalAuthoringStudioView() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === "exam" && !simulatedExam && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-12 text-center space-y-4">
+          <ListChecks className="w-12 h-12 text-violet-400 mx-auto opacity-60" />
+          <h3 className="text-lg font-bold text-white">Nenhum Simulado Gerado Ainda</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Gere um simulado técnico com 4 alternativas por questão (A, B, C, D), taxonomia de Bloom e gabarito detalhado.
+          </p>
+          <button
+            onClick={() => handleGenerateSingleResource("exam")}
+            disabled={generatingSingle !== null}
+            className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-mono font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-violet-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            {generatingSingle === "exam" ? "Criando Simulado..." : "Criar Simulado (4 Alternativas) com os Assuntos"}
+          </button>
         </div>
       )}
 
@@ -1466,6 +1446,24 @@ export default function PedagogicalAuthoringStudioView() {
         </div>
       )}
 
+      {activeTab === "courseware" && !courseware && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-12 text-center space-y-4">
+          <BookOpen className="w-12 h-12 text-amber-400 mx-auto opacity-60" />
+          <h3 className="text-lg font-bold text-white">Nenhuma Apostila Didática Gerada Ainda</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Gere uma apostila completa com capítulos modulares, fundamentação teórica, armadilhas comuns de código e dicas de seniores.
+          </p>
+          <button
+            onClick={() => handleGenerateSingleResource("courseware")}
+            disabled={generatingSingle !== null}
+            className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-mono font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            {generatingSingle === "courseware" ? "Criando Apostila..." : "Criar Apostila Modular com os Assuntos"}
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* TAB 4: SITUAÇÃO DE APRENDIZAGEM (SENAI / CHA) */}
       {/* ========================================================================= */}
@@ -1595,6 +1593,24 @@ export default function PedagogicalAuthoringStudioView() {
         </div>
       )}
 
+      {activeTab === "situation" && !situation && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-12 text-center space-y-4">
+          <Building2 className="w-12 h-12 text-emerald-400 mx-auto opacity-60" />
+          <h3 className="text-lg font-bold text-white">Nenhuma Situação de Aprendizagem Gerada Ainda</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Gere uma Situação de Aprendizagem oficial no padrão SENAI com Matriz CHA (Conhecimentos, Habilidades e Atitudes) e rubricas SAEP.
+          </p>
+          <button
+            onClick={() => handleGenerateSingleResource("situation")}
+            disabled={generatingSingle !== null}
+            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            {generatingSingle === "situation" ? "Criando SA..." : "Criar Situação de Aprendizagem (CHA/SAEP)"}
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* TAB 5: DEBUG LAB FORENSE */}
       {/* ========================================================================= */}
@@ -1720,6 +1736,24 @@ export default function PedagogicalAuthoringStudioView() {
         </div>
       )}
 
+      {activeTab === "debugLab" && !debugLab && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-12 text-center space-y-4">
+          <Terminal className="w-12 h-12 text-rose-400 mx-auto opacity-60" />
+          <h3 className="text-lg font-bold text-white">Nenhum Debug Lab Forense Gerado Ainda</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Gere um laboratório forense com bugs ocultos de concorrência, memória ou sintaxe e suíte de testes automatizados.
+          </p>
+          <button
+            onClick={() => handleGenerateSingleResource("debugLab")}
+            disabled={generatingSingle !== null}
+            className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-mono font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-rose-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            {generatingSingle === "debugLab" ? "Criando Debug Lab..." : "Criar Debug Lab Forense com os Assuntos"}
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* TAB 6: ESTUDO DE CASO (POST-MORTEM & ADR) */}
       {/* ========================================================================= */}
@@ -1826,6 +1860,24 @@ export default function PedagogicalAuthoringStudioView() {
         </div>
       )}
 
+      {activeTab === "caseStudy" && !caseStudy && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-12 text-center space-y-4">
+          <ShieldAlert className="w-12 h-12 text-purple-400 mx-auto opacity-60" />
+          <h3 className="text-lg font-bold text-white">Nenhum Estudo de Caso Gerado Ainda</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Gere um estudo de caso e autópsia de incidentes com timeline de falha, logs e registro de decisões arquiteturais (ADR).
+          </p>
+          <button
+            onClick={() => handleGenerateSingleResource("caseStudy")}
+            disabled={generatingSingle !== null}
+            className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-mono font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-purple-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            {generatingSingle === "caseStudy" ? "Criando Caso..." : "Criar Estudo de Caso (ADR) com os Assuntos"}
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* TAB 7: PESQUISA GUIADA (WEBQUEST) */}
       {/* ========================================================================= */}
@@ -1906,6 +1958,24 @@ export default function PedagogicalAuthoringStudioView() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === "guidedResearch" && !guidedResearch && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-12 text-center space-y-4">
+          <Compass className="w-12 h-12 text-cyan-400 mx-auto opacity-60" />
+          <h3 className="text-lg font-bold text-white">Nenhum Roteiro de Pesquisa Guiada Gerado Ainda</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Gere uma pesquisa guiada (WebQuest) estruturada com fontes oficiais confiáveis e perguntas críticas de Bloom.
+          </p>
+          <button
+            onClick={() => handleGenerateSingleResource("guidedResearch")}
+            disabled={generatingSingle !== null}
+            className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-cyan-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            {generatingSingle === "guidedResearch" ? "Criando Roteiro..." : "Criar Pesquisa Guiada com os Assuntos"}
+          </button>
         </div>
       )}
 

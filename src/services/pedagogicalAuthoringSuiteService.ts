@@ -1537,9 +1537,20 @@ Retorne ESTRITAMENTE um JSON no formato:
   // ===========================================================================
 
   /**
+   * Helper unificado para salvar no navegador ou gerar Buffer no Node.js
+   */
+  private static formatPdfOutput(doc: jsPDF, saveFilename?: string): Buffer {
+    if (typeof window !== "undefined" && saveFilename) {
+      doc.save(saveFilename);
+    }
+    const arrayBuffer = doc.output("arraybuffer");
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
+  }
+
+  /**
    * Exporta a Apostila Completa em PDF Institucional SENAI com sumário e diagramação elegante.
    */
-  static exportCoursewarePdf(booklet: CoursewareBooklet): Buffer {
+  static exportCoursewarePdf(booklet: CoursewareBooklet, saveFilename?: string): Buffer {
     const doc = new jsPDF();
 
     // CAPA INSTITUCIONAL SENAI
@@ -1650,13 +1661,13 @@ Retorne ESTRITAMENTE um JSON no formato:
       });
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    return this.formatPdfOutput(doc, saveFilename);
   }
 
   /**
    * Exporta a Situação de Aprendizagem Oficial no Padrão SENAI/SAEP em PDF.
    */
-  static exportLearningSituationPdf(situation: LearningSituation): Buffer {
+  static exportLearningSituationPdf(situation: LearningSituation, saveFilename?: string): Buffer {
     const doc = new jsPDF();
 
     // Header
@@ -1765,13 +1776,13 @@ Retorne ESTRITAMENTE um JSON no formato:
       alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    return this.formatPdfOutput(doc, saveFilename);
   }
 
   /**
    * Exporta o Roteiro do Debug Lab / Laboratório Forense em PDF.
    */
-  static exportDebugLabPdf(lab: DebugLabScenario): Buffer {
+  static exportDebugLabPdf(lab: DebugLabScenario, saveFilename?: string): Buffer {
     const doc = new jsPDF();
 
     doc.setFillColor(0, 51, 153);
@@ -1864,13 +1875,13 @@ Retorne ESTRITAMENTE um JSON no formato:
       currentY += 4.5;
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    return this.formatPdfOutput(doc, saveFilename);
   }
 
   /**
    * Exporta o Estudo de Caso & Autópsia em PDF.
    */
-  static exportCaseStudyPdf(study: CaseStudyScenario): Buffer {
+  static exportCaseStudyPdf(study: CaseStudyScenario, saveFilename?: string): Buffer {
     const doc = new jsPDF();
 
     doc.setFillColor(0, 51, 153);
@@ -1960,13 +1971,13 @@ Retorne ESTRITAMENTE um JSON no formato:
       currentY += 4.5;
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    return this.formatPdfOutput(doc, saveFilename);
   }
 
   /**
    * Exporta a Pesquisa Guiada em PDF.
    */
-  static exportGuidedResearchPdf(quest: GuidedResearchQuest): Buffer {
+  static exportGuidedResearchPdf(quest: GuidedResearchQuest, saveFilename?: string): Buffer {
     const doc = new jsPDF();
 
     doc.setFillColor(0, 51, 153);
@@ -2042,13 +2053,13 @@ Retorne ESTRITAMENTE um JSON no formato:
       currentY += 5;
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    return this.formatPdfOutput(doc, saveFilename);
   }
 
   /**
    * Exporta a Atividade Prática em PDF Institucional SENAI.
    */
-  static exportPracticalActivityPdf(activity: PracticalActivity): Buffer {
+  static exportPracticalActivityPdf(activity: PracticalActivity, saveFilename?: string): Buffer {
     const doc = new jsPDF();
 
     doc.setFillColor(0, 51, 153);
@@ -2156,13 +2167,13 @@ Retorne ESTRITAMENTE um JSON no formato:
       alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    return this.formatPdfOutput(doc, saveFilename);
   }
 
   /**
    * Exporta o Simulado com 4 Alternativas em PDF Institucional SENAI.
    */
-  static exportSimulatedExamPdf(exam: SimulatedExam): Buffer {
+  static exportSimulatedExamPdf(exam: SimulatedExam, saveFilename?: string): Buffer {
     const doc = new jsPDF();
 
     doc.setFillColor(0, 51, 153);
@@ -2290,6 +2301,6 @@ Retorne ESTRITAMENTE um JSON no formato:
       alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    return this.formatPdfOutput(doc, saveFilename);
   }
 }
