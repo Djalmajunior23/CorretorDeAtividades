@@ -83,6 +83,7 @@ const VivaVoceExamView = React.lazy(() => import("./components/VivaVoceExamView"
 const AgileSquadSimulatorView = React.lazy(() => import("./components/AgileSquadSimulatorView"));
 const IotIndustrySimulatorView = React.lazy(() => import("./components/IotIndustrySimulatorView"));
 const ParametricExamGeneratorView = React.lazy(() => import("./components/ParametricExamGeneratorView"));
+const PedagogicalAuthoringStudioView = React.lazy(() => import("./components/PedagogicalAuthoringStudioView"));
 const GitAutoGradingStudioView = React.lazy(() => import("./components/GitAutoGradingStudioView"));
 const SocraticTutorScaffoldingView = React.lazy(() => import("./components/SocraticTutorScaffoldingView"));
 const StudentAcademyMasteryView = React.lazy(() => import("./components/StudentAcademyMasteryView"));
@@ -2674,6 +2675,10 @@ export default function App() {
 
            {currentTab === "iot_industry" && (
              <IotIndustrySimulatorView />
+           )}
+
+           {currentTab === "pedagogical_authoring" && (
+             <PedagogicalAuthoringStudioView />
            )}
 
            {currentTab === "parametric_exam" && (

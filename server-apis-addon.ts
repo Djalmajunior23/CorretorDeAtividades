@@ -40,6 +40,7 @@ import { TeacherPowerhouseService } from "./src/services/teacherPowerhouseServic
 import { ComplexActivityGeneratorService } from "./src/services/complexActivityService";
 import { AdvancedItemBankService } from "./src/services/advancedItemBankService";
 import { DeepLearningAcademyService, MasteryPassportReport } from "./src/services/deepLearningAcademyService";
+import { PedagogicalAuthoringSuiteService } from "./src/services/pedagogicalAuthoringSuiteService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -7177,6 +7178,83 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const pdfBuffer = ParametricExamService.exportAllClassBookletsPdf(booklets);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename=cadernos_turma_completa.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==========================================
+  // MODULE 17B: PEDAGOGICAL AUTHORING SUITE (APOSTILAS, SA SENAI, DEBUG LABS, ADR, WEBQUESTS)
+  // ==========================================
+  app.post("/api/authoring/generate-pack", async (req, res) => {
+    try {
+      const pack = await PedagogicalAuthoringSuiteService.generateMasterTeachingPack(req.body);
+      res.json({ success: true, pack });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/authoring/export-courseware-pdf", (req, res) => {
+    try {
+      const { courseware } = req.body;
+      if (!courseware) return res.status(400).json({ error: "Courseware data is required" });
+      const pdfBuffer = PedagogicalAuthoringSuiteService.exportCoursewarePdf(courseware);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=apostila_senai.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/authoring/export-situation-pdf", (req, res) => {
+    try {
+      const { situation } = req.body;
+      if (!situation) return res.status(400).json({ error: "Situation data is required" });
+      const pdfBuffer = PedagogicalAuthoringSuiteService.exportLearningSituationPdf(situation);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=situacao_aprendizagem_senai.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/authoring/export-debuglab-pdf", (req, res) => {
+    try {
+      const { debugLab } = req.body;
+      if (!debugLab) return res.status(400).json({ error: "DebugLab data is required" });
+      const pdfBuffer = PedagogicalAuthoringSuiteService.exportDebugLabPdf(debugLab);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=debug_lab_forense.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/authoring/export-casestudy-pdf", (req, res) => {
+    try {
+      const { caseStudy } = req.body;
+      if (!caseStudy) return res.status(400).json({ error: "CaseStudy data is required" });
+      const pdfBuffer = PedagogicalAuthoringSuiteService.exportCaseStudyPdf(caseStudy);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=estudo_de_caso_adr.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/authoring/export-guidedresearch-pdf", (req, res) => {
+    try {
+      const { guidedResearch } = req.body;
+      if (!guidedResearch) return res.status(400).json({ error: "GuidedResearch data is required" });
+      const pdfBuffer = PedagogicalAuthoringSuiteService.exportGuidedResearchPdf(guidedResearch);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=pesquisa_guiada.pdf`);
       res.send(pdfBuffer);
     } catch (e: any) {
       res.status(500).json({ error: e.message });

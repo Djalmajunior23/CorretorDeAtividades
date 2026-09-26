@@ -137,6 +137,7 @@ export default function Sidebar({
     { id: "viva_voce", label: "AI Viva-Voce Arguição Oral", icon: Volume2, desc: "Defesa Técnica & Oratória por Voz", visible: true },
     { id: "agile_squad", label: "Virtual Agile Scrum Squad", icon: Users, desc: "Scrum Master AI, PO & GitOps", visible: true },
     { id: "iot_industry", label: "Indústria 4.0 & IoT Lab", icon: Radio, desc: "Hardware-in-the-Loop & MQTT", visible: true },
+    { id: "pedagogical_authoring", label: "Estúdio de Autoria Docente", icon: BookOpen, desc: "Apostilas, SA (CHA), Debug Labs & ADR", visible: true },
     { id: "parametric_exam", label: "Provas Paramétricas Anti-Cola", icon: ShieldCheck, desc: "Variantes A/B/C/D & Dossiê PDF", visible: true },
     { id: "git_autograde", label: "GitHub & GitLab CI/CD", icon: GitBranch, desc: "Auto-Grading & Webhook Studio", visible: true },
     { id: "socratic_tutor", label: "Tutor Socrático Adaptativo", icon: Lightbulb, desc: "Scaffolding em 4 Degraus & Radar", visible: true },
