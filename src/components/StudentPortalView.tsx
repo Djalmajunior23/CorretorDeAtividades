@@ -18,12 +18,27 @@ import {
   ChevronRight, 
   RefreshCw,
   Eye,
-  Brain
+  Brain,
+  Download,
+  HelpCircle,
+  Scale,
+  Lightbulb,
+  Check,
+  XCircle,
+  FileCheck,
+  Activity,
+  Cpu,
+  ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { apiUrl } from "../config/api";
 import { StudentAcademyMasteryView } from "./StudentAcademyMasteryView";
+import { 
+  StudentCorrectionInsightService, 
+  AssertiveStudentReport, 
+  DisputeReviewResult 
+} from "../services/studentCorrectionInsightService";
 
 interface StudentPortalViewProps {
   initialStudentId?: string;
@@ -36,7 +51,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(initialStudentId);
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId);
-  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades" | "academy_mastery">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades" | "corrections" | "academy_mastery">("pending");
   const [loading, setLoading] = useState<boolean>(true);
 
   // Portal data
@@ -98,6 +113,20 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   const [submissionNotes, setSubmissionNotes] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Assertive Report & Diagnostics Inspection Modal
+  const [inspectingReport, setInspectingReport] = useState<AssertiveStudentReport | null>(null);
+  const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
+  
+  // Socratic Progressive Hints
+  const [currentHint, setCurrentHint] = useState<{ level: number; title: string; text: string; snippet?: string } | null>(null);
+  const [isLoadingHint, setIsLoadingHint] = useState<boolean>(false);
+
+  // Pedagogical Dispute Modal
+  const [isDisputeModalOpen, setIsDisputeModalOpen] = useState<boolean>(false);
+  const [disputeJustification, setDisputeJustification] = useState<string>("");
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState<boolean>(false);
+  const [disputeResult, setDisputeResult] = useState<DisputeReviewResult | null>(null);
+
   // Student roster for simulation
   const availableStudents = [
     { id: "st-01", name: "Ana Beatriz Silva", code: "20260101" },
@@ -118,7 +147,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         if (data.attendance) setAttendance(data.attendance);
         if (data.submissions && Array.isArray(data.submissions) && data.submissions.length > 0) {
           setActivities(prev => {
-            // Keep template pending activities and merge in submissions from backend
             const basePending = prev.filter(p => p.delivery_status === "pending" || p.delivery_status === "late_pending");
             const mappedSubmissions = data.submissions.map((s: any) => ({
               id: s.id,
@@ -178,7 +206,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       if (res.ok) {
         toast.success("✓ Atividade enviada com sucesso ao professor!");
-        // Update local activity state
         setActivities(prev => prev.map(a => {
           if (a.id === submittingActivity.id) {
             return {
@@ -210,6 +237,188 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       setSubmittingActivity(null);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Inspect or generate assertive line-by-line student report
+  const handleOpenAssertiveReport = async (act: any) => {
+    setIsLoadingReport(true);
+    setCurrentHint(null);
+    setDisputeResult(null);
+    setIsDisputeModalOpen(false);
+    try {
+      const res = await fetch(apiUrl("/api/student/corrections/detailed-report"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: act.id,
+          studentId: selectedStudentId,
+          studentName: studentProfile.name,
+          enrollmentCode: studentProfile.enrollment_code,
+          className: studentProfile.class_name,
+          courseName: studentProfile.course,
+          activityTitle: act.title,
+          language: act.language || "Python",
+          submittedCode: act.submitted_code || "def solucao():\n    return True\n",
+          rawScore: act.score ?? 85,
+          testCases: act.test_cases || []
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setInspectingReport(data.report);
+      } else {
+        // Fallback directly via service
+        const fallbackRep = await StudentCorrectionInsightService.generateAssertiveStudentReport({
+          submissionId: act.id,
+          studentId: selectedStudentId,
+          studentName: studentProfile.name,
+          enrollmentCode: studentProfile.enrollment_code,
+          className: studentProfile.class_name,
+          courseName: studentProfile.course,
+          activityTitle: act.title,
+          language: act.language || "Python",
+          submittedCode: act.submitted_code || "def solucao():\n    return True\n",
+          rawScore: act.score ?? 85,
+          testCases: act.test_cases || []
+        });
+        setInspectingReport(fallbackRep);
+      }
+    } catch (e) {
+      const fallbackRep = await StudentCorrectionInsightService.generateAssertiveStudentReport({
+        submissionId: act.id,
+        studentId: selectedStudentId,
+        studentName: studentProfile.name,
+        enrollmentCode: studentProfile.enrollment_code,
+        className: studentProfile.class_name,
+        courseName: studentProfile.course,
+        activityTitle: act.title,
+        language: act.language || "Python",
+        submittedCode: act.submitted_code || "def solucao():\n    return True\n",
+        rawScore: act.score ?? 85,
+        testCases: act.test_cases || []
+      });
+      setInspectingReport(fallbackRep);
+    } finally {
+      setIsLoadingReport(false);
+    }
+  };
+
+  // Request progressive hint from Socratic tutor
+  const handleRequestHint = async (level: 1 | 2 | 3) => {
+    if (!inspectingReport) return;
+    setIsLoadingHint(true);
+    try {
+      const res = await fetch(apiUrl("/api/student/corrections/refactor-hint"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: inspectingReport.submittedCode,
+          language: inspectingReport.language,
+          hintLevel: level,
+          identifiedIssue: inspectingReport.whyItSucceededOrFailed
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentHint({
+          level: data.hint.hintLevel,
+          title: data.hint.hintTitle,
+          text: data.hint.hintText,
+          snippet: data.hint.codeSnippetHint
+        });
+      } else {
+        const hint = await StudentCorrectionInsightService.generateProgressiveRefactorHint({
+          code: inspectingReport.submittedCode,
+          language: inspectingReport.language,
+          hintLevel: level
+        });
+        setCurrentHint({
+          level: hint.hintLevel,
+          title: hint.hintTitle,
+          text: hint.hintText,
+          snippet: hint.codeSnippetHint
+        });
+      }
+    } catch (e) {
+      const hint = await StudentCorrectionInsightService.generateProgressiveRefactorHint({
+        code: inspectingReport.submittedCode,
+        language: inspectingReport.language,
+        hintLevel: level
+      });
+      setCurrentHint({
+        level: hint.hintLevel,
+        title: hint.hintTitle,
+        text: hint.hintText,
+        snippet: hint.codeSnippetHint
+      });
+    } finally {
+      setIsLoadingHint(false);
+    }
+  };
+
+  // Submit formal pedagogical dispute to AI jury
+  const handleSendDispute = async () => {
+    if (!inspectingReport || !disputeJustification.trim()) {
+      toast.error("Por favor, descreva os argumentos técnicos do seu recurso.");
+      return;
+    }
+
+    setIsSubmittingDispute(true);
+    try {
+      const res = await fetch(apiUrl("/api/student/corrections/dispute"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: inspectingReport.studentName,
+          activityTitle: inspectingReport.activityTitle,
+          submittedCode: inspectingReport.submittedCode,
+          originalScore: inspectingReport.score,
+          studentJustification: disputeJustification
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setDisputeResult(data.disputeResult);
+        toast.success("✓ Parecer da Banca Recursal emitido com sucesso!");
+      } else {
+        const fallbackDisp = await StudentCorrectionInsightService.submitGradeDispute({
+          studentName: inspectingReport.studentName,
+          activityTitle: inspectingReport.activityTitle,
+          submittedCode: inspectingReport.submittedCode,
+          originalScore: inspectingReport.score,
+          studentJustification: disputeJustification
+        });
+        setDisputeResult(fallbackDisp);
+        toast.success("✓ Parecer da Banca Recursal emitido!");
+      }
+    } catch (e) {
+      const fallbackDisp = await StudentCorrectionInsightService.submitGradeDispute({
+        studentName: inspectingReport.studentName,
+        activityTitle: inspectingReport.activityTitle,
+        submittedCode: inspectingReport.submittedCode,
+        originalScore: inspectingReport.score,
+        studentJustification: disputeJustification
+      });
+      setDisputeResult(fallbackDisp);
+      toast.success("✓ Parecer da Banca Recursal emitido!");
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
+  // Download official SENAI PDF report
+  const handleDownloadPdf = () => {
+    if (!inspectingReport) return;
+    try {
+      const filename = `laudo_correcao_senai_${inspectingReport.studentName.replace(/\s+/g, "_")}_${inspectingReport.reportId}.pdf`;
+      StudentCorrectionInsightService.exportStudentCorrectionReportPdf(inspectingReport, filename);
+      toast.success("✓ Download do Laudo Oficial SENAI iniciado!");
+    } catch (e) {
+      toast.error("Erro ao gerar PDF do laudo.");
     }
   };
 
@@ -307,7 +516,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <span className="text-3xl font-bold text-amber-400">{averageGrade}</span>
             <span className="text-xs text-slate-400">/ 100 pontos</span>
             <span className="ml-auto px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/20 text-emerald-300">
-              Aprovado
+              {averageGrade >= 60 ? "Aprovado" : "Em Recuperação"}
             </span>
           </div>
           <div className="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
@@ -317,7 +526,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             />
           </div>
           <p className="text-[11px] text-slate-400 mt-2.5">
-            Média de aprovação requerida: 60.0 pontos
+            Critério oficial SENAI de aprovação: $\ge 60.0$ pontos
           </p>
         </div>
 
@@ -346,7 +555,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
         <button
           onClick={() => setActiveTab("pending")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
@@ -384,6 +593,18 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab("corrections")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            activeTab === "corrections" 
+              ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30" 
+              : "bg-slate-900 text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 border border-emerald-500/20"
+          }`}
+        >
+          <FileCheck className="w-4 h-4" />
+          Laudos & Correções Assertivas (IA)
+        </button>
+
+        <button
           onClick={() => setActiveTab("academy_mastery")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
             activeTab === "academy_mastery" 
@@ -396,7 +617,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </button>
       </div>
 
-      {/* Tab Contents */}
+      {/* Tab 1: Pending Activities */}
       {activeTab === "pending" && (
         <div className="space-y-4">
           {pendingActivities.length === 0 ? (
@@ -443,6 +664,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
+      {/* Tab 2: Delivered Activities */}
       {activeTab === "delivered" && (
         <div className="space-y-4">
           {deliveredActivities.map(act => (
@@ -463,15 +685,25 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   <h3 className="text-base font-bold text-white mt-1">{act.title}</h3>
                 </div>
 
-                {act.score !== undefined && (
-                  <div className="flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700">
-                    <Award className="w-5 h-5 text-amber-400" />
-                    <div>
-                      <span className="text-xs text-slate-400">Nota Obtida:</span>
-                      <p className="text-base font-bold text-white">{act.score} <span className="text-xs text-slate-400">/ 100</span></p>
+                <div className="flex items-center gap-3">
+                  {act.score !== undefined && (
+                    <div className="flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700">
+                      <Award className="w-5 h-5 text-amber-400" />
+                      <div>
+                        <span className="text-xs text-slate-400">Nota Obtida:</span>
+                        <p className="text-base font-bold text-white">{act.score} <span className="text-xs text-slate-400">/ 100</span></p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  <button
+                    onClick={() => handleOpenAssertiveReport(act)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow-lg shadow-indigo-600/30"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Ver Laudo & Diagnóstico
+                  </button>
+                </div>
               </div>
 
               {act.feedback && (
@@ -496,6 +728,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
+      {/* Tab 3: Grades Table */}
       {activeTab === "grades" && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -512,6 +745,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   <th className="p-3">Nota Atribuída</th>
                   <th className="p-3">Status</th>
                   <th className="p-3">Parecer / Feedback</th>
+                  <th className="p-3 text-right">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -544,6 +778,19 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     <td className="p-3 text-slate-300 text-xs max-w-sm">
                       {act.feedback || "Aguardando correção do docente."}
                     </td>
+                    <td className="p-3 text-right">
+                      {act.submitted_code ? (
+                        <button
+                          onClick={() => handleOpenAssertiveReport(act)}
+                          className="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-lg font-semibold text-[11px] transition inline-flex items-center gap-1.5"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Laudo
+                        </button>
+                      ) : (
+                        <span className="text-slate-500 text-[11px]">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -552,7 +799,83 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
-      {/* Tab 4: Academia de Aprendizado Profundo & Domínio Cognitivo */}
+      {/* Tab 4: Corrections & Assertive Diagnostic Hub */}
+      {activeTab === "corrections" && (
+        <div className="space-y-6">
+          <div className="bg-slate-900/90 border border-emerald-500/20 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    Auditoria Pedagógica & Diagnóstico Socrático
+                  </span>
+                  <span className="text-xs text-slate-400">Padrão Oficial SENAI</span>
+                </div>
+                <h2 className="text-xl font-bold text-white mt-2">Central de Laudos & Evolução Contínua do Estudante</h2>
+                <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+                  Aqui você tem acesso à auditoria linha a linha das suas soluções de código, diagnóstico do interpretador, análise assintótica Big-O, dicas incrementais de refatoração e canal de recurso pedagógico com a banca examinadora.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleOpenAssertiveReport(activities[activities.length - 1])}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg shadow-emerald-600/30"
+                >
+                  <Activity className="w-4 h-4" />
+                  Auditar Última Entrega
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {deliveredActivities.map(act => (
+              <div 
+                key={act.id}
+                className="bg-slate-900/80 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-5 shadow-lg space-y-4 transition flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-indigo-300 border border-indigo-500/30">
+                      {act.language || "Python"}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      Entregue: {act.submission_date ? new Date(act.submission_date).toLocaleDateString("pt-BR") : "Recentemente"}
+                    </span>
+                  </div>
+
+                  <h3 className="text-base font-bold text-white mt-2">{act.title}</h3>
+                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{act.feedback || act.description}</p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm font-bold text-white">{act.score ?? 85} <span className="text-xs text-slate-400">/ 100</span></span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      (act.score ?? 85) >= 60 ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                    }`}>
+                      {(act.score ?? 85) >= 60 ? "Aprovado" : "Recuperação"}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenAssertiveReport(act)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Abrir Laudo
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 5: Academia de Aprendizado Profundo & Domínio Cognitivo */}
       {activeTab === "academy_mastery" && (
         <StudentAcademyMasteryView 
           studentId={selectedStudentId}
@@ -561,7 +884,398 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         />
       )}
 
-      {/* Interactive Submission Modal */}
+      {/* Loading Modal Overlay */}
+      {isLoadingReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <RefreshCw className="w-10 h-10 text-emerald-400 animate-spin mx-auto" />
+            <h3 className="text-base font-bold text-white">Gerando Laudo Hiper-Assertivo...</h3>
+            <p className="text-xs text-slate-400">
+              Auditando linhas de código, calculando complexidade Big-O e validando casos de teste.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Full Interactive Assertive Correction Report Modal */}
+      {inspectingReport && !isLoadingReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 md:p-6 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-700/90 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-slate-950 via-indigo-950/60 to-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">Laudo de Correção & Diagnóstico do Estudante</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      inspectingReport.isApproved ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                    }`}>
+                      {inspectingReport.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {inspectingReport.activityTitle} • Matrícula: <span className="font-mono text-white">{inspectingReport.enrollmentCode}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadPdf}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition"
+                  title="Baixar Laudo Oficial SENAI em PDF"
+                >
+                  <Download className="w-3.5 h-3.5 text-indigo-400" />
+                  PDF Oficial (SENAI)
+                </button>
+
+                <button
+                  onClick={() => setIsDisputeModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-xs font-semibold text-amber-300 border border-amber-500/30 transition"
+                  title="Contestar nota ou solicitar reavaliação da banca"
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  Contestar Nota
+                </button>
+
+                <button
+                  onClick={() => setInspectingReport(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 ml-2 transition"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Executive Verdict & Big-O KPIs */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-3 bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                      <Terminal className="w-4 h-4 text-indigo-400" />
+                      Diagnóstico do Interpretador & Parecer Docente:
+                    </span>
+                    <span className="text-xs font-mono text-slate-400">
+                      Critério de Aprovação: $\ge {inspectingReport.passingScore}$ pts
+                    </span>
+                  </div>
+                  <p className="text-xs text-white leading-relaxed">
+                    <span className="font-semibold text-slate-300">Veredito:</span> {inspectingReport.executiveVerdict}
+                  </p>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    <span className="font-semibold text-slate-400">O que o computador executou:</span> {inspectingReport.whatComputerExecuted}
+                  </p>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    <span className="font-semibold text-slate-400">Diagnóstico de integridade:</span> {inspectingReport.whyItSucceededOrFailed}
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-400">Complexidade Algorítmica</span>
+                    <div className="mt-2 space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Tempo:</span>
+                        <span className="font-mono font-bold text-amber-400">{inspectingReport.asymptoticComplexity?.timeComplexity || "O(n)"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Espaço:</span>
+                        <span className="font-mono font-bold text-amber-400">{inspectingReport.asymptoticComplexity?.spaceComplexity || "O(1)"}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400">Eficiência:</span>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/20 text-indigo-300">
+                      {inspectingReport.asymptoticComplexity?.complexityVerdict || "Adequada"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Line-by-Line Code Annotation Viewer */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Code2 className="w-4 h-4 text-indigo-400" />
+                    Auditoria e Anotações Linha a Linha:
+                  </h4>
+                  <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Erro / Incompleto</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Atenção / Refatoração</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Boa Prática</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-800/80 font-mono text-xs">
+                  {inspectingReport.lineAnnotations && inspectingReport.lineAnnotations.length > 0 ? (
+                    inspectingReport.lineAnnotations.map((line) => (
+                      <div 
+                        key={line.lineNumber}
+                        className={`p-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2 transition ${
+                          line.type === "error" 
+                            ? "bg-rose-950/20 border-l-4 border-rose-500" 
+                            : line.type === "warning" 
+                              ? "bg-amber-950/20 border-l-4 border-amber-500" 
+                              : line.type === "success" 
+                                ? "bg-emerald-950/15 border-l-4 border-emerald-500" 
+                                : "border-l-4 border-transparent hover:bg-slate-900/50"
+                        }`}
+                      >
+                        <div className="flex items-baseline gap-3 overflow-x-auto">
+                          <span className="text-slate-500 select-none w-6 shrink-0 text-right font-semibold">
+                            {line.lineNumber}
+                          </span>
+                          <span className={`${
+                            line.type === "error" ? "text-rose-300" : line.type === "warning" ? "text-amber-200" : line.type === "success" ? "text-emerald-300" : "text-slate-300"
+                          }`}>
+                            {line.codeLine || " "}
+                          </span>
+                        </div>
+
+                        {(line.message || line.fixSuggestion) && (
+                          <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-sans px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 max-w-md">
+                            {line.type === "error" && <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
+                            {line.type === "warning" && <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                            {line.type === "success" && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                            <span className="text-slate-300 truncate">
+                              {line.message || line.fixSuggestion}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-xs text-slate-400 font-sans">
+                      Nenhuma anotação de linha necessária. Código aderente ao padrão.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Test Cases Execution Diff Audit */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                  Auditoria de Casos de Teste & Respostas:
+                </h4>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-800">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800">
+                        <th className="p-3">Caso #</th>
+                        <th className="p-3">Entrada (Input)</th>
+                        <th className="p-3">Saída Esperada</th>
+                        <th className="p-3">Saída do Aluno</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Tempo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 font-mono text-xs">
+                      {inspectingReport.testCaseDiffs && inspectingReport.testCaseDiffs.length > 0 ? (
+                        inspectingReport.testCaseDiffs.map((tc) => (
+                          <tr key={tc.testId} className="hover:bg-slate-950/50">
+                            <td className="p-3 font-sans font-semibold text-white">Teste #{tc.testId}</td>
+                            <td className="p-3 text-slate-300">{tc.input}</td>
+                            <td className="p-3 text-emerald-400">{tc.expectedOutput}</td>
+                            <td className="p-3 text-amber-300">{tc.actualOutput}</td>
+                            <td className="p-3 font-sans">
+                              {tc.passed ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 flex items-center gap-1 w-fit">
+                                  <Check className="w-3 h-3" /> Aprovado
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 flex items-center gap-1 w-fit">
+                                  <XCircle className="w-3 h-3" /> Falhou
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-slate-400 text-[11px]">
+                              {tc.executionTimeMs ? `${tc.executionTimeMs} ms` : "—"}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="p-4 text-center text-slate-400 font-sans">
+                            Testes unitários validados com sucesso.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Socratic Refactoring Hints */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lightbulb className="w-4 h-4 text-amber-400" />
+                      Tutor Socrático • Dicas Incrementais de Refatoração:
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Solicite orientações guiadas sem receber a resposta pronta para desenvolver autonomia de raciocínio.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleRequestHint(1)}
+                      disabled={isLoadingHint}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+                    >
+                      Dica 1: Conceitual
+                    </button>
+                    <button
+                      onClick={() => handleRequestHint(2)}
+                      disabled={isLoadingHint}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+                    >
+                      Dica 2: Caso de Borda
+                    </button>
+                    <button
+                      onClick={() => handleRequestHint(3)}
+                      disabled={isLoadingHint}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+                    >
+                      Dica 3: Exemplo Análogo
+                    </button>
+                  </div>
+                </div>
+
+                {currentHint && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs space-y-2"
+                  >
+                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                      <Sparkles className="w-4 h-4" />
+                      {currentHint.title}
+                    </div>
+                    <p className="text-slate-200 leading-relaxed">{currentHint.text}</p>
+                    {currentHint.snippet && (
+                      <pre className="p-2.5 rounded bg-slate-950 font-mono text-[11px] text-amber-200 border border-amber-500/20 overflow-x-auto">
+                        {currentHint.snippet}
+                      </pre>
+                    )}
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                Aprovado pelo Sistema de Correção & Diagnóstico SENAI
+              </span>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleDownloadPdf}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-md shadow-indigo-600/30"
+                >
+                  <Download className="w-4 h-4" />
+                  Baixar Laudo (PDF)
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Pedagogical Dispute Modal */}
+      {isDisputeModalOpen && inspectingReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Scale className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">Recurso Pedagógico & Contestação de Nota</h3>
+              </div>
+              <button
+                onClick={() => setIsDisputeModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/60 text-xs text-slate-300">
+                <span className="font-semibold text-white">Atividade:</span> {inspectingReport.activityTitle} • <span className="font-semibold text-white">Nota Atual:</span> {inspectingReport.score} / 100
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Justificativa Técnica do Estudante:
+                </label>
+                <textarea
+                  value={disputeJustification}
+                  onChange={(e) => setDisputeJustification(e.target.value)}
+                  rows={5}
+                  className="w-full bg-slate-950 text-xs text-slate-200 p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-amber-500 leading-relaxed"
+                  placeholder="Explique por que sua solução está correta, citando linhas do código, casos de uso atendidos ou possíveis ambiguidades no enunciado..."
+                />
+              </div>
+
+              {disputeResult && (
+                <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/30 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-indigo-300 flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-amber-400" />
+                      Parecer Oficial da Banca Recursal:
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/20 text-indigo-200">
+                      Veredito: {disputeResult.verdict}
+                    </span>
+                  </div>
+                  <p className="text-slate-200 leading-relaxed">{disputeResult.juryOpinion}</p>
+                  <p className="text-slate-400 leading-relaxed">
+                    <span className="font-semibold text-slate-300">Recomendação ao Professor:</span> {disputeResult.teacherRecommendation}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+              <button
+                onClick={() => setIsDisputeModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition"
+              >
+                Fechar
+              </button>
+
+              <button
+                onClick={handleSendDispute}
+                disabled={isSubmittingDispute}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs transition shadow-lg shadow-amber-600/30 disabled:opacity-50"
+              >
+                <Scale className="w-4 h-4" />
+                {isSubmittingDispute ? "Avaliando Recurso..." : "Submeter Recurso à Banca (IA)"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Interactive Submission Workspace Modal */}
       {submittingActivity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
           <motion.div

@@ -41,6 +41,7 @@ import { ComplexActivityGeneratorService } from "./src/services/complexActivityS
 import { AdvancedItemBankService } from "./src/services/advancedItemBankService";
 import { DeepLearningAcademyService, MasteryPassportReport } from "./src/services/deepLearningAcademyService";
 import { PedagogicalAuthoringSuiteService } from "./src/services/pedagogicalAuthoringSuiteService";
+import { StudentCorrectionInsightService } from "./src/services/studentCorrectionInsightService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -8402,6 +8403,178 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename=simulado_4_alternativas_${exam.id || "senai"}.pdf`);
       res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // SISTEMA DE CORREÇÕES ASSERTIVAS, AUDITORIA & PORTAL DE EVOLUÇÃO DO ALUNO
+  // =========================================================================
+
+  // GET: Obter histórico de correções e laudos detalhados do aluno
+  app.get("/api/student/corrections/:studentId", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      let submissions: any[] = [];
+      if (pool) {
+        try {
+          const cRes = await pool.query(
+            `SELECT * FROM correction_vault 
+             WHERE student_id = $1 OR student_key = $1 OR student_registration = $1 
+             ORDER BY created_at DESC`,
+            [studentId]
+          );
+          submissions = cRes.rows;
+        } catch (dbErr) {
+          console.warn("[StudentCorrections] DB query fallback:", dbErr);
+        }
+      }
+
+      if (submissions.length === 0) {
+        submissions = [
+          {
+            id: "sub-01",
+            activity_title: "Desafio 01: Manipulação de Arrays e Filtros",
+            class_name: "Desenvolvimento de Sistemas 1A",
+            language: "python",
+            submitted_code: "def filtrar_aprovados(notas):\n    return [n for n in notas if n >= 60]\n",
+            score: 95,
+            max_score: 100,
+            feedback: "Solução concisa e idiomática utilizando list comprehension. Excelente desempenho!",
+            created_at: new Date(Date.now() - 86400000 * 2).toISOString()
+          },
+          {
+            id: "sub-02",
+            activity_title: "Desafio 02: Validação de CPF e Expressões Regulares",
+            class_name: "Desenvolvimento de Sistemas 1A",
+            language: "python",
+            submitted_code: "def validar_cpf(cpf: str) -> bool:\n    import re\n    limpo = re.sub(r'\\D', '', cpf)\n    if len(limpo) != 11 or len(set(limpo)) == 1:\n        return False\n    return True\n",
+            score: 80,
+            max_score: 100,
+            feedback: "Validação básica de tamanho e dígitos repetidos correta. Faltou o cálculo completo dos dígitos verificadores.",
+            created_at: new Date(Date.now() - 86400000 * 4).toISOString()
+          }
+        ];
+      }
+
+      res.json({ success: true, studentId, count: submissions.length, submissions });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Gerar Laudo Hiper-Assertivo e Anotado de Correção para o Aluno
+  app.post("/api/student/corrections/detailed-report", async (req, res) => {
+    try {
+      const {
+        submissionId,
+        studentId = "st-01",
+        studentName = "Estudante SENAI",
+        enrollmentCode,
+        className = "Turma 1A",
+        courseName,
+        activityTitle = "Atividade Prática de Programação",
+        language = "Python",
+        submittedCode = "",
+        rawScore,
+        testCases,
+        customAI
+      } = req.body;
+
+      if (!submittedCode && !activityTitle) {
+        return res.status(400).json({ success: false, error: "Código e título da atividade são necessários." });
+      }
+
+      const report = await StudentCorrectionInsightService.generateAssertiveStudentReport({
+        submissionId,
+        studentId,
+        studentName,
+        enrollmentCode,
+        className,
+        courseName,
+        activityTitle,
+        language,
+        submittedCode,
+        rawScore,
+        testCases,
+        customAI
+      });
+
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Laudo Oficial SENAI em PDF
+  app.post("/api/student/corrections/export-pdf", (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) {
+        return res.status(400).json({ success: false, error: "Dados do laudo são obrigatórios." });
+      }
+
+      const pdfBuffer = StudentCorrectionInsightService.exportStudentCorrectionReportPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_correcao_senai_${report.reportId || "aluno"}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Submeter Recurso Técnico / Contestação Pedagógica com IA
+  app.post("/api/student/corrections/dispute", async (req, res) => {
+    try {
+      const {
+        studentName = "Estudante",
+        activityTitle = "Atividade Prática",
+        submittedCode = "",
+        originalScore = 70,
+        studentJustification = "",
+        customAI
+      } = req.body;
+
+      if (!studentJustification.trim()) {
+        return res.status(400).json({ success: false, error: "Justificativa da contestação é obrigatória." });
+      }
+
+      const disputeResult = await StudentCorrectionInsightService.submitGradeDispute({
+        studentName,
+        activityTitle,
+        submittedCode,
+        originalScore,
+        studentJustification,
+        customAI
+      });
+
+      res.json({ success: true, disputeResult });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Tutor Socrático - Obter Dica Incremental de Refatoração
+  app.post("/api/student/corrections/refactor-hint", async (req, res) => {
+    try {
+      const {
+        code = "",
+        language = "Python",
+        hintLevel = 1,
+        identifiedIssue,
+        customAI
+      } = req.body;
+
+      const hint = await StudentCorrectionInsightService.generateProgressiveRefactorHint({
+        code,
+        language,
+        hintLevel: Number(hintLevel) as 1 | 2 | 3,
+        identifiedIssue,
+        customAI
+      });
+
+      res.json({ success: true, hint });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
