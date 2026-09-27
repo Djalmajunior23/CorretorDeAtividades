@@ -36,7 +36,7 @@ import { apiUrl, safeJsonResponse } from "../config/api";
 
 export default function TeacherAiPowerhouseView() {
   const [activeTab, setActiveTab] = useState<
-    "socratic" | "forensics" | "clustering" | "lessons" | "audio_diary" | "adaptive_quiz"
+    "socratic" | "forensics" | "clustering" | "lessons" | "audio_diary" | "adaptive_quiz" | "live_copilot" | "tri_anti_leak" | "faid_remedial"
   >("socratic");
 
   // ==========================================
@@ -104,9 +104,311 @@ export default function TeacherAiPowerhouseView() {
   const [quizCompletedResult, setQuizCompletedResult] = useState<any | null>(null);
   const [isLoadingQuizStep, setIsLoadingQuizStep] = useState(false);
 
+  // ==========================================
+  // 7. LIVE CLASSROOM COPILOT STATE
+  // ==========================================
+  const [liveTopic, setLiveTopic] = useState("Recursão vs Iteração e Pilha de Chamadas (Stack)");
+  const [liveLanguage, setLiveLanguage] = useState("Python");
+  const [liveLevel, setLiveLevel] = useState("Intermediário");
+  const [liveDoubtContext, setLiveDoubtContext] = useState(
+    "Alunos confundindo o critério de parada (caso base) com a chamada recursiva, gerando estouro de pilha (RecursionError)."
+  );
+  const [isGeneratingLiveIntervention, setIsGeneratingLiveIntervention] = useState(false);
+  const [liveIntervention, setLiveIntervention] = useState<any | null>(null);
+  const [isExportingLivePdf, setIsExportingLivePdf] = useState(false);
+
+  // ==========================================
+  // 8. TRI & ANTI-LEAK EXAM AUDITOR STATE
+  // ==========================================
+  const [examAuditTitle, setExamAuditTitle] = useState("Simulado 01 • Banco de Dados e Backend");
+  const [examAuditSubject, setExamAuditSubject] = useState("Desenvolvimento de Sistemas");
+  const [examAuditQuestionsText, setExamAuditQuestionsText] = useState(
+    JSON.stringify(
+      [
+        {
+          prompt: "Qual cláusula DDL do PostgreSQL deve ser especificada em uma chave estrangeira para garantir a deleção automática de registros filhos quando o registro pai for excluído?",
+          options: [
+            { letter: "A", text: "ON DELETE RESTRICT", isCorrect: false },
+            { letter: "B", text: "ON DELETE CASCADE", isCorrect: true },
+            { letter: "C", text: "ON UPDATE NO ACTION", isCorrect: false },
+            { letter: "D", text: "ON DELETE SET NULL", isCorrect: false }
+          ],
+          topic: "Integridade Referencial DDL"
+        },
+        {
+          prompt: "Em relação ao tratamento de concorrência em sistemas distribuídos, qual problema ocorre quando duas transações leem o mesmo dado simultaneamente e tentam atualizá-lo sem lock otimista/pessimista?",
+          options: [
+            { letter: "A", text: "Deadlock Imediato", isCorrect: false },
+            { letter: "B", text: "Perda de Atualização (Lost Update)", isCorrect: true },
+            { letter: "C", text: "Estouro de Buffer Circular", isCorrect: false },
+            { letter: "D", text: "Violação de 1FN", isCorrect: false }
+          ],
+          topic: "Transações ACID"
+        }
+      ],
+      null,
+      2
+    )
+  );
+  const [isAuditingExam, setIsAuditingExam] = useState(false);
+  const [examAuditResult, setExamAuditResult] = useState<any | null>(null);
+  const [isExportingExamAuditPdf, setIsExportingExamAuditPdf] = useState(false);
+
+  // ==========================================
+  // 9. FAID SENAI & ADAPTIVE REMEDIAL STATE
+  // ==========================================
+  const [faidStudentName, setFaidStudentName] = useState("Lucas Mendes de Oliveira");
+  const [faidEnrollmentCode, setFaidEnrollmentCode] = useState("20261011");
+  const [faidClassName, setFaidClassName] = useState("Técnico em Desenvolvimento de Sistemas 2A");
+  const [faidCourseName, setFaidCourseName] = useState("Habilitação Técnica de Nível Médio em Desenvolvimento de Sistemas");
+  const [faidUnitCurricular, setFaidUnitCurricular] = useState("Lógica de Programação e Banco de Dados");
+  const [faidTeacherNotes, setFaidTeacherNotes] = useState(
+    "Estudante participativo e assíduo, porém com dificuldades identificadas em laços de repetição complexos e dependência transitiva (3FN)."
+  );
+  const [isGeneratingFaid, setIsGeneratingFaid] = useState(false);
+  const [faidRecord, setFaidRecord] = useState<any | null>(null);
+  const [isExportingFaidPdf, setIsExportingFaidPdf] = useState(false);
+
+  const [remedialFailedTopics, setRemedialFailedTopics] = useState("Laços de Repetição (While/For), Guard Clauses Defensivas, Normalização 3FN");
+  const [remedialCurrentGrade, setRemedialCurrentGrade] = useState(52);
+  const [isGeneratingRemedial, setIsGeneratingRemedial] = useState(false);
+  const [remedialPack, setRemedialPack] = useState<any | null>(null);
+  const [isExportingRemedialPdf, setIsExportingRemedialPdf] = useState(false);
+
   // =========================================================================
   // HANDLERS
   // =========================================================================
+
+  // 7. Live Copilot Handlers
+  const handleGenerateLiveIntervention = async () => {
+    if (!liveTopic.trim()) {
+      toast.error("Informe o tópico da aula.");
+      return;
+    }
+    setIsGeneratingLiveIntervention(true);
+    setLiveIntervention(null);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/live-copilot/intervene"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: liveTopic,
+          programmingLanguage: liveLanguage,
+          classDifficultyLevel: liveLevel,
+          studentDoubtContext: liveDoubtContext
+        })
+      });
+      const data = await safeJsonResponse(res);
+      if (data && data.success) {
+        setLiveIntervention(data.intervention);
+        toast.success("Guia de intervenção didática gerado com sucesso!");
+      } else {
+        throw new Error(data?.error || "Falha na geração");
+      }
+    } catch (e: any) {
+      toast.error("Erro ao acionar Copiloto de Aula: " + e.message);
+    } finally {
+      setIsGeneratingLiveIntervention(false);
+    }
+  };
+
+  const handleExportLiveInterventionPdf = async () => {
+    if (!liveIntervention) return;
+    setIsExportingLivePdf(true);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/live-copilot/export-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intervention: liveIntervention })
+      });
+      if (!res.ok) throw new Error("Falha no download");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `intervencao_copiloto_${Date.now()}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("PDF do Copiloto de Aula exportado!");
+    } catch (e: any) {
+      toast.error("Erro ao exportar PDF: " + e.message);
+    } finally {
+      setIsExportingLivePdf(false);
+    }
+  };
+
+  // 8. TRI & Anti-Leak Handlers
+  const handleAuditExam = async () => {
+    let parsedQuestions = [];
+    try {
+      parsedQuestions = JSON.parse(examAuditQuestionsText);
+    } catch {
+      toast.error("O formato das questões deve ser um JSON válido de lista de questões.");
+      return;
+    }
+
+    setIsAuditingExam(true);
+    setExamAuditResult(null);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/exam-tri-audit"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examTitle: examAuditTitle,
+          targetSubject: examAuditSubject,
+          questions: parsedQuestions
+        })
+      });
+      const data = await safeJsonResponse(res);
+      if (data && data.success) {
+        setExamAuditResult(data.audit);
+        toast.success("Auditoria TRI & Anti-Cola concluída com sucesso!");
+      } else {
+        throw new Error(data?.error || "Falha ao auditar prova");
+      }
+    } catch (e: any) {
+      toast.error("Erro na auditoria da prova: " + e.message);
+    } finally {
+      setIsAuditingExam(false);
+    }
+  };
+
+  const handleExportExamAuditPdf = async () => {
+    if (!examAuditResult) return;
+    setIsExportingExamAuditPdf(true);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/exam-tri-audit/export-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audit: examAuditResult })
+      });
+      if (!res.ok) throw new Error("Falha no download");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `laudo_tri_anti_leak_${Date.now()}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Laudo TRI & Anti-Cola exportado em PDF!");
+    } catch (e: any) {
+      toast.error("Erro ao exportar laudo TRI: " + e.message);
+    } finally {
+      setIsExportingExamAuditPdf(false);
+    }
+  };
+
+  // 9. FAID SENAI & Adaptive Remedial Handlers
+  const handleGenerateFaid = async () => {
+    setIsGeneratingFaid(true);
+    setFaidRecord(null);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/faid/generate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: faidStudentName,
+          enrollmentCode: faidEnrollmentCode,
+          className: faidClassName,
+          courseName: faidCourseName,
+          unitCurricular: faidUnitCurricular,
+          teacherNotes: faidTeacherNotes
+        })
+      });
+      const data = await safeJsonResponse(res);
+      if (data && data.success) {
+        setFaidRecord(data.faid);
+        toast.success("Ficha FAID SENAI gerada com sucesso!");
+      } else {
+        throw new Error(data?.error || "Falha na emissão da FAID");
+      }
+    } catch (e: any) {
+      toast.error("Erro ao gerar FAID: " + e.message);
+    } finally {
+      setIsGeneratingFaid(false);
+    }
+  };
+
+  const handleExportFaidPdf = async () => {
+    if (!faidRecord) return;
+    setIsExportingFaidPdf(true);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/faid/export-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ faid: faidRecord })
+      });
+      if (!res.ok) throw new Error("Falha no download");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `faid_senai_${faidRecord.studentName.replace(/\s+/g, "_")}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("PDF da FAID SENAI baixado!");
+    } catch (e: any) {
+      toast.error("Erro ao exportar FAID: " + e.message);
+    } finally {
+      setIsExportingFaidPdf(false);
+    }
+  };
+
+  const handleGenerateRemedial = async () => {
+    const topicsArray = remedialFailedTopics.split(",").map((t) => t.trim()).filter(Boolean);
+    setIsGeneratingRemedial(true);
+    setRemedialPack(null);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/adaptive-remedial/generate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: faidStudentName,
+          className: faidClassName,
+          courseName: faidCourseName,
+          unitCurricular: faidUnitCurricular,
+          failedTopics: topicsArray,
+          currentGrade: remedialCurrentGrade
+        })
+      });
+      const data = await safeJsonResponse(res);
+      if (data && data.success) {
+        setRemedialPack(data.pack);
+        toast.success("Trilha de Recuperação Individualizada emitida com sucesso!");
+      } else {
+        throw new Error(data?.error || "Falha na geração");
+      }
+    } catch (e: any) {
+      toast.error("Erro ao gerar Trilha de Recuperação: " + e.message);
+    } finally {
+      setIsGeneratingRemedial(false);
+    }
+  };
+
+  const handleExportRemedialPdf = async () => {
+    if (!remedialPack) return;
+    setIsExportingRemedialPdf(true);
+    try {
+      const res = await fetch(apiUrl("/api/teacher/adaptive-remedial/export-pdf"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack: remedialPack })
+      });
+      if (!res.ok) throw new Error("Falha no download");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `trilha_recuperacao_${remedialPack.studentName.replace(/\s+/g, "_")}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Trilha de Recuperação baixada em PDF!");
+    } catch (e: any) {
+      toast.error("Erro ao exportar PDF: " + e.message);
+    } finally {
+      setIsExportingRemedialPdf(false);
+    }
+  };
 
   // 1. Socratic
   const handleGenerateSocraticQuestions = async () => {
@@ -474,7 +776,10 @@ export default function TeacherAiPowerhouseView() {
             { id: "clustering", label: "Clusters Semânticos", icon: Layers, badge: "Lote IA" },
             { id: "lessons", label: "Arquiteto de Aulas & Slides", icon: Presentation, badge: "Tela Cheia" },
             { id: "audio_diary", label: "Diário por Áudio / Voz", icon: Mic, badge: "Transcrição" },
-            { id: "adaptive_quiz", label: "Quizzes Adaptativos", icon: Compass, badge: "Tempo Real" }
+            { id: "adaptive_quiz", label: "Quizzes Adaptativos", icon: Compass, badge: "Tempo Real" },
+            { id: "live_copilot", label: "Copiloto de Aula ao Vivo", icon: Zap, badge: "Tempo Real" },
+            { id: "tri_anti_leak", label: "Auditor TRI & Anti-Cola IA", icon: ShieldCheck, badge: "Psicometria" },
+            { id: "faid_remedial", label: "FAID SENAI & Recuperação", icon: Award, badge: "Oficial SENAI" }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1294,6 +1599,627 @@ export default function TeacherAiPowerhouseView() {
               </button>
             </div>
           )}
+        </div>
+      )}
+      {/* ========================================================================= */}
+      {/* 7. LIVE CLASSROOM COPILOT SUBTAB */}
+      {/* ========================================================================= */}
+      {activeTab === "live_copilot" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
+          {/* Left Column: Classroom context configuration */}
+          <div className="lg:col-span-5 flex flex-col gap-5">
+            <div className="rounded-3xl border border-slate-800 bg-[#0b0f24] p-6 flex flex-col gap-4 shadow-xl">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Zap className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
+                  Copiloto Pedagógico em Sala de Aula
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Intervenção didática instantânea com analogias vívidas do mundo real, comparação de código &quot;Jeito Frágil vs Padrão SENAI&quot;, perguntas socráticas e desafio de 5 minutos.
+              </p>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">Tópico da Aula Prática</label>
+                <input
+                  type="text"
+                  value={liveTopic}
+                  onChange={(e) => setLiveTopic(e.target.value)}
+                  placeholder="Ex: Recursão vs Iteração e Call Stack"
+                  className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold">Linguagem</label>
+                  <input
+                    type="text"
+                    value={liveLanguage}
+                    onChange={(e) => setLiveLanguage(e.target.value)}
+                    placeholder="Python, JS, SQL, C#..."
+                    className="px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold">Nível da Turma</label>
+                  <select
+                    value={liveLevel}
+                    onChange={(e) => setLiveLevel(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-amber-500 focus:outline-none"
+                  >
+                    <option value="Iniciante">Iniciante</option>
+                    <option value="Intermediário">Intermediário</option>
+                    <option value="Avançado">Avançado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">Contexto da Dúvida / Trava da Turma</label>
+                <textarea
+                  value={liveDoubtContext}
+                  onChange={(e) => setLiveDoubtContext(e.target.value)}
+                  rows={4}
+                  placeholder="Descreva onde a turma está travando..."
+                  className="w-full p-3 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-amber-500 focus:outline-none resize-none leading-relaxed"
+                />
+              </div>
+
+              <button
+                onClick={handleGenerateLiveIntervention}
+                disabled={isGeneratingLiveIntervention}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-40 text-white font-bold text-xs font-mono shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <Zap className="w-4 h-4" />
+                {isGeneratingLiveIntervention ? "Gerando Intervenção Didática..." : "Destravar Turma Agora (Copiloto IA)"}
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column: Live Intervention Output */}
+          <div className="lg:col-span-7 flex flex-col gap-5">
+            {liveIntervention ? (
+              <div className="rounded-3xl border border-slate-800 bg-[#0b0f24] p-6 flex flex-col gap-6 shadow-2xl animate-fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      Guia de Intervenção: {liveIntervention.conceptKey}
+                    </h3>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {liveIntervention.programmingLanguage} • Nível {liveIntervention.targetLevel}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleExportLiveInterventionPdf}
+                    disabled={isExportingLivePdf}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono font-bold flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    {isExportingLivePdf ? "Baixando..." : "Baixar PDF"}
+                  </button>
+                </div>
+
+                {/* Immediate 30s Analogy */}
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col gap-2">
+                  <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                    💡 ANALOGIA IMEDIATA DO MUNDO REAL (30 SEGUNDOS)
+                  </span>
+                  <p className="text-xs text-slate-200 leading-relaxed italic">
+                    &quot;{liveIntervention.immediateAnalogy}&quot;
+                  </p>
+                </div>
+
+                {/* Wrong vs Right Code Comparison */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-4 flex flex-col gap-2.5">
+                    <span className="text-xs font-mono font-bold text-rose-400 flex items-center gap-1.5">
+                      ❌ Padrão Frágil / Equívoco Típico
+                    </span>
+                    <pre className="p-3 rounded-xl bg-black/50 border border-rose-500/20 text-rose-200 font-mono text-[11px] overflow-x-auto scrollbar-thin">
+                      {liveIntervention.wrongVsRightCode?.wrongCode}
+                    </pre>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      {liveIntervention.wrongVsRightCode?.wrongExplanation}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 flex flex-col gap-2.5">
+                    <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1.5">
+                      ✅ Padrão SENAI Resiliente & Clean Code
+                    </span>
+                    <pre className="p-3 rounded-xl bg-black/50 border border-emerald-500/20 text-emerald-200 font-mono text-[11px] overflow-x-auto scrollbar-thin">
+                      {liveIntervention.wrongVsRightCode?.rightCode}
+                    </pre>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      {liveIntervention.wrongVsRightCode?.rightExplanation}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Socratic Questions */}
+                <div className="flex flex-col gap-3">
+                  <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-indigo-400" /> Perguntas Socráticas de Sondagem
+                  </h4>
+                  <div className="flex flex-col gap-2.5">
+                    {(liveIntervention.socraticQuestions || []).map((q: any, i: number) => (
+                      <div key={i} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white">Q{i + 1}: {q.question}</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                            {q.expectedDifficulty}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          <strong className="text-slate-300">Insight esperado:</strong> {q.targetInsight}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5-Min Lightning Challenge */}
+                {liveIntervention.fiveMinChallenge && (
+                  <div className="rounded-2xl border border-orange-500/30 bg-orange-950/20 p-4 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold text-orange-400 flex items-center gap-1.5">
+                        ⚡ {liveIntervention.fiveMinChallenge.challengeTitle}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-orange-500/20 text-orange-300">
+                        5 minutos
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-200">{liveIntervention.fiveMinChallenge.challengePrompt}</p>
+                    <pre className="p-2.5 rounded-xl bg-black/40 border border-orange-500/20 text-orange-200 font-mono text-[11px] overflow-x-auto scrollbar-thin">
+                      {liveIntervention.fiveMinChallenge.starterSnippet}
+                    </pre>
+                    <div className="text-[11px] text-emerald-400 font-mono flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <strong>Validação do Professor (3s):</strong> {liveIntervention.fiveMinChallenge.verificationKey}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/20 p-12 flex flex-col items-center justify-center text-center gap-4 text-slate-500">
+                <Zap className="w-12 h-12 text-slate-700 animate-pulse" />
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-sm font-bold text-slate-300">Copiloto em Espera</h4>
+                  <p className="text-xs text-slate-500 max-w-sm">
+                    Configure o tema e acione o Copiloto para receber o roteiro didático de intervenção imediata.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 8. TRI & ANTI-LEAK EXAM AUDITOR SUBTAB */}
+      {/* ========================================================================= */}
+      {activeTab === "tri_anti_leak" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
+          {/* Left Column: Exam Inputs */}
+          <div className="lg:col-span-5 flex flex-col gap-5">
+            <div className="rounded-3xl border border-slate-800 bg-[#0b0f24] p-6 flex flex-col gap-4 shadow-xl">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
+                  Auditor TRI & Anti-Cola IA
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Avalie a resistência contra respostas automáticas de ChatGPT/LLMs, calibre parâmetros TRI ($a, b, c$) e audite a plausibilidade dos distratores de 4 alternativas.
+              </p>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">Título da Avaliação</label>
+                <input
+                  type="text"
+                  value={examAuditTitle}
+                  onChange={(e) => setExamAuditTitle(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">Disciplina / UC</label>
+                <input
+                  type="text"
+                  value={examAuditSubject}
+                  onChange={(e) => setExamAuditSubject(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono text-slate-300 font-bold">Questões da Avaliação (JSON)</label>
+                  <span className="text-[10px] font-mono text-slate-500">4 Alternativas (A-D)</span>
+                </div>
+                <textarea
+                  value={examAuditQuestionsText}
+                  onChange={(e) => setExamAuditQuestionsText(e.target.value)}
+                  rows={8}
+                  className="w-full p-3 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-indigo-500 focus:outline-none resize-none leading-relaxed"
+                />
+              </div>
+
+              <button
+                onClick={handleAuditExam}
+                disabled={isAuditingExam}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-40 text-white font-bold text-xs font-mono shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                {isAuditingExam ? "Auditando Psicométria TRI..." : "Auditar Psicométrica TRI & Anti-Cola"}
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column: Audit Report */}
+          <div className="lg:col-span-7 flex flex-col gap-5">
+            {examAuditResult ? (
+              <div className="rounded-3xl border border-slate-800 bg-[#0b0f24] p-6 flex flex-col gap-6 shadow-2xl animate-fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Award className="w-4 h-4 text-emerald-400" />
+                      Laudo Psicométrico: {examAuditResult.examTitle}
+                    </h3>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {examAuditResult.targetSubject} • {examAuditResult.auditedQuestions?.length || 0} Itens Auditados
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleExportExamAuditPdf}
+                    disabled={isExportingExamAuditPdf}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono font-bold flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5 text-indigo-400" />
+                    {isExportingExamAuditPdf ? "Baixando..." : "Baixar Laudo PDF"}
+                  </button>
+                </div>
+
+                {/* Score Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase">Blindagem Anti-IA</span>
+                    <span className="text-2xl font-black text-white font-mono">{examAuditResult.antiLeakScore}/100</span>
+                    <span className="text-[10px] text-slate-400">Resistência a Cópias em LLM</span>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase">Média TRI (b)</span>
+                    <span className="text-2xl font-black text-white font-mono">{examAuditResult.triCalibration?.overallDifficultyMean} pts</span>
+                    <span className="text-[10px] text-slate-400">Escala de Dificuldade SENAI</span>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-violet-500/30 bg-violet-950/20 flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-violet-400 font-bold uppercase">Discriminação (a)</span>
+                    <span className="text-base font-bold text-white font-mono mt-1">{examAuditResult.triCalibration?.discriminationQuality}</span>
+                    <span className="text-[10px] text-slate-400">Poder de Distinção de Nível</span>
+                  </div>
+                </div>
+
+                {/* Executive Summary */}
+                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                  <strong className="text-indigo-400 font-mono uppercase block mb-1">Diagnóstico Executivo:</strong>
+                  {examAuditResult.antiLeakSummary}
+                </div>
+
+                {/* Audited Questions List */}
+                <div className="flex flex-col gap-3">
+                  <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
+                    Itens Calibrados e Diagnóstico de Distratores
+                  </h4>
+                  <div className="flex flex-col gap-3">
+                    {(examAuditResult.auditedQuestions || []).map((q: any, idx: number) => (
+                      <div key={idx} className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col gap-3">
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                          <span className="text-xs font-bold text-white font-mono">Questão {q.questionIndex}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                              b={q.triDifficultyParam_b} | a={q.triDiscriminationParam_a}
+                            </span>
+                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                              q.antiAiLeakVulnerability === "Blindada"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : q.antiAiLeakVulnerability === "Moderada"
+                                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                  : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                            }`}>
+                              {q.antiAiLeakVulnerability}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-200 italic">&quot;{q.promptExcerpt}&quot;</p>
+
+                        {/* Distractor Audits */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {(q.distractorAudits || []).map((d: any, dIdx: number) => (
+                            <div key={dIdx} className={`p-2.5 rounded-xl border text-[11px] flex flex-col gap-1 ${
+                              d.isCorrect
+                                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-200"
+                                : "bg-slate-900/60 border-slate-800 text-slate-300"
+                            }`}>
+                              <span className="font-bold font-mono">
+                                [{d.letter}] {d.isCorrect ? "✅ Gabarito" : "❌ Distrator"}
+                              </span>
+                              <span className="text-[10px] text-slate-400">{d.pedagogicalDiagnostic}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {q.suggestedRefinementPrompt && (
+                          <div className="p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-[11px] text-indigo-200">
+                            <strong className="text-indigo-300 font-mono">Sugestão de Blindagem:</strong> {q.suggestedRefinementPrompt}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/20 p-12 flex flex-col items-center justify-center text-center gap-4 text-slate-500">
+                <ShieldCheck className="w-12 h-12 text-slate-700 animate-pulse" />
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-sm font-bold text-slate-300">Auditoria em Espera</h4>
+                  <p className="text-xs text-slate-500 max-w-sm">
+                    Forneça a lista de questões em formato JSON para calcular parâmetros TRI e verificar blindagem contra IA.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 9. FAID SENAI & ADAPTIVE REMEDIAL SUBTAB */}
+      {/* ========================================================================= */}
+      {activeTab === "faid_remedial" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
+          {/* Left Column: FAID and Remedial Generators */}
+          <div className="lg:col-span-5 flex flex-col gap-5">
+            <div className="rounded-3xl border border-slate-800 bg-[#0b0f24] p-6 flex flex-col gap-4 shadow-xl">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Award className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
+                  Ficha FAID SENAI & Recuperação
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Emita a Ficha de Avaliação Individual de Desempenho (60% técnico + 40% atitudinal) e gere a Trilha Adaptativa de Recuperação com exercícios graduados.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold">Nome do Estudante</label>
+                  <input
+                    type="text"
+                    value={faidStudentName}
+                    onChange={(e) => setFaidStudentName(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold">Matrícula</label>
+                  <input
+                    type="text"
+                    value={faidEnrollmentCode}
+                    onChange={(e) => setFaidEnrollmentCode(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">Turma & Unidade Curricular</label>
+                <input
+                  type="text"
+                  value={faidUnitCurricular}
+                  onChange={(e) => setFaidUnitCurricular(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">Observações / Parecer do Docente</label>
+                <textarea
+                  value={faidTeacherNotes}
+                  onChange={(e) => setFaidTeacherNotes(e.target.value)}
+                  rows={3}
+                  className="w-full p-3 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none resize-none leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleGenerateFaid}
+                  disabled={isGeneratingFaid}
+                  className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 text-white font-bold text-xs font-mono shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <Award className="w-4 h-4" />
+                  {isGeneratingFaid ? "Gerando FAID..." : "Emitir Ficha FAID"}
+                </button>
+              </div>
+
+              <div className="border-t border-slate-800 pt-4 flex flex-col gap-3">
+                <span className="text-xs font-mono font-bold text-amber-400">Trilha de Nivelamento / Recuperação</span>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-mono text-slate-300">Tópicos com Defasagem (separados por vírgula)</label>
+                  <input
+                    type="text"
+                    value={remedialFailedTopics}
+                    onChange={(e) => setRemedialFailedTopics(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs font-mono focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-24">
+                    <label className="text-[10px] font-mono text-slate-400 block mb-1">Nota Atual</label>
+                    <input
+                      type="number"
+                      value={remedialCurrentGrade}
+                      onChange={(e) => setRemedialCurrentGrade(Number(e.target.value))}
+                      className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono"
+                    />
+                  </div>
+                  <button
+                    onClick={handleGenerateRemedial}
+                    disabled={isGeneratingRemedial}
+                    className="flex-1 mt-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-mono font-bold flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    {isGeneratingRemedial ? "Criando Trilha..." : "Gerar Trilha de Recuperação"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: FAID & Remedial Output */}
+          <div className="lg:col-span-7 flex flex-col gap-5">
+            {faidRecord ? (
+              <div className="rounded-3xl border border-slate-800 bg-[#0b0f24] p-6 flex flex-col gap-5 shadow-2xl animate-fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Award className="w-4 h-4 text-emerald-400" />
+                      FAID SENAI • {faidRecord.studentName}
+                    </h3>
+                    <span className="text-xs text-slate-400 font-mono">
+                      Matrícula: {faidRecord.enrollmentCode} | {faidRecord.className}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleExportFaidPdf}
+                    disabled={isExportingFaidPdf}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono font-bold flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    {isExportingFaidPdf ? "Baixando..." : "Baixar FAID PDF"}
+                  </button>
+                </div>
+
+                {/* Consolidado & Menção */}
+                <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+                  faidRecord.finalGradeCalculated >= 70
+                    ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
+                    : "bg-amber-950/20 border-amber-500/30 text-amber-300"
+                }`}>
+                  <div>
+                    <span className="text-[10px] font-mono uppercase block font-bold">Nota Final Consolidada</span>
+                    <span className="text-2xl font-black font-mono">{faidRecord.finalGradeCalculated.toFixed(1)} / 100</span>
+                  </div>
+                  <span className="px-3 py-1.5 rounded-xl bg-slate-900 border font-mono text-xs font-bold">
+                    Menção: {faidRecord.finalMention}
+                  </span>
+                </div>
+
+                {/* Technical Criteria */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-mono font-bold text-slate-300 uppercase">Critérios Técnicos (60%)</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {(faidRecord.technicalCriteria || []).map((t: any, idx: number) => (
+                      <div key={idx} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white">{t.criterion}</span>
+                          <span className="font-mono text-emerald-400">{t.scoreObtained}/{t.maxScore} pts</span>
+                        </div>
+                        <span className="text-slate-400 text-[10px]">{t.evidenceNotes}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Attitudinal Criteria */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-mono font-bold text-slate-300 uppercase">Critérios Atitudinais (40%)</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    {(faidRecord.attitudinalCriteria || []).map((a: any, idx: number) => (
+                      <div key={idx} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white">{a.attitude}</span>
+                          <span className="font-mono text-indigo-400">{a.scoreObtained}/{a.maxScore}</span>
+                        </div>
+                        <span className="text-slate-400 text-[10px]">{a.observation}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Parecer Descritivo */}
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                  <strong className="text-emerald-400 font-mono block mb-1">Parecer Descritivo Oficial:</strong>
+                  {faidRecord.aiDescriptiveOpinion}
+                </div>
+              </div>
+            ) : remedialPack ? (
+              <div className="rounded-3xl border border-slate-800 bg-[#0b0f24] p-6 flex flex-col gap-5 shadow-2xl animate-fade-in">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-amber-400" />
+                      Trilha de Recuperação: {remedialPack.studentName}
+                    </h3>
+                    <span className="text-xs text-slate-400 font-mono">
+                      Nota Atual: {remedialPack.currentGrade}/100 • 3 Exercícios Graduados
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleExportRemedialPdf}
+                    disabled={isExportingRemedialPdf}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono font-bold flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    {isExportingRemedialPdf ? "Baixando..." : "Baixar Trilha PDF"}
+                  </button>
+                </div>
+
+                {/* Roadmap Steps */}
+                <div className="flex flex-col gap-2.5">
+                  <span className="text-xs font-mono font-bold text-slate-300 uppercase">Roteiro Microlearning</span>
+                  {(remedialPack.microLearningRoadmap || []).map((step: any, sIdx: number) => (
+                    <div key={sIdx} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white font-mono">Passo {step.stepNumber}: {step.title}</span>
+                        <span className="text-[10px] font-mono text-amber-400">{step.durationEstimatedMinutes} min</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300">{step.studyGuidance}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Graduated Exercises */}
+                <div className="flex flex-col gap-2.5">
+                  <span className="text-xs font-mono font-bold text-slate-300 uppercase">Exercícios Práticos</span>
+                  {(remedialPack.graduatedExerciseSet || []).map((ex: any, eIdx: number) => (
+                    <div key={eIdx} className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col gap-2">
+                      <span className="text-xs font-bold text-amber-400 font-mono">{ex.level}</span>
+                      <p className="text-xs text-slate-200">{ex.questionPrompt}</p>
+                      <pre className="p-2 rounded bg-black/40 text-slate-300 font-mono text-[10px] overflow-x-auto">
+                        {ex.modelSolution}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/20 p-12 flex flex-col items-center justify-center text-center gap-4 text-slate-500">
+                <Award className="w-12 h-12 text-slate-700 animate-pulse" />
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-sm font-bold text-slate-300">FAID & Recuperação em Espera</h4>
+                  <p className="text-xs text-slate-500 max-w-sm">
+                    Preencha os dados do discente e selecione emitir a FAID SENAI oficial ou a Trilha de Recuperação Adaptativa.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

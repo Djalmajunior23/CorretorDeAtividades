@@ -580,5 +580,259 @@ describe("Suíte Avançada de IA para o Docente (AI Teacher Powerhouse)", () => 
       expect(data.result.whatsappFormattedUrl).toContain("api.whatsapp.com");
       expect(data.result.emailPayload).toHaveProperty("subject");
     });
+
+    // =========================================================================
+    // 8. COPILOTO DE AULA AO VIVO (LIVE CLASSROOM INTERVENTION)
+    // =========================================================================
+    it("POST /api/teacher/live-copilot/intervene - Deve gerar intervenção didática com analogia 30s, código Jeito Errado vs Certo e desafio 5min", async () => {
+      const payload = {
+        topic: "Recursão vs Iteração e Pilha de Chamadas",
+        programmingLanguage: "Python",
+        classDifficultyLevel: "Intermediário",
+        studentDoubtContext: "Alunos esquecendo o caso base gerando StackOverflow"
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/live-copilot/intervene`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.intervention).toBeDefined();
+      expect(data.intervention.immediateAnalogy.length).toBeGreaterThan(15);
+      expect(data.intervention.wrongVsRightCode).toHaveProperty("wrongCode");
+      expect(data.intervention.wrongVsRightCode).toHaveProperty("rightCode");
+      expect(Array.isArray(data.intervention.socraticQuestions)).toBe(true);
+      expect(data.intervention.socraticQuestions.length).toBeGreaterThanOrEqual(3);
+      expect(data.intervention.fiveMinChallenge).toHaveProperty("challengeTitle");
+      expect(data.intervention.fiveMinChallenge).toHaveProperty("verificationKey");
+    });
+
+    it("POST /api/teacher/live-copilot/export-pdf - Deve exportar PDF do guia de intervenção em tempo real", async () => {
+      const payload = {
+        intervention: {
+          conceptKey: "Recursão e Árvores",
+          targetLevel: "Intermediário",
+          programmingLanguage: "Python",
+          immediateAnalogy: "Linha de montagem com parada de segurança.",
+          wrongVsRightCode: {
+            wrongCode: "def f(n): return f(n)",
+            wrongExplanation: "Sem caso base",
+            rightCode: "def f(n): return 1 if n<=1 else n*f(n-1)",
+            rightExplanation: "Com caso base seguro"
+          },
+          socraticQuestions: [
+            { question: "Onde o caso base para?", targetInsight: "Pilha", expectedDifficulty: "Iniciante" }
+          ],
+          fiveMinChallenge: {
+            challengeTitle: "Desafio Relâmpago",
+            challengePrompt: "Implemente fatorial",
+            starterSnippet: "def fat(n): pass",
+            verificationKey: "Verifique n<=1"
+          },
+          cheatSheetTips: ["Fail fast", "Clean code"],
+          generatedAt: new Date().toISOString()
+        }
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/live-copilot/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/pdf");
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(500);
+    });
+
+    // =========================================================================
+    // 9. AUDITOR TRI & ANTI-COLA IA DE PROVAS
+    // =========================================================================
+    it("POST /api/teacher/exam-tri-audit - Deve auditar itens com parâmetros TRI (a,b,c) e distratores A-D", async () => {
+      const payload = {
+        examTitle: "Avaliação Oficial de Backend",
+        targetSubject: "Desenvolvimento de Sistemas",
+        questions: [
+          {
+            prompt: "Qual cláusula garante integridade referencial ON DELETE CASCADE?",
+            options: [
+              { letter: "A", text: "ON DELETE RESTRICT", isCorrect: false },
+              { letter: "B", text: "ON DELETE CASCADE", isCorrect: true },
+              { letter: "C", text: "ON UPDATE NO ACTION", isCorrect: false },
+              { letter: "D", text: "ON DELETE SET NULL", isCorrect: false }
+            ],
+            topic: "SQL DDL"
+          }
+        ]
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/exam-tri-audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.audit.antiLeakScore).toBeGreaterThanOrEqual(50);
+      expect(data.audit.triCalibration).toHaveProperty("overallDifficultyMean");
+      expect(Array.isArray(data.audit.auditedQuestions)).toBe(true);
+      expect(data.audit.auditedQuestions[0]).toHaveProperty("triDifficultyParam_b");
+      expect(data.audit.auditedQuestions[0].distractorAudits.length).toBe(4);
+    });
+
+    it("POST /api/teacher/exam-tri-audit/export-pdf - Deve exportar PDF do laudo TRI & Anti-Cola", async () => {
+      const payload = {
+        audit: {
+          examTitle: "Avaliação Oficial de Backend",
+          targetSubject: "Desenvolvimento de Sistemas",
+          antiLeakScore: 88,
+          antiLeakSummary: "Excelente blindagem contra IAs externas e calibração TRI precisa.",
+          triCalibration: {
+            overallDifficultyMean: 585,
+            discriminationQuality: "Excelente",
+            guessingVulnerabilityRisk: "Baixo"
+          },
+          auditedQuestions: [
+            {
+              questionIndex: 1,
+              promptExcerpt: "Qual comando DDL...",
+              triDifficultyParam_b: 0.45,
+              triDiscriminationParam_a: 1.80,
+              triGuessingParam_c: 0.25,
+              antiAiLeakVulnerability: "Blindada",
+              antiAiVulnerabilityReason: "Cenário industrial contextualizado",
+              distractorAudits: [
+                { letter: "A", text: "RESTRICT", isCorrect: false, pedagogicalDiagnostic: "Bloqueia deleção", plausibilityRating: "Alta" },
+                { letter: "B", text: "CASCADE", isCorrect: true, pedagogicalDiagnostic: "Gabarito", plausibilityRating: "Alta" },
+                { letter: "C", text: "NO ACTION", isCorrect: false, pedagogicalDiagnostic: "Padrão", plausibilityRating: "Média" },
+                { letter: "D", text: "SET NULL", isCorrect: false, pedagogicalDiagnostic: "Nulifica", plausibilityRating: "Média" }
+              ]
+            }
+          ],
+          generalTeacherRecommendations: ["Manter 4 alternativas", "Usar logs industriais"]
+        }
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/exam-tri-audit/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/pdf");
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(500);
+    });
+
+    // =========================================================================
+    // 10. FICHA FAID SENAI & TRILHA ADAPTATIVA DE RECUPERAÇÃO
+    // =========================================================================
+    it("POST /api/teacher/faid/generate - Deve gerar ficha FAID com critérios 60/40 e menção oficial", async () => {
+      const payload = {
+        studentName: "Lucas Mendes de Oliveira",
+        enrollmentCode: "20261011",
+        className: "Desenvolvimento de Sistemas 2A",
+        courseName: "Técnico em Desenvolvimento de Sistemas",
+        unitCurricular: "Lógica e Estrutura de Dados",
+        teacherNotes: "Excelente assiduidade e bom domínio de algoritmos iterativos."
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/faid/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.faid.technicalCriteria.length).toBe(4);
+      expect(data.faid.attitudinalCriteria.length).toBe(3);
+      expect(data.faid.finalGradeCalculated).toBeGreaterThanOrEqual(0);
+      expect(data.faid.finalMention).toBeDefined();
+      expect(data.faid.aiDescriptiveOpinion.length).toBeGreaterThan(20);
+    });
+
+    it("POST /api/teacher/faid/export-pdf - Deve exportar Ficha FAID SENAI em PDF", async () => {
+      const payload = {
+        faid: {
+          recordId: "faid-123",
+          studentId: "st-01",
+          studentName: "Lucas Mendes de Oliveira",
+          enrollmentCode: "20261011",
+          courseName: "Técnico em Desenvolvimento de Sistemas",
+          className: "DS 2A",
+          unitCurricular: "Lógica de Programação",
+          evaluatorTeacherName: "Prof. Djalma Batista",
+          assessmentDate: "27/09/2026",
+          technicalCriteria: [
+            { criterion: "Lógica", weight: 20, scoreObtained: 18, maxScore: 20, performanceLevel: "Adequado", evidenceNotes: "Ótimo" }
+          ],
+          attitudinalCriteria: [
+            { attitude: "Pontualidade/Compromisso", scoreObtained: 14, maxScore: 15, performanceLevel: "Adequado", observation: "Assíduo" }
+          ],
+          finalGradeCalculated: 88,
+          finalMention: "Apto com Excelência",
+          aiDescriptiveOpinion: "Discente com excelente aproveitamento técnico e atitudinal no curso.",
+          recommendedInterventions: ["Continuar estudos avançados"]
+        }
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/faid/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/pdf");
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(500);
+    });
+
+    it("POST /api/teacher/adaptive-remedial/generate - Deve gerar trilha de recuperação em 3 níveis", async () => {
+      const payload = {
+        studentName: "Lucas Mendes",
+        className: "DS 2A",
+        courseName: "Técnico em DS",
+        unitCurricular: "Lógica",
+        failedTopics: ["Laços de Repetição", "Normalização 3FN"],
+        currentGrade: 52
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/adaptive-remedial/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.pack.microLearningRoadmap.length).toBeGreaterThanOrEqual(1);
+      expect(data.pack.graduatedExerciseSet.length).toBeGreaterThanOrEqual(1);
+      expect(data.pack.studentPactTerms).toContain("Lucas Mendes");
+    });
+
+    it("POST /api/teacher/adaptive-remedial/export-pdf - Deve exportar PDF da Trilha de Recuperação", async () => {
+      const payload = {
+        pack: {
+          packId: "rem-123",
+          studentId: "st-01",
+          studentName: "Lucas Mendes",
+          className: "DS 2A",
+          courseName: "Técnico em DS",
+          unitCurricular: "Lógica",
+          currentGrade: 52,
+          diagnosedGaps: [{ concept: "Loops", severity: "Alta", diagnosedRootCause: "Condição de parada" }],
+          microLearningRoadmap: [{ stepNumber: 1, title: "Revisão", targetConcept: "While", durationEstimatedMinutes: 20, studyGuidance: "Pratique", quickSelfCheckQuestion: "O que é while?" }],
+          graduatedExerciseSet: [{ level: "Nível 1 - Fixação", questionPrompt: "Crie um loop", stepByStepHints: ["for n in list"], modelSolution: "def f(): pass" }],
+          studentPactTerms: "Eu, Lucas Mendes, comprometo-me a cumprir a trilha de recuperação."
+        }
+      };
+      const res = await fetch(`${baseUrl}/api/teacher/adaptive-remedial/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/pdf");
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(500);
+    });
   });
 });

@@ -7869,6 +7869,141 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   });
 
   // =========================================================================
+  // TEACHER AI POWERHOUSE: COPILOTO AO VIVO, TRI AUDITOR, FAID & RECUPERAÇÃO
+  // =========================================================================
+
+  // 27. Copiloto Pedagógico de Aula em Tempo Real
+  app.post("/api/teacher/live-copilot/intervene", async (req, res) => {
+    try {
+      const { topic, programmingLanguage, classDifficultyLevel, studentDoubtContext, customAI } = req.body;
+      const intervention = await TeacherPowerhouseService.generateLiveClassroomIntervention({
+        topic,
+        programmingLanguage,
+        classDifficultyLevel,
+        studentDoubtContext,
+        customAI
+      });
+      res.json({ success: true, intervention });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 28. Exportar Guia de Intervenção Didática em PDF
+  app.post("/api/teacher/live-copilot/export-pdf", async (req, res) => {
+    try {
+      const { intervention } = req.body;
+      if (!intervention) return res.status(400).json({ success: false, error: "Intervention data required" });
+      const buffer = TeacherPowerhouseService.exportLiveInterventionPdf(intervention);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=intervencao_copiloto_aula_${Date.now()}.pdf`);
+      res.send(buffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 29. Auditoria Psicométrica TRI & Blindagem Anti-Cola IA de Provas
+  app.post("/api/teacher/exam-tri-audit", async (req, res) => {
+    try {
+      const { examTitle, targetSubject, questions, customAI } = req.body;
+      const audit = await TeacherPowerhouseService.auditExamWithTriAndAntiLeak({
+        examTitle,
+        targetSubject,
+        questions,
+        customAI
+      });
+      res.json({ success: true, audit });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 30. Exportar Laudo TRI & Anti-Cola em PDF
+  app.post("/api/teacher/exam-tri-audit/export-pdf", async (req, res) => {
+    try {
+      const { audit } = req.body;
+      if (!audit) return res.status(400).json({ success: false, error: "Audit data required" });
+      const buffer = TeacherPowerhouseService.exportExamTriAuditPdf(audit);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=laudo_tri_anti_leak_${Date.now()}.pdf`);
+      res.send(buffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 31. Gerar Ficha FAID SENAI Individual
+  app.post("/api/teacher/faid/generate", async (req, res) => {
+    try {
+      const { studentName, studentId, enrollmentCode, className, courseName, unitCurricular, evaluatorTeacherName, rawScores, teacherNotes, customAI } = req.body;
+      const faid = await TeacherPowerhouseService.generateFaidRecord({
+        studentName,
+        studentId,
+        enrollmentCode,
+        className,
+        courseName,
+        unitCurricular,
+        evaluatorTeacherName,
+        rawScores,
+        teacherNotes,
+        customAI
+      });
+      res.json({ success: true, faid });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 32. Exportar Ficha FAID SENAI em PDF Oficial
+  app.post("/api/teacher/faid/export-pdf", async (req, res) => {
+    try {
+      const { faid } = req.body;
+      if (!faid) return res.status(400).json({ success: false, error: "FAID record data required" });
+      const buffer = TeacherPowerhouseService.exportFaidPdf(faid);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=faid_senai_${Date.now()}.pdf`);
+      res.send(buffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 33. Gerar Trilha Adaptativa de Recuperação e Nivelamento
+  app.post("/api/teacher/adaptive-remedial/generate", async (req, res) => {
+    try {
+      const { studentName, studentId, className, courseName, unitCurricular, failedTopics, currentGrade, customAI } = req.body;
+      const pack = await TeacherPowerhouseService.generateAdaptiveRemedialPack({
+        studentName,
+        studentId,
+        className,
+        courseName,
+        unitCurricular,
+        failedTopics,
+        currentGrade,
+        customAI
+      });
+      res.json({ success: true, pack });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 34. Exportar Trilha Adaptativa de Recuperação em PDF
+  app.post("/api/teacher/adaptive-remedial/export-pdf", async (req, res) => {
+    try {
+      const { pack } = req.body;
+      if (!pack) return res.status(400).json({ success: false, error: "Remedial pack data required" });
+      const buffer = TeacherPowerhouseService.exportAdaptiveRemedialPdf(pack);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=trilha_recuperacao_${Date.now()}.pdf`);
+      res.send(buffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
   // CIBERACADEMY • DEEP LEARNING & STUDENT MASTERY ENGINE APIS
   // =========================================================================
 
