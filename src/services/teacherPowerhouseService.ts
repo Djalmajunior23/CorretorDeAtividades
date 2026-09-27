@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { aiService } from "../ai/services/AIService";
-import { CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
+import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
 import { safeAutoTable, getAutoTableFinalY } from "../utils/pdfExport";
 
 export interface LiveClassroomIntervention {
@@ -1341,13 +1341,9 @@ Gere uma resposta estritamente em formato JSON (sem markdown externo ou blocos e
 }`;
 
     try {
-      const response = await aiService.generateContent({
-        prompt,
-        systemInstruction: "Você é um mestre pedagogo do SENAI especializado em ensino de Ciência da Computação e Engenharia de Software. Retorne apenas JSON válido.",
-        customAI: params.customAI
-      });
-
-      const cleanJson = response.text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const provider = ProviderFactory.createCustomProvider(params.customAI);
+      const aiResponse = await provider.generateContent(prompt, { temperature: 0.3, max_tokens: 4000 });
+      const cleanJson = aiResponse.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
 
       return {
@@ -1641,13 +1637,9 @@ Retorne estritamente um JSON no seguinte formato:
 }`;
 
     try {
-      const response = await aiService.generateContent({
-        prompt,
-        systemInstruction: "Você é o auditor psicométrico TRI e especialista em segurança pedagógica do SENAI. Retorne apenas JSON.",
-        customAI: params.customAI
-      });
-
-      const cleanJson = response.text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const provider = ProviderFactory.createCustomProvider(params.customAI);
+      const aiResponse = await provider.generateContent(prompt, { temperature: 0.3, max_tokens: 4000 });
+      const cleanJson = aiResponse.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
 
       return {
@@ -1852,13 +1844,9 @@ Retorne estritamente um JSON no seguinte formato:
 }`;
 
     try {
-      const response = await aiService.generateContent({
-        prompt,
-        systemInstruction: "Você é o auditor pedagógico institucional do SENAI. Retorne apenas JSON.",
-        customAI: params.customAI
-      });
-
-      const cleanJson = response.text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const provider = ProviderFactory.createCustomProvider(params.customAI);
+      const aiResponse = await provider.generateContent(prompt, { temperature: 0.3, max_tokens: 4000 });
+      const cleanJson = aiResponse.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
 
       const tech = parsed.technicalCriteria || [];
@@ -2099,13 +2087,9 @@ Retorne estritamente o JSON no seguinte formato:
 }`;
 
     try {
-      const response = await aiService.generateContent({
-        prompt,
-        systemInstruction: "Você é o tutor especialista em recuperação adaptativa do SENAI. Retorne apenas JSON.",
-        customAI: params.customAI
-      });
-
-      const cleanJson = response.text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const provider = ProviderFactory.createCustomProvider(params.customAI);
+      const aiResponse = await provider.generateContent(prompt, { temperature: 0.3, max_tokens: 4000 });
+      const cleanJson = aiResponse.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
 
       return {
