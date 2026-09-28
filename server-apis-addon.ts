@@ -8647,6 +8647,61 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
+  // POST: Converter Modelo de Dados para Multi-SGBD Nativo (Postgres, MySQL, Oracle, SQL Server, SQLite)
+  app.post("/api/database/convert-multi-sgbd", async (req, res) => {
+    try {
+      const { modelCode, extractedTables, customAI } = req.body;
+      if (!modelCode || !modelCode.trim()) {
+        return res.status(400).json({ success: false, error: "Código do modelo ou DDL é obrigatório." });
+      }
+      const multiSgbd = await DatabaseModelAssessmentService.convertModelToMultiSgbd({
+        modelCode,
+        extractedTables,
+        customAI
+      });
+      res.json({ success: true, multiSgbd });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Gerador de Pacote de Migrações Flyway e Refatoração 3FN
+  app.post("/api/database/generate-migrations", async (req, res) => {
+    try {
+      const { unnormalizedCode, normalizedCode, targetSgbd, customAI } = req.body;
+      if (!unnormalizedCode || !unnormalizedCode.trim()) {
+        return res.status(400).json({ success: false, error: "Código da estrutura não-normalizada é obrigatório." });
+      }
+      const migrations = await DatabaseModelAssessmentService.generateRefactored3fnMigrations({
+        unnormalizedCode,
+        normalizedCode,
+        targetSgbd,
+        customAI
+      });
+      res.json({ success: true, migrations });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Auditoria de Governança e Conformidade LGPD em Bancos de Dados
+  app.post("/api/database/lgpd-audit", async (req, res) => {
+    try {
+      const { ddlOrMermaid, extractedTables, customAI } = req.body;
+      if (!ddlOrMermaid || !ddlOrMermaid.trim()) {
+        return res.status(400).json({ success: false, error: "Script DDL ou Diagrama é obrigatório para auditoria LGPD." });
+      }
+      const lgpdReport = await DatabaseModelAssessmentService.auditDataPrivacyGovernance({
+        ddlOrMermaid,
+        extractedTables,
+        customAI
+      });
+      res.json({ success: true, lgpdReport });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // POST: Gerar Trilha Adaptativa de Micro-Desafios Gamificados
   app.post("/api/adaptive/pathway-plan", async (req, res) => {
     try {

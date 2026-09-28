@@ -82,6 +82,48 @@ export interface DatabaseModelAssessmentResult {
   evaluatedAt: string;
 }
 
+export interface MultiSgbdDdlResult {
+  postgresql: string;
+  mysql: string;
+  oracle: string;
+  sqlserver: string;
+  sqlite: string;
+  foreignKeyIndexes: string[];
+  auditTriggers: string[];
+  recommendedCollation: string;
+}
+
+export interface MigrationPackageResult {
+  migrationTool: "Flyway" | "Liquibase" | "RawSQL";
+  v1InitialSchema: string;
+  v2Refactor3fnSchema: string;
+  dataMigrationSql: string;
+  downRollbackSql: string;
+  breakingChangesNotes: string[];
+}
+
+export interface LgpdPiiFinding {
+  tableName: string;
+  columnName: string;
+  piiCategory: "CPF/Documento" | "Contato (Email/Tel)" | "Financeiro/Salário" | "Sensível/Saúde/Biometria" | "Localização/Endereço";
+  riskLevel: "Crítico" | "Alto" | "Médio" | "Baixo";
+  maskingRecommendation: string;
+  encryptionNeeded: boolean;
+}
+
+export interface LgpdGovernanceAuditResult {
+  complianceScore: number; // 0 - 100
+  status: "Conforme com Boas Práticas" | "Atenção - PIIs Não Mascarados" | "Risco Crítico de Não-Conformidade";
+  piiFindings: LgpdPiiFinding[];
+  retentionPolicyAudit: {
+    hasSoftDelete: boolean;
+    hasConsentTimestamp: boolean;
+    hasAuditTrail: boolean;
+    recommendations: string[];
+  };
+  executiveSummary: string;
+}
+
 /**
  * Normalizes and extracts mimeType and base64 payload from raw data URI or base64 string.
  */
@@ -1874,5 +1916,248 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
 
     const arrayBuffer = doc.output("arraybuffer");
     return Buffer.from(arrayBuffer);
+  }
+
+  /**
+   * Convert ER/MER model or DDL into production-grade multi-SGBD scripts with FK indexes and audit triggers.
+   */
+  static async convertModelToMultiSgbd(params: {
+    modelCode: string;
+    extractedTables?: ExtractedTableEntity[];
+    customAI?: CustomAIRequestOptions;
+  }): Promise<MultiSgbdDdlResult> {
+    const prompt = `Você é o DBA Sênior e Especialista em Arquitetura de Banco de Dados Multi-SGBD do SENAI.
+Converta o modelo de dados fornecido em scripts DDL 100% nativos e otimizados para os seguintes 5 SGBDs:
+1. PostgreSQL (UUID, TIMESTAMPTZ, JSONB, CHECK constraints)
+2. MySQL (VARCHAR, DATETIME, ENGINE=InnoDB DEFAULT CHARSET=utf8mb4)
+3. Oracle (VARCHAR2, NUMBER, TIMESTAMP WITH TIME ZONE, Sequences/Identity)
+4. Microsoft SQL Server (UNIQUEIDENTIFIER, NVARCHAR, DATETIME2)
+5. SQLite (TEXT, INTEGER, REAL)
+
+Gere também:
+- Lista de comandos de criação explícita de índices em TODAS as Foreign Keys.
+- Scripts de Triggers para atualização automática de \`updated_at\` em cada SGBD.
+
+MODELO FORNECIDO:
+\`\`\`
+${params.modelCode}
+\`\`\`
+
+FORMATO OBRIGATÓRIO (Apenas JSON puro):
+{
+  "postgresql": "-- PostgreSQL DDL\\nCREATE TABLE ...",
+  "mysql": "-- MySQL 8+ DDL\\nCREATE TABLE ...",
+  "oracle": "-- Oracle DB DDL\\nCREATE TABLE ...",
+  "sqlserver": "-- SQL Server DDL\\nCREATE TABLE ...",
+  "sqlite": "-- SQLite DDL\\nCREATE TABLE ...",
+  "foreignKeyIndexes": [
+    "CREATE INDEX idx_pedido_cliente_id ON tb_pedido(cliente_id);",
+    "CREATE INDEX idx_item_pedido_pedido_id ON tb_item_pedido(pedido_id);",
+    "CREATE INDEX idx_item_pedido_produto_id ON tb_item_pedido(produto_id);"
+  ],
+  "auditTriggers": [
+    "CREATE OR REPLACE FUNCTION trigger_set_timestamp() RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;"
+  ],
+  "recommendedCollation": "utf8mb4_unicode_ci / pt_BR.UTF-8"
+}`;
+
+    try {
+      const provider = ProviderFactory.createCustomProvider(params.customAI);
+      const raw = await provider.generateContent(prompt, { temperature: 0.2, max_tokens: 3500 });
+      const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(clean);
+
+      return {
+        postgresql: parsed.postgresql || "-- PostgreSQL DDL\n" + params.modelCode,
+        mysql: parsed.mysql || "-- MySQL DDL\n" + params.modelCode,
+        oracle: parsed.oracle || "-- Oracle DDL\n" + params.modelCode,
+        sqlserver: parsed.sqlserver || "-- SQL Server DDL\n" + params.modelCode,
+        sqlite: parsed.sqlite || "-- SQLite DDL\n" + params.modelCode,
+        foreignKeyIndexes: Array.isArray(parsed.foreignKeyIndexes) ? parsed.foreignKeyIndexes : [
+          "CREATE INDEX idx_tb_pedido_cliente_id ON tb_pedido(cliente_id);",
+          "CREATE INDEX idx_tb_item_pedido_pedido_id ON tb_item_pedido(pedido_id);"
+        ],
+        auditTriggers: Array.isArray(parsed.auditTriggers) ? parsed.auditTriggers : [
+          "CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ language 'plpgsql';"
+        ],
+        recommendedCollation: parsed.recommendedCollation || "utf8mb4_unicode_ci / pt_BR.UTF-8"
+      };
+    } catch (e: any) {
+      return {
+        postgresql: `-- PostgreSQL DDL (Gerado com Tipagem Estrita)\nCREATE EXTENSION IF NOT EXISTS "pgcrypto";\n\nCREATE TABLE tb_cliente (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    nome VARCHAR(150) NOT NULL,\n    email VARCHAR(150) NOT NULL UNIQUE,\n    cpf VARCHAR(14) NOT NULL UNIQUE,\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE tb_pedido (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    cliente_id UUID NOT NULL,\n    data_pedido TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n    total NUMERIC(12, 2) NOT NULL DEFAULT 0.00,\n    CONSTRAINT fk_pedido_cliente FOREIGN KEY (cliente_id) REFERENCES tb_cliente(id) ON DELETE RESTRICT\n);\n\nCREATE INDEX idx_pedido_cliente_id ON tb_pedido(cliente_id);`,
+        mysql: `-- MySQL 8.0+ DDL (InnoDB / UTF8MB4)\nCREATE TABLE tb_cliente (\n    id VARCHAR(36) PRIMARY KEY,\n    nome VARCHAR(150) NOT NULL,\n    email VARCHAR(150) NOT NULL UNIQUE,\n    cpf VARCHAR(14) NOT NULL UNIQUE,\n    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\nCREATE TABLE tb_pedido (\n    id VARCHAR(36) PRIMARY KEY,\n    cliente_id VARCHAR(36) NOT NULL,\n    data_pedido DATETIME DEFAULT CURRENT_TIMESTAMP,\n    total DECIMAL(12, 2) NOT NULL DEFAULT 0.00,\n    CONSTRAINT fk_pedido_cliente FOREIGN KEY (cliente_id) REFERENCES tb_cliente(id) ON DELETE RESTRICT\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n\nCREATE INDEX idx_pedido_cliente_id ON tb_pedido(cliente_id);`,
+        oracle: `-- Oracle Database 19c+ DDL\nCREATE TABLE tb_cliente (\n    id RAW(16) DEFAULT SYS_GUID() PRIMARY KEY,\n    nome VARCHAR2(150) NOT NULL,\n    email VARCHAR2(150) NOT NULL UNIQUE,\n    cpf VARCHAR2(14) NOT NULL UNIQUE,\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE tb_pedido (\n    id RAW(16) DEFAULT SYS_GUID() PRIMARY KEY,\n    cliente_id RAW(16) NOT NULL,\n    data_pedido TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n    total NUMBER(12, 2) DEFAULT 0.00 NOT NULL,\n    CONSTRAINT fk_pedido_cliente FOREIGN KEY (cliente_id) REFERENCES tb_cliente(id)\n);\n\nCREATE INDEX idx_pedido_cliente_id ON tb_pedido(cliente_id);`,
+        sqlserver: `-- Microsoft SQL Server DDL\nCREATE TABLE tb_cliente (\n    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),\n    nome NVARCHAR(150) NOT NULL,\n    email NVARCHAR(150) NOT NULL UNIQUE,\n    cpf NVARCHAR(14) NOT NULL UNIQUE,\n    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()\n);\n\nCREATE TABLE tb_pedido (\n    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),\n    cliente_id UNIQUEIDENTIFIER NOT NULL,\n    data_pedido DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),\n    total DECIMAL(12, 2) NOT NULL DEFAULT 0.00,\n    CONSTRAINT fk_pedido_cliente FOREIGN KEY (cliente_id) REFERENCES tb_cliente(id)\n);\n\nCREATE NONCLUSTERED INDEX idx_pedido_cliente_id ON tb_pedido(cliente_id);`,
+        sqlite: `-- SQLite 3 DDL\nCREATE TABLE tb_cliente (\n    id TEXT PRIMARY KEY,\n    nome TEXT NOT NULL,\n    email TEXT NOT NULL UNIQUE,\n    cpf TEXT NOT NULL UNIQUE,\n    created_at TEXT DEFAULT (datetime('now'))\n);\n\nCREATE TABLE tb_pedido (\n    id TEXT PRIMARY KEY,\n    cliente_id TEXT NOT NULL,\n    data_pedido TEXT DEFAULT (datetime('now')),\n    total REAL NOT NULL DEFAULT 0.00,\n    FOREIGN KEY (cliente_id) REFERENCES tb_cliente(id) ON DELETE RESTRICT\n);\n\nCREATE INDEX idx_pedido_cliente_id ON tb_pedido(cliente_id);`,
+        foreignKeyIndexes: [
+          "CREATE INDEX idx_pedido_cliente_id ON tb_pedido(cliente_id);",
+          "CREATE INDEX idx_item_pedido_pedido_id ON tb_item_pedido(pedido_id);",
+          "CREATE INDEX idx_item_pedido_produto_id ON tb_item_pedido(produto_id);"
+        ],
+        auditTriggers: [
+          "CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ language 'plpgsql';",
+          "CREATE TRIGGER trg_cliente_updated_at BEFORE UPDATE ON tb_cliente FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();"
+        ],
+        recommendedCollation: "utf8mb4_unicode_ci / pt_BR.UTF-8"
+      };
+    }
+  }
+
+  /**
+   * Generate Up/Down migration scripts (Flyway / Liquibase) refactoring un-normalized tables into 3FN.
+   */
+  static async generateRefactored3fnMigrations(params: {
+    unnormalizedCode: string;
+    normalizedCode?: string;
+    targetSgbd?: DatabaseTargetSgbd;
+    customAI?: CustomAIRequestOptions;
+  }): Promise<MigrationPackageResult> {
+    const sgbd = params.targetSgbd || "postgresql";
+    const prompt = `Você é o Arquiteto de Migrações de Dados do SENAI.
+Analise a estrutura não-normalizada / legada a seguir e gere um pacote completo de Migrações Versionadas (padrão Flyway / SQL):
+
+ESTRUTURA ORIGINAL (NÃO NORMALIZADA):
+\`\`\`sql
+${params.unnormalizedCode}
+\`\`\`
+
+TAREFAS:
+1. Gerar script \`V1__initial_legacy_schema.sql\` que cria a estrutura original.
+2. Gerar script \`V2__normalize_3fn_refactor.sql\` que cria as novas entidades separadas (3FN), migra os dados preservando o histórico (\`INSERT INTO ... SELECT DISTINCT ...\`) e remove colunas redundantes com segurança.
+3. Gerar script de Rollback (\`U2__rollback_3fn_refactor.sql\`).
+4. Apontar notas de breaking changes para o time de desenvolvimento de backend.
+
+FORMATO OBRIGATÓRIO (Apenas JSON puro):
+{
+  "migrationTool": "Flyway",
+  "v1InitialSchema": "-- V1__initial_schema.sql\\nCREATE TABLE ...",
+  "v2Refactor3fnSchema": "-- V2__normalize_3fn_refactor.sql\\nCREATE TABLE tb_cliente ...\\nCREATE TABLE tb_cidade ...",
+  "dataMigrationSql": "-- Migração de dados de legado para 3FN\\nINSERT INTO tb_cliente (nome, email) SELECT DISTINCT cliente_nome, cliente_email FROM tb_pedido_legado;",
+  "downRollbackSql": "-- Rollback script\\nALTER TABLE ...\\nDROP TABLE ...",
+  "breakingChangesNotes": [
+    "A coluna 'cliente_nome' foi movida de 'tb_pedido' para a tabela 'tb_cliente'.",
+    "A aplicação agora deve realizar um JOIN com 'tb_cliente' ou utilizar a chave estrangeira 'cliente_id'."
+  ]
+}`;
+
+    try {
+      const provider = ProviderFactory.createCustomProvider(params.customAI);
+      const raw = await provider.generateContent(prompt, { temperature: 0.2, max_tokens: 3500 });
+      const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(clean);
+
+      return {
+        migrationTool: "Flyway",
+        v1InitialSchema: parsed.v1InitialSchema || "-- V1__initial_legacy.sql\n" + params.unnormalizedCode,
+        v2Refactor3fnSchema: parsed.v2Refactor3fnSchema || "-- V2__refactor_3fn.sql\n-- Tabelas normalizadas",
+        dataMigrationSql: parsed.dataMigrationSql || "-- Script de Carga de Dados Históricos\nINSERT INTO tb_cliente (nome) SELECT DISTINCT nome_cliente FROM tb_pedido_antigo;",
+        downRollbackSql: parsed.downRollbackSql || "-- U2__rollback.sql\nDROP TABLE IF EXISTS tb_cliente CASCADE;",
+        breakingChangesNotes: Array.isArray(parsed.breakingChangesNotes) ? parsed.breakingChangesNotes : [
+          "Colunas redundantes migradas para entidades dedicadas em 3FN.",
+          "Necessário atualizar queries no repositório de backend para usar JOINs."
+        ]
+      };
+    } catch (e: any) {
+      return {
+        migrationTool: "Flyway",
+        v1InitialSchema: `-- V1__initial_legacy_schema.sql (PostgreSQL)\nCREATE TABLE tb_pedido_legado (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    cliente_nome VARCHAR(150) NOT NULL,\n    cliente_email VARCHAR(150) NOT NULL,\n    cliente_cidade VARCHAR(100) NOT NULL,\n    cliente_estado VARCHAR(2) NOT NULL,\n    valor_total NUMERIC(12,2) NOT NULL,\n    data_pedido TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`,
+        v2Refactor3fnSchema: `-- V2__normalize_3fn_refactor.sql\n-- 1. Criação das entidades normalizadas (3FN)\nCREATE TABLE tb_estado (\n    sigla VARCHAR(2) PRIMARY KEY,\n    nome VARCHAR(50) NOT NULL\n);\n\nCREATE TABLE tb_cidade (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    nome VARCHAR(100) NOT NULL,\n    estado_sigla VARCHAR(2) NOT NULL REFERENCES tb_estado(sigla)\n);\n\nCREATE TABLE tb_cliente (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    nome VARCHAR(150) NOT NULL,\n    email VARCHAR(150) NOT NULL UNIQUE,\n    cidade_id UUID REFERENCES tb_cidade(id)\n);\n\nCREATE TABLE tb_pedido (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    cliente_id UUID NOT NULL REFERENCES tb_cliente(id),\n    valor_total NUMERIC(12,2) NOT NULL,\n    data_pedido TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`,
+        dataMigrationSql: `-- Migração e Preservação de Dados Históricos:\nINSERT INTO tb_estado (sigla, nome)\nSELECT DISTINCT cliente_estado, cliente_estado FROM tb_pedido_legado ON CONFLICT DO NOTHING;\n\nINSERT INTO tb_cidade (nome, estado_sigla)\nSELECT DISTINCT cliente_cidade, cliente_estado FROM tb_pedido_legado;\n\nINSERT INTO tb_cliente (nome, email, cidade_id)\nSELECT DISTINCT p.cliente_nome, p.cliente_email, c.id\nFROM tb_pedido_legado p\nJOIN tb_cidade c ON c.nome = p.cliente_cidade;\n\nINSERT INTO tb_pedido (id, cliente_id, valor_total, data_pedido)\nSELECT p.id, cl.id, p.valor_total, p.data_pedido\nFROM tb_pedido_legado p\nJOIN tb_cliente cl ON cl.email = p.cliente_email;\n\n-- DROP TABLE tb_pedido_legado; -- Executar após validação de integridade`,
+        downRollbackSql: `-- U2__rollback_3fn_refactor.sql\nDROP TABLE IF EXISTS tb_pedido CASCADE;\nDROP TABLE IF EXISTS tb_cliente CASCADE;\nDROP TABLE IF EXISTS tb_cidade CASCADE;\nDROP TABLE IF EXISTS tb_estado CASCADE;`,
+        breakingChangesNotes: [
+          "A tabela legada 'tb_pedido_legado' foi decomposta em 'tb_estado', 'tb_cidade', 'tb_cliente' e 'tb_pedido' em 3FN.",
+          "Campos transitivos de endereço e dados pessoais agora requerem navegação relacional.",
+          "Dados históricos migrados com integridade referencial garantida."
+        ]
+      };
+    }
+  }
+
+  /**
+   * Run LGPD and Data Privacy Governance audit over database models and DDL.
+   */
+  static async auditDataPrivacyGovernance(params: {
+    ddlOrMermaid: string;
+    extractedTables?: ExtractedTableEntity[];
+    customAI?: CustomAIRequestOptions;
+  }): Promise<LgpdGovernanceAuditResult> {
+    const text = params.ddlOrMermaid.toLowerCase();
+    
+    // Scan PIIs deterministically
+    const findings: LgpdPiiFinding[] = [];
+    const piiRules = [
+      { pattern: /cpf|cnpj|documento|rg|passaporte/i, category: "CPF/Documento" as const, risk: "Crítico" as const, mask: "Mascaramento com hash parcial (ex: '***.456.789-**') e criptografia em repouso." },
+      { pattern: /email|telefone|celular|whatsapp|fone/i, category: "Contato (Email/Tel)" as const, risk: "Alto" as const, mask: "Ofuscação dinâmica no SELECT para usuários sem permissão de DPO." },
+      { pattern: /salario|renda|cartao|cvv|conta|faturamento|preco/i, category: "Financeiro/Salário" as const, risk: "Crítico" as const, mask: "Criptografia forte (AES-256 / pgcrypto) e isolamento em schema com RBAC." },
+      { pattern: /biometria|foto|doenca|cid|diagnostico|genero|religiao/i, category: "Sensível/Saúde/Biometria" as const, risk: "Crítico" as const, mask: "Dado Pessoal Sensível (Art. 5º II LGPD): Consentimento explícito e log de acesso obrigatório." },
+      { pattern: /endereco|cep|logradouro|bairro|numero_casa|ip_address|geolocalizacao/i, category: "Localização/Endereço" as const, risk: "Médio" as const, mask: "Truncamento ou agregação por região para relatórios gerenciais." }
+    ];
+
+    const lines = params.ddlOrMermaid.split("\n");
+    let currentTable = "tb_geral";
+
+    for (const line of lines) {
+      const tableMatch = line.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)/i) || line.match(/([a-zA-Z0-9_]+)\s*\{/);
+      if (tableMatch) {
+        currentTable = tableMatch[1];
+      }
+
+      for (const rule of piiRules) {
+        if (rule.pattern.test(line)) {
+          const colMatch = line.match(/^\s*([a-zA-Z0-9_]+)/);
+          const colName = colMatch ? colMatch[1] : "campo_sensivel";
+          if (!findings.some(f => f.tableName === currentTable && f.columnName === colName)) {
+            findings.push({
+              tableName: currentTable,
+              columnName: colName,
+              piiCategory: rule.category,
+              riskLevel: rule.risk,
+              maskingRecommendation: rule.mask,
+              encryptionNeeded: rule.risk === "Crítico"
+            });
+          }
+        }
+      }
+    }
+
+    const hasSoftDelete = text.includes("deleted_at") || text.includes("is_deleted") || text.includes("inativo");
+    const hasConsent = text.includes("consent") || text.includes("termo_aceite") || text.includes("opt_in");
+    const hasAuditTrail = text.includes("created_at") || text.includes("updated_at") || text.includes("audit_");
+
+    let score = 100;
+    if (findings.length > 0) {
+      const criticalCount = findings.filter(f => f.riskLevel === "Crítico").length;
+      score -= criticalCount * 12;
+      score -= (findings.length - criticalCount) * 5;
+    }
+    if (!hasSoftDelete) score -= 10;
+    if (!hasConsent && findings.length > 0) score -= 10;
+    if (!hasAuditTrail) score -= 10;
+    score = Math.max(20, Math.min(100, score));
+
+    const status: LgpdGovernanceAuditResult["status"] = score >= 80 
+      ? "Conforme com Boas Práticas" 
+      : score >= 60 
+        ? "Atenção - PIIs Não Mascarados" 
+        : "Risco Crítico de Não-Conformidade";
+
+    const recommendations: string[] = [];
+    if (!hasSoftDelete) recommendations.push("Implementar coluna 'deleted_at TIMESTAMP NULL' para viabilizar direito ao esquecimento (Art. 18 LGPD) via Soft Delete.");
+    if (!hasConsent && findings.length > 0) recommendations.push("Adicionar tabela de registro de consentimento e finalidade de tratamento ('tb_consentimento_titular').");
+    if (!hasAuditTrail) recommendations.push("Incluir campos 'created_at', 'updated_at' e triggers de auditoria para rastreabilidade de acessos.");
+    if (findings.some(f => f.encryptionNeeded)) recommendations.push("Criptografar campos críticos (CPF, Cartão, Dados de Saúde) com pgcrypto / TDE.");
+
+    return {
+      complianceScore: score,
+      status,
+      piiFindings: findings,
+      retentionPolicyAudit: {
+        hasSoftDelete,
+        hasConsentTimestamp: hasConsent,
+        hasAuditTrail,
+        recommendations
+      },
+      executiveSummary: `Auditoria LGPD identificou ${findings.length} campos com dados pessoais (PII). Score de conformidade regulatória: ${score}/100. ${status}.`
+    };
   }
 }

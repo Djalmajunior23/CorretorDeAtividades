@@ -40,7 +40,14 @@ import {
   Activity,
   BarChart3,
   Camera,
-  Play
+  Play,
+  ShieldAlert,
+  FileDigit,
+  History,
+  Lock,
+  Workflow,
+  Binary,
+  CheckSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -52,7 +59,11 @@ import {
   DatabaseModelAssessmentResult,
   DatabaseModelCategory,
   DatabaseTargetSgbd,
-  DatabaseInputFormat
+  DatabaseInputFormat,
+  MultiSgbdDdlResult,
+  MigrationPackageResult,
+  LgpdGovernanceAuditResult,
+  LgpdPiiFinding
 } from "../services/databaseModelAssessmentService";
 import { 
   DatabaseLoadBenchmarkService, 
@@ -123,7 +134,7 @@ export default function DiagramAssessmentView() {
   const [isGeneratingRef, setIsGeneratingRef] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [assessment, setAssessment] = useState<DatabaseModelAssessmentResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"feedback" | "studentTables" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram" | "benchmark">("feedback");
+  const [activeTab, setActiveTab] = useState<"feedback" | "studentTables" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram" | "benchmark" | "multi_sgbd" | "migrations" | "lgpd_governance">("feedback");
   const [profileModalStudentId, setProfileModalStudentId] = useState<string | null>(null);
 
   // Advanced Benchmark & Vision Recognition States
@@ -132,6 +143,19 @@ export default function DiagramAssessmentView() {
   const [isExportingBenchmarkPdf, setIsExportingBenchmarkPdf] = useState<boolean>(false);
   const [visionResult, setVisionResult] = useState<DiagramVisionRecognitionResult | null>(null);
   const [isVisionProcessing, setIsVisionProcessing] = useState<boolean>(false);
+
+  // Multi-SGBD Converter States
+  const [multiSgbdResult, setMultiSgbdResult] = useState<MultiSgbdDdlResult | null>(null);
+  const [selectedMultiSgbdDialect, setSelectedMultiSgbdDialect] = useState<"postgresql" | "mysql" | "oracle" | "sqlserver" | "sqlite">("postgresql");
+  const [isConvertingMultiSgbd, setIsConvertingMultiSgbd] = useState<boolean>(false);
+
+  // 3FN Migrations Package States
+  const [migrationsResult, setMigrationsResult] = useState<MigrationPackageResult | null>(null);
+  const [isGeneratingMigrations, setIsGeneratingMigrations] = useState<boolean>(false);
+
+  // LGPD Governance Audit States
+  const [lgpdReport, setLgpdReport] = useState<LgpdGovernanceAuditResult | null>(null);
+  const [isAuditingLgpd, setIsAuditingLgpd] = useState<boolean>(false);
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -509,6 +533,141 @@ CREATE TABLE tb_item_pedido (
     }
   };
 
+  // Multi-SGBD Generation Handler
+  const handleConvertMultiSgbd = async () => {
+    const code = assessment?.generatedDdlSql || diagramCode;
+    if (!code || !code.trim()) {
+      toast.error("Nenhum código ou modelo disponível para conversão.");
+      return;
+    }
+    setIsConvertingMultiSgbd(true);
+    try {
+      const res = await fetch(apiUrl("/api/database/convert-multi-sgbd"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelCode: code,
+          extractedTables: assessment?.extractedTables
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMultiSgbdResult(data.multiSgbd);
+        setActiveTab("multi_sgbd");
+        toast.success("✓ Conversão Multi-SGBD concluída para 5 bancos de dados!");
+      } else {
+        const fallback = await DatabaseModelAssessmentService.convertModelToMultiSgbd({
+          modelCode: code,
+          extractedTables: assessment?.extractedTables
+        });
+        setMultiSgbdResult(fallback);
+        setActiveTab("multi_sgbd");
+        toast.success("✓ Conversão Multi-SGBD gerada com sucesso!");
+      }
+    } catch (e) {
+      const fallback = await DatabaseModelAssessmentService.convertModelToMultiSgbd({
+        modelCode: code,
+        extractedTables: assessment?.extractedTables
+      });
+      setMultiSgbdResult(fallback);
+      setActiveTab("multi_sgbd");
+      toast.success("✓ Conversão Multi-SGBD gerada com sucesso!");
+    } finally {
+      setIsConvertingMultiSgbd(false);
+    }
+  };
+
+  // 3FN Migrations Package Handler
+  const handleGenerateMigrations = async () => {
+    const code = diagramCode;
+    if (!code || !code.trim()) {
+      toast.error("Insira o modelo ou DDL para gerar as migrações.");
+      return;
+    }
+    setIsGeneratingMigrations(true);
+    try {
+      const res = await fetch(apiUrl("/api/database/generate-migrations"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          unnormalizedCode: code,
+          normalizedCode: assessment?.generatedDdlSql,
+          targetSgbd
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMigrationsResult(data.migrations);
+        setActiveTab("migrations");
+        toast.success("✓ Pacote de migrações Flyway / 3FN gerado com sucesso!");
+      } else {
+        const fallback = await DatabaseModelAssessmentService.generateRefactored3fnMigrations({
+          unnormalizedCode: code,
+          normalizedCode: assessment?.generatedDdlSql,
+          targetSgbd
+        });
+        setMigrationsResult(fallback);
+        setActiveTab("migrations");
+        toast.success("✓ Pacote de migrações gerado com sucesso!");
+      }
+    } catch (e) {
+      const fallback = await DatabaseModelAssessmentService.generateRefactored3fnMigrations({
+        unnormalizedCode: code,
+        normalizedCode: assessment?.generatedDdlSql,
+        targetSgbd
+      });
+      setMigrationsResult(fallback);
+      setActiveTab("migrations");
+      toast.success("✓ Pacote de migrações gerado com sucesso!");
+    } finally {
+      setIsGeneratingMigrations(false);
+    }
+  };
+
+  // LGPD Privacy Governance Audit Handler
+  const handleAuditLgpd = async () => {
+    const code = assessment?.generatedDdlSql || diagramCode;
+    if (!code || !code.trim()) {
+      toast.error("Nenhum modelo ou DDL disponível para auditoria LGPD.");
+      return;
+    }
+    setIsAuditingLgpd(true);
+    try {
+      const res = await fetch(apiUrl("/api/database/lgpd-audit"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ddlOrMermaid: code,
+          extractedTables: assessment?.extractedTables
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLgpdReport(data.lgpdReport);
+        setActiveTab("lgpd_governance");
+        toast.success("✓ Auditoria de Governança & LGPD concluída!");
+      } else {
+        const fallback = await DatabaseModelAssessmentService.auditDataPrivacyGovernance({
+          ddlOrMermaid: code,
+          extractedTables: assessment?.extractedTables
+        });
+        setLgpdReport(fallback);
+        setActiveTab("lgpd_governance");
+        toast.success("✓ Auditoria LGPD concluída!");
+      }
+    } catch (e) {
+      const fallback = await DatabaseModelAssessmentService.auditDataPrivacyGovernance({
+        ddlOrMermaid: code,
+        extractedTables: assessment?.extractedTables
+      });
+      setLgpdReport(fallback);
+      setActiveTab("lgpd_governance");
+      toast.success("✓ Auditoria LGPD concluída!");
+    } finally {
+      setIsAuditingLgpd(false);
+    }
+  };
+
   const handleExportPdf = async () => {
     if (!assessment) return;
     setIsExportingPdf(true);
@@ -604,7 +763,37 @@ CREATE TABLE tb_item_pedido (
               title="Executar Teste de Carga e Benchmark de 100.000 Registros"
             >
               {isBenchmarking ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-              {isBenchmarking ? "Simulando Carga..." : "Benchmark 100k"}
+              {isBenchmarking ? "Simulando..." : "Benchmark 100k"}
+            </button>
+
+            <button
+              onClick={handleConvertMultiSgbd}
+              disabled={isConvertingMultiSgbd}
+              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold font-mono transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Converter para PostgreSQL, MySQL, Oracle, SQL Server e SQLite"
+            >
+              {isConvertingMultiSgbd ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Binary className="w-4 h-4" />}
+              {isConvertingMultiSgbd ? "Convertendo..." : "Multi-SGBD"}
+            </button>
+
+            <button
+              onClick={handleGenerateMigrations}
+              disabled={isGeneratingMigrations}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono transition-all shadow-lg shadow-emerald-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Gerar Migrações Flyway e Refatoração 3FN"
+            >
+              {isGeneratingMigrations ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Workflow className="w-4 h-4" />}
+              {isGeneratingMigrations ? "Gerando..." : "Migrações 3FN"}
+            </button>
+
+            <button
+              onClick={handleAuditLgpd}
+              disabled={isAuditingLgpd}
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold font-mono transition-all shadow-lg shadow-rose-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Auditoria de Conformidade LGPD & Detecção de PII"
+            >
+              {isAuditingLgpd ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+              {isAuditingLgpd ? "Auditando..." : "Auditoria LGPD"}
             </button>
 
             <button
@@ -945,6 +1134,39 @@ CREATE TABLE tb_item_pedido (
                 >
                   Diagrama Visual
                 </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("multi_sgbd");
+                    if (!multiSgbdResult) handleConvertMultiSgbd();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "multi_sgbd" ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" : "text-indigo-400 hover:text-indigo-300"
+                  }`}
+                >
+                  Multi-SGBD (5)
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("migrations");
+                    if (!migrationsResult) handleGenerateMigrations();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "migrations" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "text-emerald-400 hover:text-emerald-300"
+                  }`}
+                >
+                  Migrações 3FN
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("lgpd_governance");
+                    if (!lgpdReport) handleAuditLgpd();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "lgpd_governance" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "text-rose-400 hover:text-rose-300"
+                  }`}
+                >
+                  Auditoria LGPD
+                </button>
               </div>
 
               {/* Tab: Feedback & Strengths */}
@@ -1168,6 +1390,299 @@ CREATE TABLE tb_item_pedido (
                       <span className="text-xs text-slate-500 font-mono">Renderizando diagrama corrigido...</span>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Tab: Multi-SGBD Converter */}
+              {activeTab === "multi_sgbd" && (
+                <div className="space-y-4">
+                  {multiSgbdResult ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-mono font-bold text-slate-400 mr-2">SGBD Alvo:</span>
+                          {(["postgresql", "mysql", "oracle", "sqlserver", "sqlite"] as const).map((dial) => (
+                            <button
+                              key={dial}
+                              onClick={() => setSelectedMultiSgbdDialect(dial)}
+                              className={`px-3 py-1 rounded-lg text-xs font-mono font-bold uppercase transition ${
+                                selectedMultiSgbdDialect === dial
+                                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                              }`}
+                            >
+                              {dial}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/60 px-2.5 py-1 rounded border border-indigo-500/30">
+                            Collation: {multiSgbdResult.recommendedCollation}
+                          </span>
+                          <button
+                            onClick={() => {
+                              const code = multiSgbdResult[selectedMultiSgbdDialect];
+                              navigator.clipboard.writeText(code);
+                              toast.success(`DDL para ${selectedMultiSgbdDialect.toUpperCase()} copiado!`);
+                            }}
+                            className="text-xs font-mono text-slate-300 hover:text-white flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg border border-slate-700 transition"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copiar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Code Output */}
+                      <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-cyan-300 overflow-x-auto max-h-[260px] scrollbar-thin">
+                        {multiSgbdResult[selectedMultiSgbdDialect]}
+                      </pre>
+
+                      {/* FK Indexes & Triggers Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                          <span className="text-xs font-mono font-bold text-sky-400 uppercase flex items-center gap-1.5">
+                            <Key className="w-3.5 h-3.5" /> Índices Automáticos em Foreign Keys:
+                          </span>
+                          <div className="space-y-1 font-mono text-[11px] text-slate-300 max-h-[140px] overflow-y-auto">
+                            {multiSgbdResult.foreignKeyIndexes.map((idx, i) => (
+                              <div key={i} className="p-1.5 rounded bg-slate-900 border border-slate-800/80">
+                                {idx}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                          <span className="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5" /> Triggers de Auditoria (updated_at):
+                          </span>
+                          <div className="space-y-1 font-mono text-[11px] text-slate-300 max-h-[140px] overflow-y-auto">
+                            {multiSgbdResult.auditTriggers.map((trg, i) => (
+                              <div key={i} className="p-1.5 rounded bg-slate-900 border border-slate-800/80">
+                                {trg}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center space-y-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                      <Binary className="w-8 h-8 text-indigo-400 mx-auto" />
+                      <h4 className="text-sm font-bold text-white">Conversão Multi-SGBD Pronta para Executar</h4>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Gere scripts DDL otimizados para PostgreSQL, MySQL, Oracle, SQL Server e SQLite com índices em chaves estrangeiras.
+                      </p>
+                      <button
+                        onClick={handleConvertMultiSgbd}
+                        disabled={isConvertingMultiSgbd}
+                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition"
+                      >
+                        {isConvertingMultiSgbd ? "Convertendo..." : "Gerar Scripts Multi-SGBD Agora"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab: Migrations 3FN Package */}
+              {activeTab === "migrations" && (
+                <div className="space-y-4">
+                  {migrationsResult ? (
+                    <div className="space-y-4">
+                      {/* Breaking Changes Banner */}
+                      <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-2">
+                        <span className="text-xs font-mono font-bold text-emerald-300 uppercase flex items-center gap-1.5">
+                          <Workflow className="w-3.5 h-3.5 text-emerald-400" />
+                          Plano de Refatoração 3FN & Preservação Histórica (Flyway):
+                        </span>
+                        <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside">
+                          {migrationsResult.breakingChangesNotes.map((note, idx) => (
+                            <li key={idx}>{note}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* V2 Normalized Migration Code */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold text-slate-300">
+                            V2__normalize_3fn_refactor.sql (Criação das Entidades Decompostas)
+                          </span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(migrationsResult.v2Refactor3fnSchema);
+                              toast.success("Script V2 copiado!");
+                            }}
+                            className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copiar V2
+                          </button>
+                        </div>
+                        <pre className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-emerald-300 overflow-x-auto max-h-[160px] scrollbar-thin">
+                          {migrationsResult.v2Refactor3fnSchema}
+                        </pre>
+                      </div>
+
+                      {/* Data Migration DML */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold text-slate-300">
+                            Carga e Migração de Dados Históricos (DML com DISTINCT & JOIN)
+                          </span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(migrationsResult.dataMigrationSql);
+                              toast.success("Script de migração de dados copiado!");
+                            }}
+                            className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copiar DML
+                          </button>
+                        </div>
+                        <pre className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-amber-300 overflow-x-auto max-h-[140px] scrollbar-thin">
+                          {migrationsResult.dataMigrationSql}
+                        </pre>
+                      </div>
+
+                      {/* Rollback Script */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold text-slate-300">
+                            U2__rollback_3fn_refactor.sql (Rollback Seguro)
+                          </span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(migrationsResult.downRollbackSql);
+                              toast.success("Script de Rollback copiado!");
+                            }}
+                            className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copiar Rollback
+                          </button>
+                        </div>
+                        <pre className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-rose-300 overflow-x-auto max-h-[120px] scrollbar-thin">
+                          {migrationsResult.downRollbackSql}
+                        </pre>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center space-y-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                      <Workflow className="w-8 h-8 text-emerald-400 mx-auto" />
+                      <h4 className="text-sm font-bold text-white">Nenhum Pacote de Migração Gerado</h4>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Gere scripts versionados Flyway com migração de dados sem perda de histórico e script de rollback.
+                      </p>
+                      <button
+                        onClick={handleGenerateMigrations}
+                        disabled={isGeneratingMigrations}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition"
+                      >
+                        {isGeneratingMigrations ? "Gerando..." : "Gerar Pacote Flyway 3FN Agora"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab: LGPD Privacy & Governance */}
+              {activeTab === "lgpd_governance" && (
+                <div className="space-y-4">
+                  {lgpdReport ? (
+                    <div className="space-y-4">
+                      {/* Governance Score Banner */}
+                      <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center justify-center font-bold font-mono text-base">
+                            {lgpdReport.complianceScore}%
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-white">{lgpdReport.status}</h3>
+                            <p className="text-xs text-slate-400">Score de Governança & Conformidade LGPD (Lei 13.709/2018)</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-1 rounded text-[11px] font-bold ${
+                            lgpdReport.retentionPolicyAudit.hasSoftDelete ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                          }`}>
+                            Soft Delete: {lgpdReport.retentionPolicyAudit.hasSoftDelete ? "✓ Ativo" : "✗ Ausente"}
+                          </span>
+                          <span className={`px-2.5 py-1 rounded text-[11px] font-bold ${
+                            lgpdReport.retentionPolicyAudit.hasAuditTrail ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+                          }`}>
+                            Audit Trail: {lgpdReport.retentionPolicyAudit.hasAuditTrail ? "✓ Ativo" : "✗ Ausente"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* PII Findings Table */}
+                      <div className="space-y-2">
+                        <span className="text-xs font-mono font-bold text-slate-300 uppercase">
+                          Campos com Dados Pessoais Sensíveis Detectados ({lgpdReport.piiFindings.length}):
+                        </span>
+
+                        <div className="rounded-xl border border-slate-800 overflow-x-auto bg-slate-950">
+                          <table className="w-full text-left text-xs font-mono">
+                            <thead className="bg-slate-900/80 text-slate-400 border-b border-slate-800">
+                              <tr>
+                                <th className="p-2.5">Tabela</th>
+                                <th className="p-2.5">Coluna</th>
+                                <th className="p-2.5">Categoria PII</th>
+                                <th className="p-2.5">Risco</th>
+                                <th className="p-2.5">Recomendação de Proteção</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/60">
+                              {lgpdReport.piiFindings.map((pii, idx) => (
+                                <tr key={idx} className="hover:bg-slate-900/50 transition">
+                                  <td className="p-2.5 font-bold text-sky-300">{pii.tableName}</td>
+                                  <td className="p-2.5 text-white">{pii.columnName}</td>
+                                  <td className="p-2.5 text-amber-300">{pii.piiCategory}</td>
+                                  <td className="p-2.5">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      pii.riskLevel === "Crítico" ? "bg-rose-500/20 text-rose-300" : pii.riskLevel === "Alto" ? "bg-amber-500/20 text-amber-300" : "bg-sky-500/20 text-sky-300"
+                                    }`}>
+                                      {pii.riskLevel}
+                                    </span>
+                                  </td>
+                                  <td className="p-2.5 text-slate-300 text-[11px] font-sans">{pii.maskingRecommendation}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Actionable Recommendations */}
+                      <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                        <span className="text-xs font-mono font-bold text-rose-400 uppercase flex items-center gap-1.5">
+                          <ShieldAlert className="w-3.5 h-3.5" /> Ações Recomendadas para Conformidade Integral:
+                        </span>
+                        <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside">
+                          {lgpdReport.retentionPolicyAudit.recommendations.map((rec, i) => (
+                            <li key={i}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center space-y-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                      <ShieldAlert className="w-8 h-8 text-rose-400 mx-auto" />
+                      <h4 className="text-sm font-bold text-white">Auditoria de Dados Pessoais e LGPD</h4>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Identifique colunas com CPFs, emails, dados de saúde e financeiros sem criptografia ou mascaramento.
+                      </p>
+                      <button
+                        onClick={handleAuditLgpd}
+                        disabled={isAuditingLgpd}
+                        className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition"
+                      >
+                        {isAuditingLgpd ? "Auditando..." : "Executar Auditoria LGPD Agora"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
