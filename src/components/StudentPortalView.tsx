@@ -32,7 +32,17 @@ import {
   Zap,
   Target,
   Play,
-  Flame
+  Flame,
+  Briefcase,
+  ShieldCheck,
+  QrCode,
+  Github,
+  MessageSquareCode,
+  FileSignature,
+  Share2,
+  Copy,
+  Lock,
+  ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -49,6 +59,19 @@ import {
   MicroChallenge, 
   LiveSocraticFeedback 
 } from "../services/adaptiveLearningPathwayService";
+import {
+  TechMockInterviewService,
+  TechMockInterviewReport
+} from "../services/techMockInterviewService";
+import {
+  DigitalCredentialPortfolioService,
+  DigitalMicroCredential,
+  GitHubPortfolioPackage
+} from "../services/digitalCredentialPortfolioService";
+import {
+  StylometricAuthenticityService,
+  StylometricAuthenticityReport
+} from "../services/stylometricAuthenticityService";
 
 interface StudentPortalViewProps {
   initialStudentId?: string;
@@ -61,7 +84,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(initialStudentId);
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId);
-  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades" | "corrections" | "adaptive_pathway" | "academy_mastery">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades" | "corrections" | "adaptive_pathway" | "academy_mastery" | "tech_interview" | "credentials_portfolio" | "authenticity_audit">("pending");
   const [loading, setLoading] = useState<boolean>(true);
 
   // Portal data
@@ -148,6 +171,28 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   const [activeChallenge, setActiveChallenge] = useState<MicroChallenge | null>(null);
   const [challengeUserCode, setChallengeUserCode] = useState<string>("");
   const [completedChallenges, setCompletedChallenges] = useState<string[]>([]);
+
+  // Tech Mock Interview state
+  const [interviewRole, setInterviewRole] = useState<string>("Desenvolvedor Backend Python / SQL Júnior");
+  const [interviewCodeSample, setInterviewCodeSample] = useState<string>(
+    "def processar_pedidos(pedidos):\n    # Solucao com filtros defensivos\n    return [p for p in pedidos if p.get('valor', 0) > 0]"
+  );
+  const [interviewReport, setInterviewReport] = useState<TechMockInterviewReport | null>(null);
+  const [isLoadingInterview, setIsLoadingInterview] = useState<boolean>(false);
+
+  // Digital Micro-Credentials & GitHub Portfolio state
+  const [issuedCredentials, setIssuedCredentials] = useState<DigitalMicroCredential[]>([]);
+  const [githubPortfolio, setGithubPortfolio] = useState<GitHubPortfolioPackage | null>(null);
+  const [isIssuingCredential, setIsIssuingCredential] = useState<boolean>(false);
+  const [isGeneratingGithub, setIsGeneratingGithub] = useState<boolean>(false);
+
+  // Stylometric Authenticity state
+  const [auditCode, setAuditCode] = useState<string>(
+    "def validar_integridade(dados):\n    # Codigo autoral com tratamento de excecao\n    if not dados:\n        return False\n    return all(isinstance(x, (int, float)) for x in dados)"
+  );
+  const [auditLanguage, setAuditLanguage] = useState<string>("Python");
+  const [auditReport, setAuditReport] = useState<StylometricAuthenticityReport | null>(null);
+  const [isLoadingAudit, setIsLoadingAudit] = useState<boolean>(false);
 
   // Student roster for simulation
   const availableStudents = [
@@ -533,6 +578,164 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     setActiveChallenge(null);
   };
 
+  // Tech Mock Interview Handlers
+  const handleRunMockInterview = async () => {
+    setIsLoadingInterview(true);
+    try {
+      const res = await fetch(apiUrl("/api/interview/simulate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: selectedStudentId,
+          studentName: studentProfile.name,
+          className: studentProfile.class_name,
+          targetRole: interviewRole,
+          studentCodeSample: interviewCodeSample,
+          activityTitle: "Projetos Práticos e Arquitetura de Software"
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInterviewReport(data.interviewReport);
+        toast.success("✓ Simulação de Entrevista Técnica concluída com sucesso!");
+      } else {
+        const report = await TechMockInterviewService.generateInterviewSession({
+          studentId: selectedStudentId,
+          studentName: studentProfile.name,
+          className: studentProfile.class_name,
+          targetRole: interviewRole,
+          studentCodeSample: interviewCodeSample
+        });
+        setInterviewReport(report);
+        toast.success("✓ Entrevista Técnica concluída via motor local!");
+      }
+    } catch (e) {
+      const report = await TechMockInterviewService.generateInterviewSession({
+        studentId: selectedStudentId,
+        studentName: studentProfile.name,
+        className: studentProfile.class_name,
+        targetRole: interviewRole,
+        studentCodeSample: interviewCodeSample
+      });
+      setInterviewReport(report);
+      toast.success("✓ Entrevista Técnica concluída via motor local!");
+    } finally {
+      setIsLoadingInterview(false);
+    }
+  };
+
+  const handleDownloadInterviewPdf = () => {
+    if (!interviewReport) return;
+    try {
+      TechMockInterviewService.exportInterviewReportPdf(interviewReport);
+      toast.success("✓ Download do Laudo de Entrevista Técnica iniciado!");
+    } catch (e: any) {
+      toast.error("Erro ao gerar PDF: " + e.message);
+    }
+  };
+
+  // Digital Micro-Credentials & GitHub Handlers
+  const handleIssueCredential = (act: any) => {
+    setIsIssuingCredential(true);
+    try {
+      const cred = DigitalCredentialPortfolioService.issueDigitalMicroCredential({
+        studentId: selectedStudentId,
+        studentName: studentProfile.name,
+        enrollmentCode: studentProfile.enrollment_code,
+        courseName: studentProfile.course,
+        competencyTitle: act.title || "Desenvolvimento de Software Defensivo",
+        gradeScore: act.score ?? 85,
+        skillsAcquired: ["Lógica Algorítmica", "Clean Code", "Testes Automatizados", "Padrão SENAI"],
+        workloadHours: 40
+      });
+      setIssuedCredentials(prev => [cred, ...prev.filter(c => c.competencyTitle !== cred.competencyTitle)]);
+      toast.success("🏆 Micro-Credencial emitida com assinatura digital SHA-256!");
+    } catch (e: any) {
+      toast.error("Erro ao emitir credencial: " + e.message);
+    } finally {
+      setIsIssuingCredential(false);
+    }
+  };
+
+  const handleDownloadCredentialPdf = (cred: DigitalMicroCredential) => {
+    try {
+      DigitalCredentialPortfolioService.exportMicroCredentialPdf(cred);
+      toast.success("✓ Certificado oficial SENAI baixado!");
+    } catch (e: any) {
+      toast.error("Erro ao gerar PDF: " + e.message);
+    }
+  };
+
+  const handleGenerateGithub = (act: any) => {
+    setIsGeneratingGithub(true);
+    try {
+      const pkg = DigitalCredentialPortfolioService.generateGitHubPortfolio({
+        studentName: studentProfile.name,
+        projectTitle: act.title || "Projeto Prático SENAI",
+        language: act.language || "Python",
+        architectureSummary: "Arquitetura modular em camadas, com testes automatizados e validação de casos de borda.",
+        keyFeatures: [
+          "Validação defensiva de dados de entrada",
+          "Execução assíncrona otimizada",
+          "Conformidade com os padrões da Indústria 4.0"
+        ],
+        studentCodeSample: act.submitted_code || "def solucao():\n    return True"
+      });
+      setGithubPortfolio(pkg);
+      toast.success("🚀 Portfólio GitHub e README.md gerados com sucesso!");
+    } catch (e: any) {
+      toast.error("Erro ao gerar portfólio GitHub: " + e.message);
+    } finally {
+      setIsGeneratingGithub(false);
+    }
+  };
+
+  // Stylometric Authenticity Handlers
+  const handleRunAuthenticityAudit = async () => {
+    if (!auditCode.trim()) {
+      toast.error("Por favor, cole um código para auditar.");
+      return;
+    }
+    setIsLoadingAudit(true);
+    try {
+      const res = await fetch(apiUrl("/api/authenticity/audit"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: studentProfile.name,
+          activityTitle: "Auditoria Prévia de Submissão",
+          submittedCode: auditCode,
+          language: auditLanguage
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAuditReport(data.authenticityReport);
+        toast.success("✓ Auditoria Estilométrica concluída!");
+      } else {
+        const report = await StylometricAuthenticityService.auditCodeAuthenticity({
+          studentName: studentProfile.name,
+          activityTitle: "Auditoria Prévia de Submissão",
+          submittedCode: auditCode,
+          language: auditLanguage
+        });
+        setAuditReport(report);
+        toast.success("✓ Auditoria concluída via motor local!");
+      }
+    } catch (e) {
+      const report = await StylometricAuthenticityService.auditCodeAuthenticity({
+        studentName: studentProfile.name,
+        activityTitle: "Auditoria Prévia de Submissão",
+        submittedCode: auditCode,
+        language: auditLanguage
+      });
+      setAuditReport(report);
+      toast.success("✓ Auditoria concluída via motor local!");
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  };
+
   const pendingActivities = activities.filter(a => a.delivery_status === "pending" || a.delivery_status === "late_pending");
   const deliveredActivities = activities.filter(a => a.delivery_status === "delivered_on_time" || a.delivery_status === "delivered_late");
   const gradedActivities = activities.filter(a => a.score !== undefined && a.score !== null);
@@ -740,6 +943,42 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         >
           <Brain className="w-4 h-4" />
           Academia de Aprendizado Profundo (IA)
+        </button>
+
+        <button
+          onClick={() => setActiveTab("tech_interview")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            activeTab === "tech_interview" 
+              ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold shadow-md shadow-blue-500/30" 
+              : "bg-slate-900 text-cyan-400 hover:text-cyan-300 hover:bg-slate-800 border border-cyan-500/20"
+          }`}
+        >
+          <Briefcase className="w-4 h-4" />
+          Mock Interview & Empregabilidade
+        </button>
+
+        <button
+          onClick={() => setActiveTab("credentials_portfolio")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            activeTab === "credentials_portfolio" 
+              ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md shadow-emerald-500/30" 
+              : "bg-slate-900 text-teal-400 hover:text-teal-300 hover:bg-slate-800 border border-teal-500/20"
+          }`}
+        >
+          <QrCode className="w-4 h-4" />
+          Micro-Certificados (SHA-256) & GitHub
+        </button>
+
+        <button
+          onClick={() => setActiveTab("authenticity_audit")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            activeTab === "authenticity_audit" 
+              ? "bg-gradient-to-r from-rose-600 to-pink-600 text-white font-bold shadow-md shadow-rose-500/30" 
+              : "bg-slate-900 text-rose-400 hover:text-rose-300 hover:bg-slate-800 border border-rose-500/20"
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          Auditoria de Autenticidade & Defesa
         </button>
       </div>
 
@@ -1093,6 +1332,507 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           studentName={studentProfile.name}
           courseName={studentProfile.course}
         />
+      )}
+
+      {/* Tab 7: Tech Mock Interviewer com IA & Laudo de Empregabilidade */}
+      {activeTab === "tech_interview" && (
+        <div className="space-y-6">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-cyan-300 border border-cyan-500/30">
+                    IA Interviewer Sênior
+                  </span>
+                  <span className="text-xs text-slate-400">Simulação de Processo Seletivo Tech</span>
+                </div>
+                <h2 className="text-lg font-bold text-white mt-1">Tech Mock Interviewer • Simulação de Entrevista Técnica</h2>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Defenda sua solução arquitetural, explique trade-offs e receba feedback em 4 etapas como em empresas de tecnologia.
+                </p>
+              </div>
+
+              <button
+                onClick={handleRunMockInterview}
+                disabled={isLoadingInterview}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs transition shadow-lg shadow-blue-500/30 disabled:opacity-50"
+              >
+                {isLoadingInterview ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Entrevistando...
+                  </>
+                ) : (
+                  <>
+                    <Briefcase className="w-4 h-4" />
+                    Iniciar Simulação de Entrevista
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Role & Code Configuration */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Vaga / Cargo Alvo da Simulação:
+                </label>
+                <select
+                  value={interviewRole}
+                  onChange={(e) => setInterviewRole(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 text-xs text-white px-3 py-2 rounded-xl focus:outline-none focus:border-blue-500"
+                >
+                  <option value="Desenvolvedor Backend Python / SQL Júnior">Desenvolvedor Backend Python / SQL Júnior</option>
+                  <option value="Desenvolvedor Full Stack React / Node.js Júnior">Desenvolvedor Full Stack React / Node.js Júnior</option>
+                  <option value="Engenheiro de Dados & Cloud Júnior">Engenheiro de Dados & Cloud Júnior</option>
+                  <option value="Especialista em Automação & IoT Industrial">Especialista em Automação & IoT Industrial</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Código ou Projeto Base para Arguição Técnica:
+                </label>
+                <textarea
+                  value={interviewCodeSample}
+                  onChange={(e) => setInterviewCodeSample(e.target.value)}
+                  rows={4}
+                  className="w-full bg-slate-950 font-mono text-xs text-cyan-300 p-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500"
+                  placeholder="Cole seu código ou função principal para a entrevista..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Interview Report Results */}
+          {interviewReport && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              {/* Executive Summary Card */}
+              <div className="bg-gradient-to-r from-slate-900 via-blue-950/40 to-slate-900 border border-blue-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-500/20 text-cyan-300 border border-cyan-500/40 flex items-center justify-center text-xl font-bold">
+                      {interviewReport.employabilityScore}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-white">{interviewReport.studentName}</h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {interviewReport.mockHiringRecommendation}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Maturidade Técnica: <span className="text-white font-semibold">{interviewReport.technicalMaturityLevel}</span> • Vaga: <span className="text-cyan-300">{interviewReport.targetRole}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleDownloadInterviewPdf}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow-md shadow-blue-600/30"
+                  >
+                    <Download className="w-4 h-4" />
+                    Baixar Laudo Oficial (PDF)
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-200">
+                  <span className="font-semibold text-cyan-400">Parecer Executivo do Tech Lead:</span> {interviewReport.executiveVerdict}
+                </div>
+
+                {/* Score Breakdown */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-center">
+                    <span className="text-[11px] text-slate-400">Profundidade Técnica</span>
+                    <p className="text-lg font-bold text-cyan-400 mt-0.5">{interviewReport.technicalDepthScore} / 100</p>
+                  </div>
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-center">
+                    <span className="text-[11px] text-slate-400">Clareza de Comunicação</span>
+                    <p className="text-lg font-bold text-blue-400 mt-0.5">{interviewReport.communicationClarityScore} / 100</p>
+                  </div>
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-center">
+                    <span className="text-[11px] text-slate-400">Resolução de Problemas</span>
+                    <p className="text-lg font-bold text-indigo-400 mt-0.5">{interviewReport.problemSolvingScore} / 100</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4 Progressive Stages */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <MessageSquareCode className="w-4 h-4 text-cyan-400" />
+                  Arguição em 4 Etapas:
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {interviewReport.exchanges.map((ex) => (
+                    <div
+                      key={ex.questionId}
+                      className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3 shadow-lg"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-500/20 text-cyan-300 border border-cyan-500/30">
+                          Etapa {ex.questionId}: {ex.stage}
+                        </span>
+                        {ex.feedbackScore !== undefined && (
+                          <span className="text-xs font-mono font-bold text-emerald-400">
+                            Nota: {ex.feedbackScore}/100
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-white font-medium bg-slate-950 p-3 rounded-xl border border-slate-800">
+                        <span className="text-cyan-400 font-bold block mb-1">Pergunta do Entrevistador:</span>
+                        {ex.interviewerQuestion}
+                      </div>
+
+                      {ex.studentAnswer && (
+                        <div className="text-xs text-slate-300 bg-slate-950/50 p-3 rounded-xl border border-slate-800/80">
+                          <span className="text-indigo-400 font-bold block mb-1">Sua Defesa Técnica:</span>
+                          {ex.studentAnswer}
+                        </div>
+                      )}
+
+                      {ex.aiEvaluationComment && (
+                        <div className="text-xs text-slate-400 bg-blue-950/20 p-2.5 rounded-xl border border-blue-500/20">
+                          <span className="text-cyan-300 font-semibold block mb-0.5">Feedback do Tech Lead:</span>
+                          {ex.aiEvaluationComment}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Strengths & Recommendations */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-2">
+                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    Pontos Fortes Demonstrados:
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-slate-300 list-disc list-inside">
+                    {interviewReport.keyStrengthsObserved.map((st, i) => (
+                      <li key={i}>{st}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-2">
+                  <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Lightbulb className="w-4 h-4 text-amber-400" />
+                    Preparação Recomendada para o Mercado:
+                  </h4>
+                  <ul className="space-y-1.5 text-xs text-slate-300 list-disc list-inside">
+                    {interviewReport.recommendedMarketPreparation.map((rp, i) => (
+                      <li key={i}>{rp}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 8: Micro-Certificados Digitais (SHA-256) & Portfólio GitHub */}
+      {activeTab === "credentials_portfolio" && (
+        <div className="space-y-6">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Validação Criptográfica SHA-256
+                </span>
+                <span className="text-xs text-slate-400">Micro-Credenciais & Portfólio</span>
+              </div>
+              <h2 className="text-lg font-bold text-white mt-1">Micro-Certificados Digitais SENAI & Gerador GitHub</h2>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Emita certificados oficiais em PDF para atividades aprovadas ($\ge 60$ pts) e gere o `README.md` completo para seu GitHub.
+              </p>
+            </div>
+
+            {/* List of Eligible Delivered Activities */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Suas Atividades Entregues & Elegíveis para Certificação:
+              </h3>
+
+              {deliveredActivities.map((act) => (
+                <div
+                  key={act.id}
+                  className="bg-slate-950/80 border border-slate-800 hover:border-emerald-500/40 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">
+                        Nota: {act.score ?? 85} / 100
+                      </span>
+                      <span className="text-xs font-mono text-slate-400 uppercase">
+                        {act.language || "Python"}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white">{act.title}</h4>
+                    <p className="text-xs text-slate-400">{act.description}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleIssueCredential(act)}
+                      disabled={isIssuingCredential}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/20"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      Emitir Certificado (PDF)
+                    </button>
+
+                    <button
+                      onClick={() => handleGenerateGithub(act)}
+                      disabled={isGeneratingGithub}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition"
+                    >
+                      <Github className="w-3.5 h-3.5" />
+                      Gerar README GitHub
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Issued Micro-Credentials Showcase */}
+          {issuedCredentials.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Award className="w-4 h-4 text-emerald-400" />
+                Micro-Credenciais Emitidas com Assinatura Criptográfica:
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {issuedCredentials.map((cred) => (
+                  <div
+                    key={cred.credentialId}
+                    className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-5 space-y-3 shadow-xl relative overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {cred.honorsLevel}
+                      </span>
+                      <span className="text-xs font-mono text-slate-400">
+                        Nota: {cred.gradeScore}/100
+                      </span>
+                    </div>
+
+                    <h4 className="text-sm font-bold text-white">{cred.competencyTitle}</h4>
+                    <p className="text-xs text-slate-300">{cred.courseName}</p>
+
+                    <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1 font-mono text-[10px] text-slate-400">
+                      <div className="flex items-center justify-between">
+                        <span>Hash SHA-256:</span>
+                        <span className="text-emerald-400 truncate max-w-[200px]">{cred.verificationHash}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>ID da Credencial:</span>
+                        <span className="text-white">{cred.credentialId}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                      <span className="text-[11px] text-slate-400">Carga Horária: {cred.workloadHours}h</span>
+                      <button
+                        onClick={() => handleDownloadCredentialPdf(cred)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Baixar Certificado PDF
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* GitHub Portfolio Markdown Modal / Preview */}
+          {githubPortfolio && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Github className="w-5 h-5 text-indigo-400" />
+                  <div>
+                    <h3 className="text-sm font-bold text-white">README.md Pronto para o Repositório GitHub</h3>
+                    <p className="text-xs text-slate-400">Copie o Markdown gerado e cole direto no seu GitHub.</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(githubPortfolio.readmeMarkdown);
+                    toast.success("✓ README.md copiado para a área de transferência!");
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-md shadow-indigo-600/30"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copiar Markdown
+                </button>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 max-h-80 overflow-y-auto leading-relaxed">
+                <pre className="whitespace-pre-wrap">{githubPortfolio.readmeMarkdown}</pre>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 9: Auditoria de Autenticidade & Defesa Socrática */}
+      {activeTab === "authenticity_audit" && (
+        <div className="space-y-6">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    Estilometria & Anti-Plágio IA
+                  </span>
+                  <span className="text-xs text-slate-400">Auditoria Prévia</span>
+                </div>
+                <h2 className="text-lg font-bold text-white mt-1">Auditoria de Autenticidade & Defesa Socrática</h2>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Analise padrões estilométricos do seu código e pratique as perguntas conceituais antes da avaliação do docente.
+                </p>
+              </div>
+
+              <button
+                onClick={handleRunAuthenticityAudit}
+                disabled={isLoadingAudit}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs transition shadow-lg shadow-rose-500/30 disabled:opacity-50"
+              >
+                {isLoadingAudit ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Auditando...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    Executar Auditoria de Autenticidade
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-300">Código para Auditoria Estilométrica:</label>
+                <select
+                  value={auditLanguage}
+                  onChange={(e) => setAuditLanguage(e.target.value)}
+                  className="bg-slate-950 border border-slate-700 text-xs text-slate-300 px-2.5 py-1 rounded-lg"
+                >
+                  <option value="Python">Python</option>
+                  <option value="JavaScript">JavaScript</option>
+                  <option value="TypeScript">TypeScript</option>
+                  <option value="SQL">SQL</option>
+                </select>
+              </div>
+
+              <textarea
+                value={auditCode}
+                onChange={(e) => setAuditCode(e.target.value)}
+                rows={6}
+                className="w-full bg-slate-950 font-mono text-xs text-emerald-400 p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-rose-500 leading-relaxed"
+                placeholder="Cole o código que deseja auditar..."
+              />
+            </div>
+          </div>
+
+          {/* Audit Results */}
+          {auditReport && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              {/* Score Card */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center justify-center font-bold text-lg">
+                      {auditReport.authorshipConfidenceScore}%
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white">Veredito: {auditReport.authenticityVerdict}</h3>
+                      <p className="text-xs text-slate-400">Score de Autenticidade Autoral</p>
+                    </div>
+                  </div>
+
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                    auditReport.isAuthentic ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                  }`}>
+                    {auditReport.isAuthentic ? "✓ Aprovado na Auditoria" : "Requer Atenção"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-[11px] text-slate-400">Entropia de Tokens</span>
+                    <p className="text-sm font-bold text-white mt-0.5">{auditReport.metrics.tokenEntropy}</p>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-[11px] text-slate-400">Razão Comentário / Código</span>
+                    <p className="text-sm font-bold text-white mt-0.5">{auditReport.metrics.commentToCodeRatio}</p>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="text-[11px] text-slate-400">Similaridade Padrão IA</span>
+                    <p className="text-sm font-bold text-cyan-400 mt-0.5">{auditReport.metrics.aiFingerprintSimilarity}%</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Socratic Defense Questions */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-rose-400" />
+                  Perguntas Socráticas de Defesa Técnica (Prepare-se para o Professor):
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {auditReport.socraticDefenseQuestions.map((q) => (
+                    <div
+                      key={q.questionId}
+                      className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 shadow-lg"
+                    >
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        Pergunta {q.questionId}
+                      </span>
+
+                      <p className="text-xs text-white font-medium">{q.questionText}</p>
+
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-mono text-[11px] text-amber-300">
+                        <span className="text-[10px] text-slate-500 block mb-0.5">Trecho Alvo:</span>
+                        {q.targetedCodeSnippet}
+                      </div>
+
+                      <div className="text-xs text-slate-400 bg-rose-950/20 p-2.5 rounded-xl border border-rose-500/20">
+                        <span className="text-rose-300 font-semibold block mb-0.5">Explicação Conceitual Esperada:</span>
+                        {q.expectedConceptExplanation}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
       )}
 
       {/* Loading Modal Overlay */}

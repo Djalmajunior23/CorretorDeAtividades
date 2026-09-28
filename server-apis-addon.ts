@@ -46,6 +46,10 @@ import { DiagramVisionRecognitionService } from "./src/services/diagramVisionRec
 import { DatabaseLoadBenchmarkService } from "./src/services/databaseLoadBenchmarkService";
 import { AdaptiveLearningPathwayService } from "./src/services/adaptiveLearningPathwayService";
 import { TeacherPedagogicalCockpitService } from "./src/services/teacherPedagogicalCockpitService";
+import { TechMockInterviewService } from "./src/services/techMockInterviewService";
+import { StylometricAuthenticityService } from "./src/services/stylometricAuthenticityService";
+import { DigitalCredentialPortfolioService } from "./src/services/digitalCredentialPortfolioService";
+import { TeacherVoiceFeedbackService } from "./src/services/teacherVoiceFeedbackService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -8688,6 +8692,207 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         customAI
       });
       res.json({ success: true, cockpit });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Simulação de Entrevista Técnica Interativa (Tech Mock Interview)
+  app.post("/api/interview/simulate", async (req, res) => {
+    try {
+      const { studentId, studentName, className, targetRole, studentCodeSample, activityTitle, customAI } = req.body;
+      const interviewReport = await TechMockInterviewService.generateInterviewSession({
+        studentId: studentId || "st-01",
+        studentName: studentName || "Estudante SENAI",
+        className,
+        targetRole,
+        studentCodeSample,
+        activityTitle,
+        customAI
+      });
+      res.json({ success: true, interviewReport });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Laudo Oficial de Entrevista Técnica em PDF (SENAI)
+  app.post("/api/interview/export-pdf", (req, res) => {
+    try {
+      const { report } = req.body;
+      if (!report) {
+        return res.status(400).json({ success: false, error: "Relatório de entrevista é obrigatório." });
+      }
+      const pdfBuffer = TechMockInterviewService.exportInterviewReportPdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=mock_interview_senai_${report.interviewId || "laudo"}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Auditoria de Autenticidade & Detecção de Código IA (Estilometria)
+  app.post("/api/authenticity/audit", async (req, res) => {
+    try {
+      const { studentName, activityTitle, submittedCode, language, previousSubmissionSample, customAI } = req.body;
+      if (!submittedCode || !submittedCode.trim()) {
+        return res.status(400).json({ success: false, error: "Código submetido é obrigatório para auditoria." });
+      }
+      const authenticityReport = await StylometricAuthenticityService.auditCodeAuthenticity({
+        studentName: studentName || "Estudante",
+        activityTitle: activityTitle || "Atividade de Código",
+        submittedCode,
+        language,
+        previousSubmissionSample,
+        customAI
+      });
+      res.json({ success: true, authenticityReport });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Emissão de Micro-Credencial Digital Verificável (SHA-256)
+  app.post("/api/credentials/issue", (req, res) => {
+    try {
+      const { studentId, studentName, enrollmentCode, courseName, competencyTitle, gradeScore, skillsAcquired, workloadHours } = req.body;
+      const credential = DigitalCredentialPortfolioService.issueDigitalMicroCredential({
+        studentId: studentId || "st-01",
+        studentName: studentName || "Estudante SENAI",
+        enrollmentCode,
+        courseName,
+        competencyTitle: competencyTitle || "Desenvolvimento de Soluções com Algoritmos Defensivos",
+        gradeScore: Number(gradeScore) ?? 85,
+        skillsAcquired,
+        workloadHours: Number(workloadHours) || 40
+      });
+      res.json({ success: true, credential });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Certificado de Micro-Credencial em PDF (SENAI)
+  app.post("/api/credentials/export-pdf", (req, res) => {
+    try {
+      const { credential } = req.body;
+      if (!credential) {
+        return res.status(400).json({ success: false, error: "Micro-credencial é obrigatória." });
+      }
+      const pdfBuffer = DigitalCredentialPortfolioService.exportMicroCredentialPdf(credential);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=certificado_microcredencial_senai_${credential.credentialId || "doc"}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Gerador de Portfólio GitHub & README.md
+  app.post("/api/portfolio/generate-github", (req, res) => {
+    try {
+      const { studentName, projectTitle, language, architectureSummary, keyFeatures, studentCodeSample } = req.body;
+      const portfolio = DigitalCredentialPortfolioService.generateGitHubPortfolio({
+        studentName: studentName || "Estudante SENAI",
+        projectTitle: projectTitle || "Desafio de Programação e Arquitetura",
+        language: language || "Python",
+        architectureSummary,
+        keyFeatures,
+        studentCodeSample
+      });
+      res.json({ success: true, portfolio });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Polimento Pedagógico de Ditado por Voz do Professor
+  app.post("/api/teacher/voice-feedback", async (req, res) => {
+    try {
+      const { studentName, activityTitle, rawSpeechText, studentScore, customAI } = req.body;
+      if (!rawSpeechText || !rawSpeechText.trim()) {
+        return res.status(400).json({ success: false, error: "Texto do ditado por voz é obrigatório." });
+      }
+      const feedback = await TeacherVoiceFeedbackService.processTeacherDictation({
+        studentName: studentName || "Estudante SENAI",
+        activityTitle: activityTitle || "Atividade Avaliativa",
+        rawSpeechText,
+        studentScore,
+        customAI
+      });
+      res.json({ success: true, feedback });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Code Arena - Gerar Desafio Algorítmico Competitivo
+  app.post("/api/arena/challenge", async (req, res) => {
+    try {
+      const { difficulty, theme, language, providerConfig } = req.body;
+      const challenge = await CodeArenaService.generateChallenge({
+        difficulty,
+        theme,
+        language,
+        providerConfig
+      });
+      res.json({ success: true, challenge });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Code Arena - Criar Sala de Duelo
+  app.post("/api/arena/rooms", async (req, res) => {
+    try {
+      const { roomName, mode, difficulty, duelistA, duelistB, providerConfig } = req.body;
+      const room = await CodeArenaService.createRoom({
+        roomName: roomName || "Duelo 1v1 SENAI Arena",
+        mode: mode || "1v1_duel",
+        difficulty,
+        duelistA: duelistA || { id: "duelist-1", name: "Estudante 1" },
+        duelistB,
+        providerConfig
+      });
+      res.json({ success: true, room });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // GET: Code Arena - Obter Sala por ID
+  app.get("/api/arena/rooms/:roomId", (req, res) => {
+    try {
+      const room = CodeArenaService.getRoom(req.params.roomId);
+      res.json({ success: true, room });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Code Arena - Submeter Solução de Duelo
+  app.post("/api/arena/submit", (req, res) => {
+    try {
+      const { roomId, duelistId, code, language, timeElapsedSeconds } = req.body;
+      const result = CodeArenaService.submitSolution({
+        roomId: roomId || "arena-default",
+        duelistId: duelistId || "duelist-1",
+        code: code || "",
+        language: language || "python",
+        timeElapsedSeconds: Number(timeElapsedSeconds) || 30
+      });
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // GET: Code Arena - Leaderboard Global
+  app.get("/api/arena/leaderboard", (_req, res) => {
+    try {
+      const leaderboard = CodeArenaService.getLeaderboard();
+      res.json({ success: true, leaderboard });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
