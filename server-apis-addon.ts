@@ -42,6 +42,10 @@ import { AdvancedItemBankService } from "./src/services/advancedItemBankService"
 import { DeepLearningAcademyService, MasteryPassportReport } from "./src/services/deepLearningAcademyService";
 import { PedagogicalAuthoringSuiteService } from "./src/services/pedagogicalAuthoringSuiteService";
 import { StudentCorrectionInsightService } from "./src/services/studentCorrectionInsightService";
+import { DiagramVisionRecognitionService } from "./src/services/diagramVisionRecognitionService";
+import { DatabaseLoadBenchmarkService } from "./src/services/databaseLoadBenchmarkService";
+import { AdaptiveLearningPathwayService } from "./src/services/adaptiveLearningPathwayService";
+import { TeacherPedagogicalCockpitService } from "./src/services/teacherPedagogicalCockpitService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -8575,6 +8579,115 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       });
 
       res.json({ success: true, hint });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // FRENTES AVANÇADAS: VISÃO COMPUTACIONAL, BENCHMARK DB, ADAPTATIVO & COCKPIT
+  // =========================================================================
+
+  // POST: Reconhecimento de Diagramas & Desenhos por Foto (Visão Computacional)
+  app.post("/api/diagrams/vision-recognize", async (req, res) => {
+    try {
+      const { imageBase64, diagramType, customAI } = req.body;
+      if (!imageBase64) {
+        return res.status(400).json({ success: false, error: "Imagem em base64 é obrigatória." });
+      }
+      const recognitionResult = await DiagramVisionRecognitionService.recognizeDiagramFromPhoto({
+        imageBase64,
+        diagramType,
+        customAI
+      });
+      res.json({ success: true, recognitionResult });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Simulador de Testes de Carga & Benchmark de Performance de Banco de Dados
+  app.post("/api/database/load-benchmark", async (req, res) => {
+    try {
+      const { ddlSql, activityTitle, studentName, className, targetRows, customAI } = req.body;
+      if (!ddlSql || !ddlSql.trim()) {
+        return res.status(400).json({ success: false, error: "Script DDL SQL é obrigatório para o benchmark." });
+      }
+      const benchmarkResult = await DatabaseLoadBenchmarkService.runSchemaLoadBenchmark({
+        ddlSql,
+        activityTitle,
+        studentName,
+        className,
+        targetRows,
+        customAI
+      });
+      res.json({ success: true, benchmarkResult });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Laudo Oficial de Benchmark em PDF (SENAI)
+  app.post("/api/database/export-benchmark-pdf", (req, res) => {
+    try {
+      const { benchmarkResult } = req.body;
+      if (!benchmarkResult) {
+        return res.status(400).json({ success: false, error: "Dados do benchmark são obrigatórios." });
+      }
+      const pdfBuffer = DatabaseLoadBenchmarkService.exportBenchmarkReportPdf(benchmarkResult);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=benchmark_db_senai_${benchmarkResult.benchmarkId || "laudo"}.pdf`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Gerar Trilha Adaptativa de Micro-Desafios Gamificados
+  app.post("/api/adaptive/pathway-plan", async (req, res) => {
+    try {
+      const { studentId, studentName, identifiedGaps, courseName, recentActivityTitle, customAI } = req.body;
+      const pathwayPlan = await AdaptiveLearningPathwayService.generateAdaptivePathway({
+        studentId: studentId || "st-01",
+        studentName: studentName || "Estudante SENAI",
+        identifiedGaps: identifiedGaps || [],
+        courseName,
+        recentActivityTitle,
+        customAI
+      });
+      res.json({ success: true, pathwayPlan });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Copiloto Socrático Live Coding (Tempo Real)
+  app.post("/api/student/live-coding-socratic", async (req, res) => {
+    try {
+      const { code, language, activityTitle, customAI } = req.body;
+      const liveFeedback = await AdaptiveLearningPathwayService.evaluateLiveCodingSnapshot({
+        code: code || "",
+        language: language || "Python",
+        activityTitle: activityTitle || "Atividade Prática",
+        customAI
+      });
+      res.json({ success: true, liveFeedback });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Cockpit Pedagógico da Turma & Heatmap de Dificuldades
+  app.post("/api/teacher/class-cockpit", async (req, res) => {
+    try {
+      const { classId, className, submissions, customAI } = req.body;
+      const cockpit = await TeacherPedagogicalCockpitService.generateClassCockpit({
+        classId: classId || "turma-1a",
+        className: className || "Turma 1A - Desenvolvimento de Sistemas",
+        submissions,
+        customAI
+      });
+      res.json({ success: true, cockpit });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

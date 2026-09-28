@@ -28,7 +28,11 @@ import {
   FileCheck,
   Activity,
   Cpu,
-  ArrowRight
+  ArrowRight,
+  Zap,
+  Target,
+  Play,
+  Flame
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -39,6 +43,12 @@ import {
   AssertiveStudentReport, 
   DisputeReviewResult 
 } from "../services/studentCorrectionInsightService";
+import { 
+  AdaptiveLearningPathwayService, 
+  AdaptivePathwayPlan, 
+  MicroChallenge, 
+  LiveSocraticFeedback 
+} from "../services/adaptiveLearningPathwayService";
 
 interface StudentPortalViewProps {
   initialStudentId?: string;
@@ -51,7 +61,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(initialStudentId);
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId);
-  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades" | "corrections" | "academy_mastery">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "delivered" | "grades" | "corrections" | "adaptive_pathway" | "academy_mastery">("pending");
   const [loading, setLoading] = useState<boolean>(true);
 
   // Portal data
@@ -113,6 +123,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   const [submissionNotes, setSubmissionNotes] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Live Socratic Helper inside Submission Workspace
+  const [liveSocratic, setLiveSocratic] = useState<LiveSocraticFeedback | null>(null);
+  const [isRequestingLiveSocratic, setIsRequestingLiveSocratic] = useState<boolean>(false);
+
   // Assertive Report & Diagnostics Inspection Modal
   const [inspectingReport, setInspectingReport] = useState<AssertiveStudentReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
@@ -126,6 +140,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   const [disputeJustification, setDisputeJustification] = useState<string>("");
   const [isSubmittingDispute, setIsSubmittingDispute] = useState<boolean>(false);
   const [disputeResult, setDisputeResult] = useState<DisputeReviewResult | null>(null);
+
+  // Adaptive Pathway & Gamified Micro-Challenges
+  const [adaptivePathway, setAdaptivePathway] = useState<AdaptivePathwayPlan | null>(null);
+  const [isLoadingPathway, setIsLoadingPathway] = useState<boolean>(false);
+  const [studentXp, setStudentXp] = useState<number>(450);
+  const [activeChallenge, setActiveChallenge] = useState<MicroChallenge | null>(null);
+  const [challengeUserCode, setChallengeUserCode] = useState<string>("");
+  const [completedChallenges, setCompletedChallenges] = useState<string[]>([]);
 
   // Student roster for simulation
   const availableStudents = [
@@ -175,12 +197,90 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
   useEffect(() => {
     fetchPortalData(selectedStudentId);
+    fetchAdaptivePathway(selectedStudentId);
   }, [selectedStudentId, selectedClassId]);
+
+  const fetchAdaptivePathway = async (stId: string) => {
+    setIsLoadingPathway(true);
+    try {
+      const res = await fetch(apiUrl("/api/adaptive/pathway-plan"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: stId,
+          studentName: studentProfile.name,
+          courseName: studentProfile.course,
+          identifiedGaps: ["Normalização 3FN", "Validação defensiva de coleções", "Tratamento de Exceções"]
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdaptivePathway(data.pathwayPlan);
+      } else {
+        const fallback = await AdaptiveLearningPathwayService.generateAdaptivePathway({
+          studentId: stId,
+          studentName: studentProfile.name,
+          identifiedGaps: ["Validação antecipada", "Normalização 3FN"]
+        });
+        setAdaptivePathway(fallback);
+      }
+    } catch (e) {
+      const fallback = await AdaptiveLearningPathwayService.generateAdaptivePathway({
+        studentId: stId,
+        studentName: studentProfile.name,
+        identifiedGaps: ["Validação antecipada", "Normalização 3FN"]
+      });
+      setAdaptivePathway(fallback);
+    } finally {
+      setIsLoadingPathway(false);
+    }
+  };
 
   const handleOpenSubmission = (act: any) => {
     setSubmittingActivity(act);
     setSubmissionCode(act.submitted_code || act.starter_code || "# Escreva seu código aqui em " + (act.language || "Python"));
     setSubmissionNotes("");
+    setLiveSocratic(null);
+  };
+
+  // Live Socratic Request in the Submission Workspace
+  const handleRequestLiveSocratic = async () => {
+    if (!submissionCode.trim()) {
+      toast.error("Digite algum trecho de código antes de pedir orientação ao copiloto.");
+      return;
+    }
+    setIsRequestingLiveSocratic(true);
+    try {
+      const res = await fetch(apiUrl("/api/student/live-coding-socratic"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: submissionCode,
+          language: submittingActivity?.language || "Python",
+          activityTitle: submittingActivity?.title || "Atividade Prática"
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLiveSocratic(data.liveFeedback);
+      } else {
+        const fallbackFeedback = await AdaptiveLearningPathwayService.evaluateLiveCodingSnapshot({
+          code: submissionCode,
+          language: submittingActivity?.language || "Python",
+          activityTitle: submittingActivity?.title || "Atividade Prática"
+        });
+        setLiveSocratic(fallbackFeedback);
+      }
+    } catch (e) {
+      const fallbackFeedback = await AdaptiveLearningPathwayService.evaluateLiveCodingSnapshot({
+        code: submissionCode,
+        language: submittingActivity?.language || "Python",
+        activityTitle: submittingActivity?.title || "Atividade Prática"
+      });
+      setLiveSocratic(fallbackFeedback);
+    } finally {
+      setIsRequestingLiveSocratic(false);
+    }
   };
 
   const handleSendSubmission = async () => {
@@ -269,7 +369,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         const data = await res.json();
         setInspectingReport(data.report);
       } else {
-        // Fallback directly via service
         const fallbackRep = await StudentCorrectionInsightService.generateAssertiveStudentReport({
           submissionId: act.id,
           studentId: selectedStudentId,
@@ -422,6 +521,18 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     }
   };
 
+  // Complete a Micro-Challenge
+  const handleCompleteMicroChallenge = (challenge: MicroChallenge) => {
+    if (completedChallenges.includes(challenge.challengeId)) {
+      toast.info("Você já concluiu esta missão!");
+      return;
+    }
+    setCompletedChallenges(prev => [...prev, challenge.challengeId]);
+    setStudentXp(prev => prev + challenge.xpReward);
+    toast.success(`🎉 Missão Concluída! +${challenge.xpReward} XP adicionados ao seu perfil!`);
+    setActiveChallenge(null);
+  };
+
   const pendingActivities = activities.filter(a => a.delivery_status === "pending" || a.delivery_status === "late_pending");
   const deliveredActivities = activities.filter(a => a.delivery_status === "delivered_on_time" || a.delivery_status === "delivered_late");
   const gradedActivities = activities.filter(a => a.score !== undefined && a.score !== null);
@@ -445,6 +556,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 <h1 className="text-2xl font-bold text-white tracking-tight">{studentProfile.name}</h1>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Estudante Ativo
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 font-mono">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" /> {studentXp} XP
                 </span>
               </div>
               <p className="text-xs text-indigo-200/80 mt-1">
@@ -605,11 +719,23 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab("adaptive_pathway")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            activeTab === "adaptive_pathway" 
+              ? "bg-amber-600 text-slate-950 font-bold shadow-md shadow-amber-600/30" 
+              : "bg-slate-900 text-amber-400 hover:text-amber-300 hover:bg-slate-800 border border-amber-500/20"
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          Trilhas Adaptativas & Micro-Missões (XP)
+        </button>
+
+        <button
           onClick={() => setActiveTab("academy_mastery")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
             activeTab === "academy_mastery" 
-              ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold shadow-md shadow-amber-500/30" 
-              : "bg-slate-900 text-amber-400 hover:text-amber-300 hover:bg-slate-800 border border-amber-500/20"
+              ? "bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold shadow-md shadow-purple-500/30" 
+              : "bg-slate-900 text-purple-400 hover:text-purple-300 hover:bg-slate-800 border border-purple-500/20"
           }`}
         >
           <Brain className="w-4 h-4" />
@@ -814,7 +940,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 </div>
                 <h2 className="text-xl font-bold text-white mt-2">Central de Laudos & Evolução Contínua do Estudante</h2>
                 <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-                  Aqui você tem acesso à auditoria linha a linha das suas soluções de código, diagnóstico do interpretador, análise assintótica Big-O, dicas incrementais de refatoração e canal de recurso pedagógico com a banca examinadora.
+                  Acesse auditorias linha a linha de código, testes com diff, análise assintótica Big-O, dicas socráticas e recursos técnicos com a banca examinadora.
                 </p>
               </div>
 
@@ -875,7 +1001,92 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
-      {/* Tab 5: Academia de Aprendizado Profundo & Domínio Cognitivo */}
+      {/* Tab 5: Adaptive Pathway & Gamified Micro-Challenges */}
+      {activeTab === "adaptive_pathway" && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-slate-900 via-amber-950/30 to-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 w-fit">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  Trilhas Adaptativas • Missões Rápidas de 5 Minutos
+                </span>
+                <h2 className="text-xl font-bold text-white mt-2">Missões Gamificadas para Fechamento de Lacunas</h2>
+                <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+                  A IA analisa os pontos de atenção identificados nas suas correções e gera micro-desafios práticos para você subir de nível e desbloquear insígnias técnicas.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                <div>
+                  <span className="text-[11px] text-slate-400">Insígnia em Progresso:</span>
+                  <p className="text-xs font-bold text-amber-300">{adaptivePathway?.unlockedBadge || "Mestre da Resolução Socrática"}</p>
+                </div>
+                <Award className="w-8 h-8 text-amber-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(adaptivePathway?.recommendedMicroChallenges || []).map((ch) => {
+              const isDone = completedChallenges.includes(ch.challengeId);
+              return (
+                <div 
+                  key={ch.challengeId}
+                  className={`p-5 rounded-2xl border transition shadow-lg flex flex-col justify-between space-y-4 ${
+                    isDone 
+                      ? "bg-slate-900/60 border-emerald-500/40" 
+                      : "bg-slate-900/90 border-slate-800 hover:border-amber-500/50"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-amber-300 border border-amber-500/30">
+                        {ch.topic}
+                      </span>
+                      <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                        +{ch.xpReward} XP
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-bold text-white">{ch.title}</h3>
+                    <p className="text-xs text-slate-300 leading-relaxed">{ch.scenario}</p>
+
+                    <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-mono text-[11px] text-emerald-400">
+                      <pre className="overflow-x-auto">{ch.starterCodeSnippet}</pre>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                    <span className="text-[11px] text-slate-400">Meta: {ch.expectedGoal}</span>
+
+                    <button
+                      onClick={() => handleCompleteMicroChallenge(ch)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                        isDone 
+                          ? "bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 cursor-default" 
+                          : "bg-amber-600 hover:bg-amber-500 text-slate-950 shadow-md shadow-amber-600/30"
+                      }`}
+                    >
+                      {isDone ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" /> Concluído
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5" /> Resolver Missão
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 6: Academia de Aprendizado Profundo & Domínio Cognitivo */}
       {activeTab === "academy_mastery" && (
         <StudentAcademyMasteryView 
           studentId={selectedStudentId}
@@ -1275,7 +1486,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
-      {/* Interactive Submission Workspace Modal */}
+      {/* Interactive Submission Workspace Modal with Live Socratic Helper */}
       {submittingActivity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
           <motion.div
@@ -1302,10 +1513,22 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                  <Terminal className="w-4 h-4 text-indigo-400" />
-                  Seu Código / Solução ({submittingActivity.language || "Python"}):
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Terminal className="w-4 h-4 text-indigo-400" />
+                    Seu Código / Solução ({submittingActivity.language || "Python"}):
+                  </label>
+
+                  <button
+                    onClick={handleRequestLiveSocratic}
+                    disabled={isRequestingLiveSocratic}
+                    className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1.5 transition"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {isRequestingLiveSocratic ? "Analisando..." : "Pedir Ajuda ao Copiloto Socrático"}
+                  </button>
+                </div>
+
                 <textarea
                   value={submissionCode}
                   onChange={(e) => setSubmissionCode(e.target.value)}
@@ -1314,6 +1537,30 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   placeholder="Cole ou digite sua solução aqui..."
                 />
               </div>
+
+              {/* Live Socratic Assistant Bubble */}
+              {liveSocratic && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-2 text-xs"
+                >
+                  <div className="flex items-center justify-between text-indigo-300 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <Lightbulb className="w-4 h-4 text-amber-400" />
+                      Reflexão do Copiloto Socrático:
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
+                      {liveSocratic.status}
+                    </span>
+                  </div>
+                  <p className="text-slate-200 leading-relaxed font-sans">{liveSocratic.socraticQuestion}</p>
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800 font-mono">
+                    <span>{liveSocratic.testCasePreview.quickDiagnostic}</span>
+                    <span>Testes Parciais: {liveSocratic.testCasePreview.passedCount}/{liveSocratic.testCasePreview.totalCount}</span>
+                  </div>
+                </motion.div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">

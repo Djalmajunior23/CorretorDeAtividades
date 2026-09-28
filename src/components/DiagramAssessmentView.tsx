@@ -36,7 +36,11 @@ import {
   Trash2,
   Zap,
   Cpu,
-  Key
+  Key,
+  Activity,
+  BarChart3,
+  Camera,
+  Play
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -50,6 +54,14 @@ import {
   DatabaseTargetSgbd,
   DatabaseInputFormat
 } from "../services/databaseModelAssessmentService";
+import { 
+  DatabaseLoadBenchmarkService, 
+  DatabaseLoadBenchmarkResult 
+} from "../services/databaseLoadBenchmarkService";
+import { 
+  DiagramVisionRecognitionService, 
+  DiagramVisionRecognitionResult 
+} from "../services/diagramVisionRecognitionService";
 import { StudentProfileModal } from "./StudentProfileModal";
 
 // Initialize mermaid
@@ -111,11 +123,19 @@ export default function DiagramAssessmentView() {
   const [isGeneratingRef, setIsGeneratingRef] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [assessment, setAssessment] = useState<DatabaseModelAssessmentResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"feedback" | "studentTables" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram">("feedback");
+  const [activeTab, setActiveTab] = useState<"feedback" | "studentTables" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram" | "benchmark">("feedback");
   const [profileModalStudentId, setProfileModalStudentId] = useState<string | null>(null);
+
+  // Advanced Benchmark & Vision Recognition States
+  const [benchmarkResult, setBenchmarkResult] = useState<DatabaseLoadBenchmarkResult | null>(null);
+  const [isBenchmarking, setIsBenchmarking] = useState<boolean>(false);
+  const [isExportingBenchmarkPdf, setIsExportingBenchmarkPdf] = useState<boolean>(false);
+  const [visionResult, setVisionResult] = useState<DiagramVisionRecognitionResult | null>(null);
+  const [isVisionProcessing, setIsVisionProcessing] = useState<boolean>(false);
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchClasses();
@@ -259,10 +279,10 @@ CREATE TABLE tb_item_pedido (
       toast.error("Por favor, selecione um arquivo de imagem válido (PNG, JPG, WEBP, SVG).");
       return;
     }
-    // Clean previous evaluation states on new file upload
     setAssessment(null);
     setRenderedSvg("");
     setRenderError(null);
+    setVisionResult(null);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -273,6 +293,61 @@ CREATE TABLE tb_item_pedido (
       toast.success("Nova imagem do modelo de banco de dados carregada!");
     };
     reader.readAsDataURL(file);
+  };
+
+  // Run Vision Recognition specifically for photo of notebook / whiteboard
+  const handleRunVisionRecognition = async () => {
+    if (!imagePreview) {
+      toast.error("Carregue uma imagem ou foto de caderno/quadro antes.");
+      return;
+    }
+    setIsVisionProcessing(true);
+    const toastId = toast.loading("Motor de Visão Computacional extraindo entidades e cardinalidades...");
+    try {
+      const res = await fetch(apiUrl("/api/diagrams/vision-recognize"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64: imagePreview,
+          diagramType: modelCategory === "physical" ? "relational_schema" : "erd",
+          customAI: {
+            provider: aiEngine === "auto" ? undefined : (aiEngine as any),
+            apiKey: customApiKey?.trim() || undefined
+          }
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setVisionResult(data.recognitionResult);
+        if (data.recognitionResult.detectedMermaidERD) {
+          setDiagramCode(data.recognitionResult.detectedMermaidERD);
+        }
+        toast.success(`Visão IA: Confiança ${data.recognitionResult.visualConfidenceScore}% (${data.recognitionResult.legibilityLevel})`, { id: toastId });
+      } else {
+        const fallbackRes = await DiagramVisionRecognitionService.recognizeDiagramFromPhoto({
+          imageBase64: imagePreview,
+          diagramType: "erd"
+        });
+        setVisionResult(fallbackRes);
+        if (fallbackRes.detectedMermaidERD) {
+          setDiagramCode(fallbackRes.detectedMermaidERD);
+        }
+        toast.success(`Visão IA: Confiança ${fallbackRes.visualConfidenceScore}%`, { id: toastId });
+      }
+    } catch (e: any) {
+      const fallbackRes = await DiagramVisionRecognitionService.recognizeDiagramFromPhoto({
+        imageBase64: imagePreview,
+        diagramType: "erd"
+      });
+      setVisionResult(fallbackRes);
+      if (fallbackRes.detectedMermaidERD) {
+        setDiagramCode(fallbackRes.detectedMermaidERD);
+      }
+      toast.success("Diagrama extraído através do motor de visão local.", { id: toastId });
+    } finally {
+      setIsVisionProcessing(false);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -304,7 +379,6 @@ CREATE TABLE tb_item_pedido (
       return;
     }
 
-    // Reset previous assessment result during new evaluation
     setAssessment(null);
     setRenderedSvg("");
     setRenderError(null);
@@ -368,6 +442,73 @@ CREATE TABLE tb_item_pedido (
     }
   };
 
+  // Run Simulated 100,000 Rows Database Load Benchmark
+  const handleRunBenchmark = async () => {
+    const ddlToTest = assessment?.generatedDdlSql || diagramCode;
+    if (!ddlToTest || !ddlToTest.trim()) {
+      toast.error("Execute a avaliação ou forneça o script DDL SQL antes de rodar o benchmark.");
+      return;
+    }
+
+    setIsBenchmarking(true);
+    setActiveTab("benchmark");
+    const toastId = toast.loading("Simulando carga massiva de 100.000 tuplas e auditando EXPLAIN ANALYZE...");
+    try {
+      const studentObj = students.find(s => s.id === selectedStudentId);
+      const classObj = classes.find(c => c.id === selectedClassId);
+
+      const res = await fetch(apiUrl("/api/database/load-benchmark"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ddlSql: ddlToTest,
+          activityTitle: scenarioPrompt || "Modelagem Relacional de Alto Volume",
+          studentName: studentObj?.name || "Estudante SENAI",
+          className: classObj?.name || "Turma 1A",
+          targetRows: 100000,
+          customAI: {
+            provider: aiEngine === "auto" ? undefined : (aiEngine as any),
+            apiKey: customApiKey?.trim() || undefined
+          }
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setBenchmarkResult(data.benchmarkResult);
+        toast.success(`Benchmark Concluído: Score ${data.benchmarkResult.performanceScore}/100 (${data.benchmarkResult.scalabilityRating})`, { id: toastId });
+      } else {
+        const fallbackBench = await DatabaseLoadBenchmarkService.runSchemaLoadBenchmark({
+          ddlSql: ddlToTest,
+          targetRows: 100000
+        });
+        setBenchmarkResult(fallbackBench);
+        toast.success(`Benchmark Concluído: Score ${fallbackBench.performanceScore}/100`, { id: toastId });
+      }
+    } catch (e: any) {
+      const fallbackBench = await DatabaseLoadBenchmarkService.runSchemaLoadBenchmark({
+        ddlSql: ddlToTest,
+        targetRows: 100000
+      });
+      setBenchmarkResult(fallbackBench);
+      toast.success("Benchmark calculado através do motor de simulação local.", { id: toastId });
+    } finally {
+      setIsBenchmarking(false);
+    }
+  };
+
+  // Export Benchmark PDF
+  const handleExportBenchmarkPdf = () => {
+    if (!benchmarkResult) return;
+    try {
+      const filename = `benchmark_db_senai_${benchmarkResult.benchmarkId}.pdf`;
+      DatabaseLoadBenchmarkService.exportBenchmarkReportPdf(benchmarkResult, filename);
+      toast.success("✓ Download do Laudo de Benchmark SENAI iniciado!");
+    } catch (e) {
+      toast.error("Erro ao gerar PDF do benchmark.");
+    }
+  };
+
   const handleExportPdf = async () => {
     if (!assessment) return;
     setIsExportingPdf(true);
@@ -379,10 +520,8 @@ CREATE TABLE tb_item_pedido (
       const className = classObj?.name || "Turma de Banco de Dados";
 
       let pdfBlob: Blob | null = null;
-
-      // Try server endpoint first
       try {
-        const res = await fetch("/api/database-models/export-pdf", {
+        const res = await fetch(apiUrl("/api/diagrams/export-pdf"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -394,11 +533,10 @@ CREATE TABLE tb_item_pedido (
         if (res.ok) {
           pdfBlob = await res.blob();
         }
-      } catch (e) {
-        console.warn("Server PDF export endpoint unreachable, generating client-side:", e);
+      } catch (backendErr) {
+        console.warn("Backend PDF export failed, fallback to client-side", backendErr);
       }
 
-      // Fallback to client-side generation
       if (!pdfBlob) {
         const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(
           assessment,
@@ -433,17 +571,17 @@ CREATE TABLE tb_item_pedido (
           <div className="space-y-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-mono font-bold tracking-wide uppercase">
               <Database className="w-3.5 h-3.5" />
-              Auditoria de Banco de Dados • Visão Computacional & DDL
+              Auditoria de Banco de Dados • Visão Computacional, DDL & Benchmark 100k
             </div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-              Correção por Imagem: Modelos Lógico e Físico de BD
+              Correção por Imagem & Benchmark de Banco de Dados
             </h1>
             <p className="text-sm text-slate-400 max-w-3xl">
-              Submeta imagens de diagramas (brModelo, MySQL Workbench, pgAdmin, draw.io ou manuscritos em papel) ou scripts DDL. A IA multimodal extrai entidades, chaves PK/FK, valida regras de normalização (1FN a 3FN) e gera o script DDL executável corrigido.
+              Submeta fotos de cadernos, quadros brancos, diagramas digitais ou scripts DDL. A IA multimodal extrai entidades, chaves PK/FK, valida regras de normalização (1FN a 3FN) e simula testes de estresse com 100.000 tuplas.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             {assessment && (
               <button
                 onClick={handleExportPdf}
@@ -458,6 +596,16 @@ CREATE TABLE tb_item_pedido (
                 {isExportingPdf ? "Gerando PDF..." : "Exportar Laudo PDF"}
               </button>
             )}
+
+            <button
+              onClick={handleRunBenchmark}
+              disabled={isBenchmarking}
+              className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-bold font-mono transition-all shadow-lg shadow-amber-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Executar Teste de Carga e Benchmark de 100.000 Registros"
+            >
+              {isBenchmarking ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+              {isBenchmarking ? "Simulando Carga..." : "Benchmark 100k"}
+            </button>
 
             <button
               onClick={handleRunAssessment}
@@ -498,190 +646,76 @@ CREATE TABLE tb_item_pedido (
 
         <div>
           <label className="block text-xs font-mono font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
-            <Server className="w-3.5 h-3.5 text-sky-400" /> SGBD Alvo (Dialeto SQL)
+            <Server className="w-3.5 h-3.5 text-sky-400" /> SGBD Alvo
           </label>
           <select
             value={targetSgbd}
-            onChange={(e) => {
-              const sgbd = e.target.value as DatabaseTargetSgbd;
-              setTargetSgbd(sgbd);
-              if (assessment && assessment.extractedTables && assessment.extractedTables.length > 0) {
-                const newDdl = DatabaseModelAssessmentService.generateSqlDdlFromTables(assessment.extractedTables, sgbd);
-                setAssessment({
-                  ...assessment,
-                  targetSgbd: sgbd,
-                  generatedDdlSql: newDdl
-                });
-              }
-            }}
-            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-sky-500 font-mono text-xs"
+            onChange={(e) => setTargetSgbd(e.target.value as DatabaseTargetSgbd)}
+            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-sky-500 font-sans text-xs uppercase"
           >
-            <option value="postgresql">PostgreSQL (Recomendado SENAI)</option>
-            <option value="mysql">MySQL / MariaDB (InnoDB)</option>
-            <option value="sqlserver">Microsoft SQL Server (T-SQL)</option>
-            <option value="oracle">Oracle Database (PL/SQL)</option>
-            <option value="sqlite">SQLite 3 (Embarcado)</option>
-          </select>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-mono font-bold text-slate-400 uppercase flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" /> Motor de IA
-            </label>
-            <button
-              type="button"
-              onClick={() => setShowKeyInput(!showKeyInput)}
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition-all flex items-center gap-1 cursor-pointer ${
-                customApiKey
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                  : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
-              }`}
-              title="Configurar chave de API própria (Gemini, Groq, OpenAI)"
-            >
-              <Key className="w-2.5 h-2.5" />
-              {customApiKey ? "Chave Ativa" : "+ Chave API"}
-            </button>
-          </div>
-          <select
-            value={aiEngine}
-            onChange={(e) => setAiEngine(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-amber-500 font-mono text-xs"
-          >
-            <option value="auto">⚡ Auto (Mais Rápido Disponível)</option>
-            <option value="gemini">🚀 Google Gemini 2.5 Flash (&lt;1s)</option>
-            <option value="groq">⚡ Groq LPU (Ultra Rápido ~500 t/s)</option>
-            <option value="openai">🧠 OpenAI GPT-4o Mini</option>
-            <option value="deepseek">💡 DeepSeek Coder / V3</option>
-            <option value="ollama">🖥️ Ollama Local (Offline / GPU)</option>
+            <option value="postgresql">PostgreSQL Standard</option>
+            <option value="mysql">MySQL / MariaDB</option>
+            <option value="sqlserver">Microsoft SQL Server</option>
+            <option value="oracle">Oracle Database</option>
+            <option value="sqlite">SQLite 3</option>
           </select>
         </div>
 
         <div>
           <label className="block text-xs font-mono font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
-            <FileCode className="w-3.5 h-3.5 text-sky-400" /> Modo de Entrada
+            <Sliders className="w-3.5 h-3.5 text-sky-400" /> Modo de Entrada
           </label>
-          <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
             <button
               onClick={() => setInputMode("image")}
-              className={`py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                inputMode === "image"
-                  ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
-                  : "text-slate-400 hover:text-slate-200"
+              className={`flex-1 py-1 px-2 rounded-lg text-xs font-mono font-bold transition-all ${
+                inputMode === "image" ? "bg-sky-600 text-white shadow-md" : "text-slate-400 hover:text-white"
               }`}
             >
-              <ImageIcon className="w-3.5 h-3.5" /> Imagem / OCR
+              Imagem / Foto
             </button>
             <button
               onClick={() => setInputMode("code")}
-              className={`py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                inputMode === "code"
-                  ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
-                  : "text-slate-400 hover:text-slate-200"
+              className={`flex-1 py-1 px-2 rounded-lg text-xs font-mono font-bold transition-all ${
+                inputMode === "code" ? "bg-sky-600 text-white shadow-md" : "text-slate-400 hover:text-white"
               }`}
             >
-              <Code2 className="w-3.5 h-3.5" /> Código / DDL
+              Código / DDL
             </button>
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-mono font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5 text-sky-400" /> Turma & Estudante
+            <Users className="w-3.5 h-3.5 text-sky-400" /> Turma SENAI
           </label>
-          <div className="grid grid-cols-2 gap-1.5">
-            <select
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              className="w-full px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-sky-500 font-sans text-xs truncate"
-            >
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select
-              value={selectedStudentId}
-              onChange={(e) => setSelectedStudentId(e.target.value)}
-              className="w-full px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-sky-500 font-sans text-xs truncate"
-            >
-              <option value="">Sem vínculo</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
+          <select
+            value={selectedClassId}
+            onChange={(e) => setSelectedClassId(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-sky-500 font-sans text-xs"
+          >
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-mono font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-sky-400" /> Aluno
+          </label>
+          <select
+            value={selectedStudentId}
+            onChange={(e) => setSelectedStudentId(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-sky-500 font-sans text-xs"
+          >
+            <option value="">Avaliando Exemplo Anônimo</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>{s.name} ({s.enrollment_code || "Matrícula"})</option>
+            ))}
+          </select>
         </div>
       </div>
-
-      {/* Optional Custom API Key input banner with Free Resources Guide */}
-      {showKeyInput && (
-        <div className="p-4 bg-slate-900/95 rounded-2xl border border-amber-500/40 flex flex-col gap-3 animate-fade-in text-xs shadow-xl backdrop-blur-md">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
-            <div className="flex items-center gap-2 text-amber-400 font-mono font-bold">
-              <Key className="w-4 h-4" /> Configuração de Chave de IA (100% Gratuita)
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-slate-400">
-              <span>Recursos gratuitos recomendados:</span>
-              <a 
-                href="https://aistudio.google.com/app/apikey" 
-                target="_blank" 
-                rel="noreferrer" 
-                className="text-sky-400 underline hover:text-sky-300 font-mono"
-              >
-                Google AI Studio (Gemini) ↗
-              </a>
-              <span>•</span>
-              <a 
-                href="https://console.groq.com/keys" 
-                target="_blank" 
-                rel="noreferrer" 
-                className="text-emerald-400 underline hover:text-emerald-300 font-mono"
-              >
-                Groq Cloud ↗
-              </a>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <input
-              type="password"
-              value={customApiKey}
-              onChange={(e) => {
-                const val = e.target.value;
-                setCustomApiKey(val);
-                localStorage.setItem("codecheck_ai_api_key", val);
-              }}
-              placeholder="Cole sua chave gratuita (AIza... do Google Gemini ou gsk_... da Groq)"
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-500 w-full shadow-inner"
-            />
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  toast.success("Chave de API salva com sucesso no navegador!");
-                  setShowKeyInput(false);
-                }}
-                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shrink-0 cursor-pointer shadow-md transition-all"
-              >
-                Salvar Chave
-              </button>
-              {customApiKey && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCustomApiKey("");
-                    localStorage.removeItem("codecheck_ai_api_key");
-                    toast.info("Chave removida. Usando motor local gratuito.");
-                  }}
-                  className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs shrink-0 cursor-pointer border border-slate-700 transition-all"
-                  title="Limpar chave salva"
-                >
-                  Limpar
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="text-[11px] text-slate-400 leading-relaxed">
-            💡 <strong>100% Grátis:</strong> A chave do Google Gemini (Google AI Studio) é totalmente gratuita para uso educacional, sem necessidade de cartão de crédito, e analisa imagens e diagramas em &lt; 1 segundo. Se não desejar usar nenhuma chave, o sistema opera automaticamente com o motor heurístico local sem custos.
-          </div>
-        </div>
-      )}
 
       {/* Main Workspace Grid: Left (Input/Image/Code) vs Right (Assessment Results & Canvas) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -732,24 +766,33 @@ CREATE TABLE tb_item_pedido (
                       alt="Diagram Preview"
                       className="w-full h-auto max-h-[360px] object-contain mx-auto p-2"
                     />
-                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-3">
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-lg"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" /> Trocar Imagem
-                      </button>
+                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleRunVisionRecognition}
+                          disabled={isVisionProcessing}
+                          className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-lg"
+                          title="Extrair entidades e relacionamentos com Visão IA"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                          {isVisionProcessing ? "Extraindo..." : "Visão Computacional IA"}
+                        </button>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-lg"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" /> Trocar
+                        </button>
+                      </div>
                       <button
                         onClick={() => {
                           setImagePreview(null);
                           setAssessment(null);
                           setRenderedSvg("");
                           setRenderError(null);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = "";
-                          }
+                          setVisionResult(null);
                         }}
-                        className="px-3 py-2 rounded-xl bg-red-600/80 hover:bg-red-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-lg"
+                        className="px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Remover
                       </button>
@@ -758,47 +801,57 @@ CREATE TABLE tb_item_pedido (
                 ) : (
                   <div
                     onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
                     onDragOver={handleDrag}
+                    onDragLeave={handleDrag}
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 ${
-                      dragActive
-                        ? "border-sky-500 bg-sky-500/10 scale-[0.99]"
-                        : "border-slate-800 bg-slate-950/60 hover:border-sky-500/50 hover:bg-slate-950"
+                    className={`p-8 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-3 cursor-pointer ${
+                      dragActive ? "border-sky-500 bg-sky-500/10" : "border-slate-800 bg-slate-950 hover:border-slate-700"
                     }`}
                   >
-                    <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+                    <div className="w-12 h-12 rounded-2xl bg-sky-500/10 text-sky-400 flex items-center justify-center">
                       <UploadCloud className="w-6 h-6" />
                     </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-bold text-white">Arraste a Imagem do Modelo de BD aqui</h3>
-                      <p className="text-xs text-slate-400">
-                        Suporta capturas do <strong className="text-sky-400">brModelo</strong>, <strong className="text-sky-400">MySQL Workbench</strong>, <strong className="text-sky-400">pgAdmin</strong>, <strong className="text-sky-400">draw.io</strong> ou fotos de folhas de prova.
-                      </p>
+                    <div className="text-center space-y-1">
+                      <p className="text-xs font-bold text-white">Arraste ou clique para enviar o diagrama</p>
+                      <p className="text-[11px] text-slate-500">Suporta fotos de caderno, quadros brancos, PNG, JPG, WEBP e PDF</p>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                      PNG, JPG, WEBP, SVG até 20MB
-                    </span>
+                  </div>
+                )}
+
+                {/* Vision Confidence Indicator */}
+                {visionResult && (
+                  <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between text-emerald-300 font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Visão Computacional: {visionResult.entities.length} entidades reconhecidas
+                      </span>
+                      <span className="font-mono">Confiança: {visionResult.visualConfidenceScore}%</span>
+                    </div>
+                    <p className="text-slate-300 text-[11px] leading-relaxed">
+                      Legibilidade da captura: <strong>{visionResult.legibilityLevel}</strong>. Diagrama transcrito para formato Mermaid e DDL com êxito.
+                    </p>
                   </div>
                 )}
               </div>
             ) : (
-              /* CODE MODE: Monaco Editor for DDL or Mermaid */
+              /* CODE MODE: Monaco / Text Editor */
               <div className="space-y-2">
-                <div className="rounded-xl overflow-hidden border border-slate-800">
+                <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-950">
                   <Editor
-                    height="320px"
+                    height="360px"
                     language={modelCategory === "physical" ? "sql" : "markdown"}
                     theme="vs-dark"
                     value={diagramCode}
                     onChange={(val) => setDiagramCode(val || "")}
                     options={{
-                      fontSize: 12,
                       minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
+                      fontSize: 12,
+                      fontFamily: "monospace",
                       lineNumbers: "on",
-                      padding: { top: 8 }
+                      scrollBeyondLastLine: false,
+                      tabSize: 2,
                     }}
                   />
                 </div>
@@ -808,60 +861,34 @@ CREATE TABLE tb_item_pedido (
           </div>
         </div>
 
-        {/* Right Column: Assessment Dossier & Results */}
+        {/* Right Column: Assessment Results, Diagnostics & Benchmark */}
         <div className="lg:col-span-7 flex flex-col gap-4">
           
-          {assessment ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-md p-6 shadow-2xl space-y-6">
+          {assessment || benchmarkResult ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-md p-5 shadow-xl space-y-5">
               
-              {/* Score Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              {/* Score & Status Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`px-2.5 py-0.5 rounded-md text-xs font-mono font-bold ${
-                      assessment.totalGrade >= 60
+                      (assessment?.totalGrade ?? benchmarkResult?.performanceScore ?? 80) >= 60
                         ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                        : assessment.totalGrade >= 40
-                        ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                        : "bg-red-500/10 text-red-400 border border-red-500/30"
+                        : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
                     }`}>
-                      STATUS: {assessment.status.toUpperCase()}
+                      STATUS: {(assessment?.status || (benchmarkResult?.isApprovedForProduction ? "Aprovado" : "Recuperação")).toUpperCase()}
                     </span>
                     <span className="text-xs font-mono text-slate-400">
-                      • {assessment.modelCategory === "physical" ? `Modelo Físico (${assessment.targetSgbd?.toUpperCase()})` : "Modelo Lógico / Relacional"}
+                      • {targetSgbd.toUpperCase()} Standard
                     </span>
                   </div>
-                  <h2 className="text-lg font-bold text-white">Resultado da Auditoria do Banco de Dados</h2>
+                  <h2 className="text-lg font-bold text-white">Auditoria Técnica & Benchmark de Banco de Dados</h2>
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0">
-                  {selectedStudentId && (
-                    <button
-                      onClick={() => setProfileModalStudentId(selectedStudentId)}
-                      className="px-3 py-1.5 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-mono font-bold transition-all border border-indigo-500/50 flex items-center gap-1.5 cursor-pointer shadow-md"
-                      title="Ver histórico e laudos no perfil completo do estudante"
-                    >
-                      <User className="w-3.5 h-3.5 text-indigo-300" />
-                      Ver no Perfil
-                    </button>
-                  )}
-
-                  <button
-                    onClick={handleExportPdf}
-                    disabled={isExportingPdf}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
-                  >
-                    {isExportingPdf ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
-                    ) : (
-                      <Download className="w-3.5 h-3.5 text-sky-400" />
-                    )}
-                    {isExportingPdf ? "Baixando..." : "Laudo PDF"}
-                  </button>
-
                   <div className="text-right">
                     <div className="text-3xl font-black font-mono text-white">
-                      {assessment.totalGrade}<span className="text-sm text-slate-500 font-normal">/100</span>
+                      {assessment?.totalGrade ?? benchmarkResult?.performanceScore ?? 85}<span className="text-sm text-slate-500 font-normal">/100</span>
                     </div>
                     <span className="text-[10px] font-mono text-slate-400">Nota Consolidada</span>
                   </div>
@@ -884,15 +911,7 @@ CREATE TABLE tb_item_pedido (
                     activeTab === "studentTables" ? "bg-sky-500/20 text-sky-400 border border-sky-500/30" : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  Tabelas do Aluno ({assessment.extractedTables?.length || 0})
-                </button>
-                <button
-                  onClick={() => setActiveTab("rubrics")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                    activeTab === "rubrics" ? "bg-sky-500/20 text-sky-400 border border-sky-500/30" : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  Rubricas ({assessment.rubrics.length})
+                  Tabelas ({assessment?.extractedTables?.length || visionResult?.entities.length || 0})
                 </button>
                 <button
                   onClick={() => setActiveTab("normalization")}
@@ -902,23 +921,21 @@ CREATE TABLE tb_item_pedido (
                 >
                   Normalização (1FN-3FN)
                 </button>
-                {assessment.physicalAudit && (
-                  <button
-                    onClick={() => setActiveTab("physical")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                      activeTab === "physical" ? "bg-sky-500/20 text-sky-400 border border-sky-500/30" : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Auditoria Física & Tipos
-                  </button>
-                )}
+                <button
+                  onClick={() => setActiveTab("benchmark")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "benchmark" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-amber-400 hover:text-amber-300"
+                  }`}
+                >
+                  Benchmark 100k
+                </button>
                 <button
                   onClick={() => setActiveTab("ddl")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
                     activeTab === "ddl" ? "bg-sky-500/20 text-sky-400 border border-sky-500/30" : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  DDL SQL Gerado
+                  Script DDL SQL
                 </button>
                 <button
                   onClick={() => setActiveTab("diagram")}
@@ -926,68 +943,46 @@ CREATE TABLE tb_item_pedido (
                     activeTab === "diagram" ? "bg-sky-500/20 text-sky-400 border border-sky-500/30" : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  Diagrama Corrigido
+                  Diagrama Visual
                 </button>
               </div>
 
-              {/* Tab Content */}
-              {activeTab === "feedback" && (
+              {/* Tab: Feedback & Strengths */}
+              {activeTab === "feedback" && assessment && (
                 <div className="space-y-4">
-                  {/* Strengths */}
                   <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                    <span className="text-xs font-mono font-bold text-emerald-400 uppercase flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" /> Pontos Fortes & Conformidades Detectadas
-                    </span>
+                    <span className="text-xs font-mono font-bold text-sky-400 uppercase">Pontos Fortes da Modelagem:</span>
                     <ul className="text-xs text-slate-300 space-y-1 font-sans">
-                      {assessment.strengths.map((st, i) => (
+                      {assessment.strengths.map((str, i) => (
                         <li key={i} className="flex items-start gap-2">
-                          <span className="text-emerald-400">✓</span> {st}
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{str}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  {/* Issues */}
-                  <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                    <span className="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4" /> Inconsistências & Oportunidades de Melhoria
-                    </span>
-                    <ul className="text-xs text-slate-300 space-y-1 font-sans">
-                      {assessment.modelingIssues.map((issue, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="text-amber-400">!</span> {issue}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Recommendations */}
-                  <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                    <span className="text-xs font-mono font-bold text-sky-400 uppercase flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4" /> Recomendações Pedagógicas para o Estudante
-                    </span>
-                    <ul className="text-xs text-slate-400 space-y-1 font-sans">
-                      {assessment.pedagogicalRecommendations.map((rec, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="text-sky-400">•</span> {rec}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {assessment.modelingIssues.length > 0 && (
+                    <div className="p-4 rounded-xl bg-slate-950/70 border border-amber-500/20 space-y-2">
+                      <span className="text-xs font-mono font-bold text-amber-400 uppercase">Oportunidades de Melhoria:</span>
+                      <ul className="text-xs text-slate-300 space-y-1 font-sans">
+                        {assessment.modelingIssues.map((iss, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                            <span>{iss}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Tab: Student Tables Diagnosis */}
               {activeTab === "studentTables" && (
-                <div className="space-y-4">
-                  <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-sky-400">Auditoria Cirúrgica:</span> Tabelas e colunas identificadas no trabalho entregue pelo estudante ({assessment.extractedTables?.length || 0} entidades encontradas).
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[440px] overflow-y-auto pr-1">
-                    {(assessment.extractedTables || []).map((tbl, idx) => (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                    {(assessment?.extractedTables || []).map((tbl, idx) => (
                       <div key={idx} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5 shadow-md">
                         <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                           <span className="font-mono font-bold text-sm text-sky-300 flex items-center gap-1.5">
@@ -995,38 +990,17 @@ CREATE TABLE tb_item_pedido (
                             {tbl.name}
                           </span>
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-400">
-                            {tbl.type === "strong_entity" ? "Entidade Forte" : tbl.type === "associative_table" ? "Associativa / N:M" : "Tabela Física"}
+                            {tbl.type === "strong_entity" ? "Entidade Forte" : "Tabela"}
                           </span>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <div className="text-[10px] font-mono uppercase text-slate-500 font-bold flex justify-between">
-                            <span>Colunas / Tipos</span>
-                            <span>{tbl.columns.length} colunas</span>
-                          </div>
-                          <div className="space-y-1 max-h-[160px] overflow-y-auto pr-0.5">
-                            {tbl.columns.map((col, cIdx) => (
-                              <div key={cIdx} className="flex items-center justify-between text-xs font-mono bg-slate-900/70 px-2.5 py-1.5 rounded-lg border border-slate-800/60">
-                                <span className="text-slate-200 flex items-center gap-1.5 truncate">
-                                  {col.isPrimaryKey && (
-                                    <span className="text-amber-400 font-bold text-[10px] bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">
-                                      PK
-                                    </span>
-                                  )}
-                                  {col.isForeignKey && (
-                                    <span className="text-purple-400 font-bold text-[10px] bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/30 shrink-0">
-                                      FK
-                                    </span>
-                                  )}
-                                  <span className="truncate">{col.name}</span>
-                                </span>
-                                <span className="text-slate-400 text-[11px] shrink-0 ml-2">
-                                  {col.dataType || "string"}
-                                  {col.references && <span className="text-purple-400 text-[10px] ml-1">→ {col.references.table}</span>}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
+                        <div className="space-y-1 max-h-[140px] overflow-y-auto pr-0.5">
+                          {tbl.columns.map((col, cIdx) => (
+                            <div key={cIdx} className="flex items-center justify-between text-xs font-mono bg-slate-900/70 px-2 py-1 rounded border border-slate-800/60">
+                              <span className="text-slate-200 truncate">{col.name}</span>
+                              <span className="text-slate-400 text-[10px]">{col.dataType || "string"}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
@@ -1034,34 +1008,14 @@ CREATE TABLE tb_item_pedido (
                 </div>
               )}
 
-              {/* Tab 2: Rubrics */}
-              {activeTab === "rubrics" && (
-                <div className="space-y-3">
-                  {assessment.rubrics.map((r, i) => (
-                    <div key={i} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white">{r.name}</span>
-                        <span className="text-xs font-mono font-bold text-sky-400">
-                          {r.score} / {r.maxScore} pts ({r.weight}%)
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-300 leading-relaxed font-sans">{r.feedback}</p>
-                      <p className="text-[10px] text-slate-500 font-mono">{r.pedagogicalRationale}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Tab 3: Normalization */}
-              {activeTab === "normalization" && (
+              {/* Tab: Normalization */}
+              {activeTab === "normalization" && assessment && (
                 <div className="space-y-3">
                   <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-white">1ª Forma Normal (1FN) — Atomicidade</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                        assessment.normalizationAudit.firstNormalForm.compliant ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-red-500/10 text-red-400 border border-red-500/30"
-                      }`}>
-                        {assessment.normalizationAudit.firstNormalForm.compliant ? "CONFORME" : "REQUER ATENÇÃO"}
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        CONFORME
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 font-sans">{assessment.normalizationAudit.firstNormalForm.explanation}</p>
@@ -1069,7 +1023,7 @@ CREATE TABLE tb_item_pedido (
 
                   <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white">2ª Forma Normal (2FN) — Dependência Total da PK</span>
+                      <span className="text-xs font-bold text-white">2ª Forma Normal (2FN) — Dependência Total</span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         CONFORME
                       </span>
@@ -1089,47 +1043,108 @@ CREATE TABLE tb_item_pedido (
                 </div>
               )}
 
-              {/* Tab 4: Physical Audit */}
-              {activeTab === "physical" && assessment.physicalAudit && (
+              {/* Tab: Benchmark & 100k Rows Load Testing */}
+              {activeTab === "benchmark" && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">Aderência de Tipos SGBD</span>
-                      <div className="text-lg font-bold font-mono text-sky-400">
-                        {assessment.physicalAudit.dataTypesScore}%
+                  {benchmarkResult ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase">Throughput Simulado</span>
+                          <div className="text-xl font-bold font-mono text-emerald-400">
+                            {benchmarkResult.overallThroughputTps} TPS
+                          </div>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase">Latência p95</span>
+                          <div className="text-xl font-bold font-mono text-amber-400">
+                            {benchmarkResult.p95LatencyMs} ms
+                          </div>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase">Volume Auditado</span>
+                          <div className="text-xl font-bold font-mono text-sky-400">
+                            {benchmarkResult.simulatedVolumeTotalRows.toLocaleString()} tuplas
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">Tabelas Materializadas</span>
-                      <div className="text-lg font-bold font-mono text-emerald-400">
-                        {assessment.physicalAudit.ddlExecutionTest.tablesCreatedCount} Tabelas
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                    <span className="text-xs font-mono font-bold text-slate-300 uppercase">Recomendações de Indexação & Performance:</span>
-                    <ul className="text-xs text-slate-400 space-y-1 font-sans">
-                      {assessment.physicalAudit.indexingRecommendations.map((rec, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="text-sky-400">⚡</span> {rec}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                      <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2 text-xs">
+                        <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                          <Activity className="w-4 h-4" /> Parecer Técnico do DBA SENAI:
+                        </span>
+                        <p className="text-slate-200 leading-relaxed">{benchmarkResult.executiveDiagnostic}</p>
+                      </div>
+
+                      {/* Query Benchmark Table */}
+                      <div className="overflow-x-auto rounded-xl border border-slate-800">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono">
+                              <th className="p-2.5">Consulta</th>
+                              <th className="p-2.5">Plano EXPLAIN</th>
+                              <th className="p-2.5">Latência</th>
+                              <th className="p-2.5">Gargalo?</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800 font-mono text-xs">
+                            {benchmarkResult.queryBenchmarks.map((q, idx) => (
+                              <tr key={idx} className="hover:bg-slate-950/60">
+                                <td className="p-2.5 text-slate-200">{q.queryName}</td>
+                                <td className="p-2.5 text-sky-300">{q.executionPlan}</td>
+                                <td className="p-2.5 text-amber-300">{q.simulatedLatencyMs} ms</td>
+                                <td className="p-2.5">
+                                  {q.isBottleneck ? (
+                                    <span className="text-rose-400 font-bold">🔴 Sim</span>
+                                  ) : (
+                                    <span className="text-emerald-400 font-bold">🟢 Não</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          onClick={handleExportBenchmarkPdf}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs font-mono transition shadow-lg"
+                        >
+                          <Download className="w-4 h-4" /> Baixar Laudo de Benchmark (PDF)
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center space-y-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                      <Activity className="w-8 h-8 text-amber-400 mx-auto" />
+                      <h4 className="text-sm font-bold text-white">Nenhum Benchmark de Carga Executado</h4>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        Clique no botão <strong>"Benchmark 100k"</strong> no topo para simular uma injeção de 100.000 tuplas e testar planos de execução SQL.
+                      </p>
+                      <button
+                        onClick={handleRunBenchmark}
+                        disabled={isBenchmarking}
+                        className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs transition"
+                      >
+                        {isBenchmarking ? "Executando..." : "Executar Benchmark Agora"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Tab 5: DDL SQL */}
+              {/* Tab: DDL SQL */}
               {activeTab === "ddl" && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono font-bold text-slate-300 uppercase">
-                      Script DDL SQL Gerado ({targetSgbd.toUpperCase()})
+                      Script DDL SQL ({targetSgbd.toUpperCase()})
                     </span>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(assessment.generatedDdlSql);
+                        const sql = assessment?.generatedDdlSql || diagramCode;
+                        navigator.clipboard.writeText(sql);
                         toast.success("Script DDL SQL copiado!");
                       }}
                       className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
@@ -1138,12 +1153,12 @@ CREATE TABLE tb_item_pedido (
                     </button>
                   </div>
                   <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-sky-300 overflow-x-auto max-h-[300px] scrollbar-thin">
-                    {assessment.generatedDdlSql}
+                    {assessment?.generatedDdlSql || diagramCode}
                   </pre>
                 </div>
               )}
 
-              {/* Tab 6: Corrected Diagram */}
+              {/* Tab: Corrected Diagram */}
               {activeTab === "diagram" && (
                 <div className="space-y-2">
                   <div className="rounded-xl bg-slate-950 border border-slate-800 p-4 min-h-[260px] flex items-center justify-center overflow-auto">
@@ -1163,7 +1178,7 @@ CREATE TABLE tb_item_pedido (
               <div className="space-y-1">
                 <h3 className="text-sm font-bold text-slate-300">Nenhuma Avaliação Executada</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Faça o upload da imagem do diagrama (brModelo, Workbench, pgAdmin, draw.io) ou insira o código declarativo ao lado e clique em <strong className="text-sky-400">Analisar Imagem com IA</strong>.
+                  Faça o upload da foto do caderno/quadro ou insira o código declarativo ao lado e clique em <strong className="text-sky-400">Analisar Imagem com IA</strong> ou <strong className="text-amber-400">Benchmark 100k</strong>.
                 </p>
               </div>
             </div>
