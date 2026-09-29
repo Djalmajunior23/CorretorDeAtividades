@@ -32,11 +32,12 @@ import { apiUrl, safeJsonResponse } from "../config/api";
 export default function PedagogicalTracksView() {
   const [tracks, setTracks] = useState<PedagogicalTrack[]>([]);
   const [plans, setPlans] = useState<InterventionPlan[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<"tracks" | "plans">("tracks");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentClass, setCurrentClass] = useState("Turma A - Engenharia");
+  const [currentClass, setCurrentClass] = useState("Turma Principal SENAI");
 
   useEffect(() => {
     fetchData();
@@ -45,12 +46,19 @@ export default function PedagogicalTracksView() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [tracksRes, plansRes] = await Promise.all([
+      const [tracksRes, plansRes, classesRes] = await Promise.all([
         fetch(apiUrl("/api/pedagogical-tracks")),
         fetch(apiUrl("/api/intervention-plans")),
+        fetch(apiUrl("/api/classes")),
       ]);
       setTracks(await tracksRes.json());
       setPlans(await plansRes.json());
+      const classData = await safeJsonResponse(classesRes);
+      const classList = Array.isArray(classData) ? classData : (classData?.classes || []);
+      setClasses(classList);
+      if (classList.length > 0) {
+        setCurrentClass(classList[0].name);
+      }
     } catch (e) {
       toast.error("Erro ao carregar dados.");
     } finally {
@@ -153,11 +161,16 @@ export default function PedagogicalTracksView() {
               <select
                 value={currentClass}
                 onChange={(e) => setCurrentClass(e.target.value)}
-                className="w-full bg-slate-950 border border-white/5 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500/50"
+                className="w-full bg-slate-950 border border-white/5 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500/50 text-white font-medium"
               >
-                <option>Turma A - Engenharia</option>
-                <option>Turma B - Computação</option>
-                <option>Turma C - Matemática</option>
+                {classes.map((cls) => (
+                  <option key={cls.id} value={cls.name}>
+                    {cls.name}
+                  </option>
+                ))}
+                {classes.length === 0 && (
+                  <option value="Turma Geral SENAI">Turma Geral SENAI</option>
+                )}
               </select>
             </div>
           </div>

@@ -453,10 +453,157 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   });
 
 
+  // --- CLASSES & STUDENTS IN-MEMORY STORE (Fallback if pool is null) ---
+  const inMemoryClasses: any[] = [
+    {
+      id: "class-senai-dev-2026",
+      teacher_id: "teacher_1",
+      name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      course: "Técnico em Desenvolvimento de Sistemas",
+      module: "Módulo 2 - Back-end & Banco de Dados",
+      semester: "1º Semestre",
+      shift: "Noturno",
+      year: "2026",
+      description: "Turma Oficial SENAI de Formação Profissional em TI",
+      status: "active",
+      students_count: 5,
+      average_score: 78.5,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "class-senai-iot-2026",
+      teacher_id: "teacher_1",
+      name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      course: "Técnico em Automação Industrial e IoT",
+      module: "Módulo 3 - Redes Industriais & Telemetria",
+      semester: "1º Semestre",
+      shift: "Vespertino",
+      year: "2026",
+      description: "Turma de Especialização em Automação e Redes de Sensores",
+      status: "active",
+      students_count: 4,
+      average_score: 82.0,
+      created_at: new Date().toISOString()
+    }
+  ];
+
+  const inMemoryStudents: any[] = [
+    {
+      id: "stu-001",
+      class_id: "class-senai-dev-2026",
+      name: "Carlos Eduardo Silva",
+      enrollment_code: "2026TDS001",
+      email: "carlos.silva@aluno.senai.br",
+      notes: "Destaque em Algoritmos e Lógica",
+      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      course_name: "Técnico em Desenvolvimento de Sistemas",
+      status: "active",
+      average_score: 85.0
+    },
+    {
+      id: "stu-002",
+      class_id: "class-senai-dev-2026",
+      name: "Ana Clara Souza",
+      enrollment_code: "2026TDS002",
+      email: "ana.souza@aluno.senai.br",
+      notes: "Foco em Banco de Dados e Modelagem",
+      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      course_name: "Técnico em Desenvolvimento de Sistemas",
+      status: "active",
+      average_score: 92.0
+    },
+    {
+      id: "stu-003",
+      class_id: "class-senai-dev-2026",
+      name: "Bruno Henrique Costa",
+      enrollment_code: "2026TDS003",
+      email: "bruno.costa@aluno.senai.br",
+      notes: "Acompanhamento em Clean Code",
+      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      course_name: "Técnico em Desenvolvimento de Sistemas",
+      status: "active",
+      average_score: 74.0
+    },
+    {
+      id: "stu-004",
+      class_id: "class-senai-dev-2026",
+      name: "Camila Rodrigues Lima",
+      enrollment_code: "2026TDS004",
+      email: "camila.lima@aluno.senai.br",
+      notes: "Interesse em Segurança e DevSecOps",
+      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      course_name: "Técnico em Desenvolvimento de Sistemas",
+      status: "active",
+      average_score: 88.0
+    },
+    {
+      id: "stu-005",
+      class_id: "class-senai-dev-2026",
+      name: "Diego Fernandes",
+      enrollment_code: "2026TDS005",
+      email: "diego.fernandes@aluno.senai.br",
+      notes: "Desenvolvedor Front-end e APIs",
+      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      course_name: "Técnico em Desenvolvimento de Sistemas",
+      status: "active",
+      average_score: 79.5
+    },
+    {
+      id: "stu-006",
+      class_id: "class-senai-iot-2026",
+      name: "Elena Vasconcelos",
+      enrollment_code: "2026IOT001",
+      email: "elena.vasconcelos@aluno.senai.br",
+      notes: "Projetos em MQTT e CLP",
+      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      course_name: "Técnico em Automação Industrial e IoT",
+      status: "active",
+      average_score: 89.0
+    },
+    {
+      id: "stu-007",
+      class_id: "class-senai-iot-2026",
+      name: "Fabio Gabriel Mendes",
+      enrollment_code: "2026IOT002",
+      email: "fabio.mendes@aluno.senai.br",
+      notes: "Sistemas Embarcados e Edge",
+      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      course_name: "Técnico em Automação Industrial e IoT",
+      status: "active",
+      average_score: 81.0
+    },
+    {
+      id: "stu-008",
+      class_id: "class-senai-iot-2026",
+      name: "Gabriela Prado",
+      enrollment_code: "2026IOT003",
+      email: "gabriela.prado@aluno.senai.br",
+      notes: "Telemetria Industrial",
+      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      course_name: "Técnico em Automação Industrial e IoT",
+      status: "active",
+      average_score: 86.5
+    },
+    {
+      id: "stu-009",
+      class_id: "class-senai-iot-2026",
+      name: "Heitor Guimarães",
+      enrollment_code: "2026IOT004",
+      email: "heitor.guimaraes@aluno.senai.br",
+      notes: "Hardware-in-the-Loop",
+      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      course_name: "Técnico em Automação Industrial e IoT",
+      status: "active",
+      average_score: 72.0
+    }
+  ];
+
   // --- CLASSES ---
   app.get("/api/classes", async (req, res) => {
     try {
-      if (!pool) return res.json([]);
+      if (!pool) {
+        return res.json(inMemoryClasses.filter((c) => c.status !== "deleted"));
+      }
       const result = await pool.query(`
         SELECT c.*,
           COALESCE((SELECT COUNT(*) FROM d_student_record s WHERE s.class_id = c.id AND s.status != 'deleted'), 0)::int as students_count,
@@ -473,10 +620,28 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
 
   app.post("/api/classes", async (req, res) => {
     try {
-      if (!pool) return res.json({ id: uuidv4() });
       const id = uuidv4();
       const { name, course, module, semester, shift, year, description } =
         req.body;
+      if (!pool) {
+        const newClass = {
+          id,
+          teacher_id: "teacher_1",
+          name,
+          course: course || "Técnico SENAI",
+          module: module || "Módulo Integrado",
+          semester: semester || "1º Semestre",
+          shift: shift || "Noturno",
+          year: year || "2026",
+          description: description || "",
+          status: "active",
+          students_count: 0,
+          average_score: 75.0,
+          created_at: new Date().toISOString()
+        };
+        inMemoryClasses.unshift(newClass);
+        return res.json({ id });
+      }
       await pool.query(
         "INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status) VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, $7, $8, 'active')",
         [id, name, course, module, semester, shift, year, description],
@@ -489,7 +654,6 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
 
   app.put("/api/classes/:id", async (req, res) => {
     try {
-      if (!pool) return res.json({ success: true });
       const {
         name,
         course,
@@ -500,6 +664,23 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
         description,
         status,
       } = req.body;
+      if (!pool) {
+        const idx = inMemoryClasses.findIndex((c) => c.id === req.params.id);
+        if (idx !== -1) {
+          inMemoryClasses[idx] = {
+            ...inMemoryClasses[idx],
+            name: name ?? inMemoryClasses[idx].name,
+            course: course ?? inMemoryClasses[idx].course,
+            module: module ?? inMemoryClasses[idx].module,
+            semester: semester ?? inMemoryClasses[idx].semester,
+            shift: shift ?? inMemoryClasses[idx].shift,
+            year: year ?? inMemoryClasses[idx].year,
+            description: description ?? inMemoryClasses[idx].description,
+            status: status ?? inMemoryClasses[idx].status,
+          };
+        }
+        return res.json({ success: true });
+      }
       await pool.query(
         "UPDATE d_class_group SET name=$1, course=$2, module=$3, semester=$4, shift=$5, year=$6, description=$7, status=$8 WHERE id=$9",
         [
@@ -522,7 +703,13 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
 
   app.delete("/api/classes/:id", async (req, res) => {
     try {
-      if (!pool) return res.json({ success: true });
+      if (!pool) {
+        const idx = inMemoryClasses.findIndex((c) => c.id === req.params.id);
+        if (idx !== -1) {
+          inMemoryClasses[idx].status = "deleted";
+        }
+        return res.json({ success: true });
+      }
       await pool.query(
         "UPDATE d_class_group SET status='deleted' WHERE id=$1",
         [req.params.id],
@@ -536,8 +723,16 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   // --- STUDENTS ---
   app.get("/api/students", async (req, res) => {
     try {
-      if (!pool) return res.json([]);
       const classId = req.query.class_id ? String(req.query.class_id).trim() : "";
+      if (!pool) {
+        let students = inMemoryStudents.filter((s) => s.status !== "deleted");
+        if (classId) {
+          students = students.filter(
+            (s) => s.class_id === classId || s.class_name === classId
+          );
+        }
+        return res.json(students);
+      }
 
       let query = `
         SELECT s.*, 
@@ -564,9 +759,25 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
 
   app.post("/api/students", async (req, res) => {
     try {
-      if (!pool) return res.json({ id: uuidv4() });
       const id = uuidv4();
       const { class_id, name, enrollment_code, email, notes } = req.body;
+      if (!pool) {
+        const cls = inMemoryClasses.find((c) => c.id === class_id);
+        const newStu = {
+          id,
+          class_id: class_id || null,
+          name,
+          enrollment_code: enrollment_code || `ENR-${Date.now().toString(36).toUpperCase()}`,
+          email: email || "",
+          notes: notes || "",
+          class_name: cls?.name || "Turma Geral",
+          course_name: cls?.course || "Curso Técnico",
+          status: "active",
+          average_score: 75.0
+        };
+        inMemoryStudents.push(newStu);
+        return res.json({ id });
+      }
       await pool.query(
         "INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status) VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, 'active')",
         [id, class_id || null, name, enrollment_code, email, notes],
@@ -579,9 +790,23 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
 
   app.put("/api/students/:id", async (req, res) => {
     try {
-      if (!pool) return res.json({ success: true });
       const { class_id, name, enrollment_code, email, notes, status } =
         req.body;
+      if (!pool) {
+        const idx = inMemoryStudents.findIndex((s) => s.id === req.params.id);
+        if (idx !== -1) {
+          inMemoryStudents[idx] = {
+            ...inMemoryStudents[idx],
+            class_id: class_id ?? inMemoryStudents[idx].class_id,
+            name: name ?? inMemoryStudents[idx].name,
+            enrollment_code: enrollment_code ?? inMemoryStudents[idx].enrollment_code,
+            email: email ?? inMemoryStudents[idx].email,
+            notes: notes ?? inMemoryStudents[idx].notes,
+            status: status ?? inMemoryStudents[idx].status,
+          };
+        }
+        return res.json({ success: true });
+      }
       await pool.query(
         "UPDATE d_student_record SET class_id=$1, name=$2, enrollment_code=$3, email=$4, notes=$5, status=$6 WHERE id=$7",
         [
@@ -602,7 +827,13 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
 
   app.delete("/api/students/:id", async (req, res) => {
     try {
-      if (!pool) return res.json({ success: true });
+      if (!pool) {
+        const idx = inMemoryStudents.findIndex((s) => s.id === req.params.id);
+        if (idx !== -1) {
+          inMemoryStudents[idx].status = "deleted";
+        }
+        return res.json({ success: true });
+      }
       await pool.query(
         "UPDATE d_student_record SET status='deleted' WHERE id=$1",
         [req.params.id],

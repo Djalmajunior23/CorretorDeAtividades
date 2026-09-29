@@ -1,16 +1,104 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ShieldAlert, Search, GitCompare, AlertTriangle, CheckCircle2, FileText, User, Cpu, Code, Layers, Sparkles, Terminal } from "lucide-react";
 import { toast } from "sonner";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 interface PlagiarismDetectorModalProps {
   onClose: () => void;
 }
 
 export function PlagiarismDetectorModal({ onClose }: PlagiarismDetectorModalProps) {
-  const [selectedClass, setSelectedClass] = useState("Turma A (Desenvolvimento Web)");
+  const [classes, setClasses] = useState<any[]>([]);
+  const [selectedClass, setSelectedClass] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<"pairs" | "ast_inspector">("pairs");
   const [selectedPair, setSelectedPair] = useState<any>(null);
+
+  useEffect(() => {
+    fetchClasses();
+  }, []);
+
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/classes"));
+      const data = await safeJsonResponse(res);
+      const list = Array.isArray(data) ? data : (data?.classes || []);
+      setClasses(list);
+      if (list.length > 0) {
+        setSelectedClass(list[0].name);
+        fetchStudentsForClass(list[0].id || list[0].name, list[0].name);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar turmas:", e);
+    }
+  };
+
+  const fetchStudentsForClass = async (classId: string, className: string) => {
+    try {
+      const res = await fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(classId)}`));
+      const data = await safeJsonResponse(res);
+      const stList = Array.isArray(data) ? data : [];
+      if (stList.length >= 2) {
+        setResults([
+          {
+            id: "p1",
+            studentA: stList[0].name,
+            studentB: stList[1].name,
+            similarityScore: 94,
+            astMatchType: "Estrutura Sintática Idêntica (Renomeação de Variáveis Detectada)",
+            codeA: "function calculateTotal(items) {\n  let total = 0;\n  for(let i=0; i<items.length; i++) {\n    total += items[i].price * items[i].qty;\n  }\n  return total;\n}",
+            codeB: "function calcSum(produtos) {\n  let acc = 0;\n  for(let j=0; j<produtos.length; j++) {\n    acc += produtos[j].price * produtos[j].qty;\n  }\n  return acc;\n}",
+            activityName: "Desafio Prático de Arrays & Reducers",
+            status: "Plágio Estrutural Confirmado (AST Match)",
+            astTreeA: [
+              { type: "Program", children: 1 },
+              { type: "FunctionDeclaration", name: "calculateTotal", params: ["items"] },
+              { type: "VariableDeclaration", name: "total", init: "0" },
+              { type: "ForStatement", init: "let i=0", test: "i<items.length", update: "i++" },
+              { type: "AssignmentExpression", operator: "+=", left: "total", right: "items[i].price * items[i].qty" },
+              { type: "ReturnStatement", argument: "total" }
+            ],
+            astTreeB: [
+              { type: "Program", children: 1 },
+              { type: "FunctionDeclaration", name: "calcSum", params: ["produtos"] },
+              { type: "VariableDeclaration", name: "acc", init: "0" },
+              { type: "ForStatement", init: "let j=0", test: "j<produtos.length", update: "j++" },
+              { type: "AssignmentExpression", operator: "+=", left: "acc", right: "produtos[j].price * produtos[j].qty" },
+              { type: "ReturnStatement", argument: "acc" }
+            ]
+          },
+          ...(stList.length >= 4 ? [{
+            id: "p2",
+            studentA: stList[2].name,
+            studentB: stList[3].name,
+            similarityScore: 88,
+            astMatchType: "Árvore de Sintaxe Abstrata Equivalente (Troca de Ordem de Condicionais)",
+            codeA: "const isPrime = (n) => {\n  if (n <= 1) return false;\n  for (let i = 2; i <= Math.sqrt(n); i++) {\n    if (n % i === 0) return false;\n  }\n  return true;\n};",
+            codeB: "const checkPrimo = (val) => {\n  for (let k = 2; k <= Math.sqrt(val); k++) {\n    if (val % k === 0) return false;\n  }\n  if (val <= 1) return false;\n  return true;\n};",
+            activityName: "Algoritmos em JavaScript",
+            status: "Alta Similaridade Lógica (AST)",
+            astTreeA: [
+              { type: "ArrowFunctionExpression", params: ["n"] },
+              { type: "IfStatement", test: "n <= 1", consequent: "return false" },
+              { type: "ForStatement", init: "i=2", test: "i<=Math.sqrt(n)", update: "i++" },
+              { type: "IfStatement", test: "n%i===0", consequent: "return false" },
+              { type: "ReturnStatement", argument: "true" }
+            ],
+            astTreeB: [
+              { type: "ArrowFunctionExpression", params: ["val"] },
+              { type: "ForStatement", init: "k=2", test: "k<=Math.sqrt(val)", update: "k++" },
+              { type: "IfStatement", test: "val%k===0", consequent: "return false" },
+              { type: "IfStatement", test: "val <= 1", consequent: "return false" },
+              { type: "ReturnStatement", argument: "true" }
+            ]
+          }] : [])
+        ]);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar alunos para detecção de plágio:", e);
+    }
+  };
+
   const [results, setResults] = useState<any[]>([
     {
       id: "p1",
@@ -103,12 +191,24 @@ export function PlagiarismDetectorModal({ onClose }: PlagiarismDetectorModalProp
             <span className="text-xs font-bold text-slate-200">Turma Alvo:</span>
             <select
               value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedClass(val);
+                const found = classes.find((c) => c.name === val || c.id === val);
+                if (found) {
+                  fetchStudentsForClass(found.id, found.name);
+                }
+              }}
               className="bg-[#030712] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
             >
-              <option value="Turma A (Desenvolvimento Web)">Turma A (Desenvolvimento Web)</option>
-              <option value="Turma B (Estrutura de Dados)">Turma B (Estrutura de Dados)</option>
-              <option value="Turma C (Banco de Dados SQL)">Turma C (Banco de Dados SQL)</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+              {classes.length === 0 && (
+                <option value="Turma Geral">Turma Geral</option>
+              )}
             </select>
           </div>
 

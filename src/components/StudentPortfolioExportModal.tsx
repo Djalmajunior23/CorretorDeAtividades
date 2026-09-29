@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Award, Download, Printer, User, CheckCircle2, ShieldCheck, BookOpen, Star, Building2, Calendar } from "lucide-react";
 import { toast } from "sonner";
+import { apiUrl, safeJsonResponse } from "../config/api";
 
 interface StudentPortfolioExportModalProps {
   submissions: any[];
@@ -8,9 +9,23 @@ interface StudentPortfolioExportModalProps {
 }
 
 export function StudentPortfolioExportModal({ submissions, onClose }: StudentPortfolioExportModalProps) {
+  const [classes, setClasses] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState("all");
-  const [selectedTurma, setSelectedTurma] = useState("Turma A - Engenharia de Software");
+  const [selectedTurma, setSelectedTurma] = useState("Turma SENAI");
   const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    fetch(apiUrl("/api/classes"))
+      .then(res => safeJsonResponse(res))
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.classes || []);
+        setClasses(list);
+        if (list.length > 0) {
+          setSelectedTurma(list[0].name);
+        }
+      })
+      .catch(e => console.error("Erro ao carregar turmas:", e));
+  }, []);
 
   // Extract unique students
   const studentsList = Array.from(new Set(submissions.map(s => s?.submission?.student_name).filter(Boolean)));
@@ -259,9 +274,14 @@ export function StudentPortfolioExportModal({ submissions, onClose }: StudentPor
               onChange={(e) => setSelectedTurma(e.target.value)}
               className="bg-[#030712] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
             >
-              <option value="Turma A - Engenharia de Software">Turma A - Engenharia de Software</option>
-              <option value="Turma B - Ciência da Computação">Turma B - Ciência da Computação</option>
-              <option value="Turma C - Análise e Desenvolvimento de Sistemas">Turma C - Análise e Desenvolvimento de Sistemas</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name} • {c.course || "Curso Técnico"}
+                </option>
+              ))}
+              {classes.length === 0 && (
+                <option value="Turma Geral SENAI">Turma Geral SENAI</option>
+              )}
             </select>
           </div>
 

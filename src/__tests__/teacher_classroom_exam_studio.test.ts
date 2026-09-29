@@ -209,6 +209,58 @@ describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
       const headerStr = Buffer.from(pdfBuffer).subarray(0, 5).toString("utf-8");
       expect(headerStr).toContain("%PDF");
     });
+
+    it("deve gerar cadernos e cartões-resposta OMR personalizados com dados de alunos reais da turma", async () => {
+      const realClassStudents = [
+        { id: "2026DS001", name: "Ana Clara Souza", variantCode: "A", className: "Turma DS-2026/1" },
+        { id: "2026DS002", name: "Bruno Henrique Costa", variantCode: "B", className: "Turma DS-2026/1" },
+        { id: "2026DS003", name: "Camila Rodrigues Lima", variantCode: "C", className: "Turma DS-2026/1" },
+        { id: "2026DS004", name: "Diego Fernandes", variantCode: "D", className: "Turma DS-2026/1" },
+      ];
+
+      const pdfBuffer = await TeacherClassroomExamStudioService.exportExamBundlePdf(examSuite40Q, {
+        includeVariants: ["A", "B", "C", "D"],
+        includeTeacherMasterKey: true,
+        includeOmrBubbleSheets: true,
+        studentList: realClassStudents,
+      });
+
+      expect(pdfBuffer).toBeDefined();
+      expect(pdfBuffer.length).toBeGreaterThan(8000);
+      const headerStr = Buffer.from(pdfBuffer).subarray(0, 5).toString("utf-8");
+      expect(headerStr).toContain("%PDF");
+    });
+
+    it("deve processar e calcular estatísticas reais de notas para a turma inteira", () => {
+      const realClassStudents = [
+        { id: "2026DS001", name: "Ana Clara Souza", variantCode: "A" },
+        { id: "2026DS002", name: "Bruno Henrique Costa", variantCode: "B" },
+        { id: "2026DS003", name: "Camila Rodrigues Lima", variantCode: "C" },
+      ];
+
+      const submissions: StudentOmrSubmission[] = realClassStudents.map((st, idx) => {
+        const variant = examSuite40Q.variants[idx % examSuite40Q.variants.length];
+        const marked: Record<number, string> = {};
+        for (let i = 1; i <= 40; i++) {
+          marked[i] = i % 2 === 0 ? variant.answerKeyMap[i] : "A";
+        }
+        return {
+          studentId: st.id,
+          studentName: st.name,
+          variantCode: variant.variantCode,
+          markedAnswers: marked,
+        };
+      });
+
+      const batchReport = TeacherClassroomExamStudioService.gradeBatchSubmissions(submissions, examSuite40Q);
+
+      expect(batchReport.totalSubmissions).toBe(3);
+      expect(batchReport.studentResults).toHaveLength(3);
+      expect(batchReport.studentResults[0].studentName).toBe("Ana Clara Souza");
+      expect(batchReport.studentResults[1].studentName).toBe("Bruno Henrique Costa");
+      expect(batchReport.classAverage).toBeGreaterThan(0);
+      expect(batchReport.approvalRate).toBeGreaterThanOrEqual(0);
+    });
   });
 
   // =========================================================================

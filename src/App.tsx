@@ -1818,32 +1818,30 @@ export default function App() {
     return () => clearInterval(interval);
   }, [submissionsPollActive, featureFlags?.ENABLE_RUBRIC_CORRECTION]);
 
-  // Synchronously fetch classes when the user enters the corrector tab
+  // Fetch classes on mount and when user enters the corrector tab
   useEffect(() => {
-    if (currentTab === "corrector" || currentTab === "notas") {
-      fetch(apiUrl("/api/classes"))
-        .then(res => safeJsonResponse(res))
-        .then(data => {
-          let classList: any[] = [];
-          if (data) {
-            if (Array.isArray(data)) {
-              classList = data;
-            } else if (Array.isArray(data.classes)) {
-              classList = data.classes;
-            } else if (Array.isArray(data.data)) {
-              classList = data.data;
-            } else if (Array.isArray(data.data?.classes)) {
-              classList = data.data.classes;
-            } else if (Array.isArray(data.items)) {
-              classList = data.items;
-            } else if (Array.isArray(data.data?.items)) {
-              classList = data.data.items;
-            }
+    fetch(apiUrl("/api/classes"))
+      .then(res => safeJsonResponse(res))
+      .then(data => {
+        let classList: any[] = [];
+        if (data) {
+          if (Array.isArray(data)) {
+            classList = data;
+          } else if (Array.isArray(data.classes)) {
+            classList = data.classes;
+          } else if (Array.isArray(data.data)) {
+            classList = data.data;
+          } else if (Array.isArray(data.data?.classes)) {
+            classList = data.data.classes;
+          } else if (Array.isArray(data.items)) {
+            classList = data.items;
+          } else if (Array.isArray(data.data?.items)) {
+            classList = data.data.items;
           }
-          setCorrectorClasses(classList);
-        })
-        .catch(err => console.error("Error loading corrector classes:", err));
-    }
+        }
+        setCorrectorClasses(classList);
+      })
+      .catch(err => console.error("Error loading corrector classes:", err));
   }, [currentTab]);
 
   // Synchronously fetch students and activities for the selected corrector class
@@ -4564,10 +4562,14 @@ export default function App() {
                           className="w-full bg-[#030712] border border-[#1e295b]/40 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 shadow-sm"
                         >
                           <option value="Todas as Turmas (Global)">Todas as Turmas (Configuração Global)</option>
-                          <option value="Turma A (Engenharia de Software)">Turma A (Engenharia de Software)</option>
-                          <option value="Turma B (Ciência da Computação)">Turma B (Ciência da Computação)</option>
-                          <option value="Turma C (Sistemas de Informação)">Turma C (Sistemas de Informação)</option>
-                          <option value="Turma Especial / Noturno">Turma Especial / Noturno</option>
+                          {correctorClasses.map((cls) => (
+                            <option key={cls.id} value={cls.name}>
+                              {cls.name} • {cls.course || "Curso Técnico"}
+                            </option>
+                          ))}
+                          {correctorClasses.length === 0 && (
+                            <option value="Turma Geral SENAI">Turma Geral SENAI</option>
+                          )}
                         </select>
                       </div>
 

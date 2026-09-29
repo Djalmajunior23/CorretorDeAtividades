@@ -71,10 +71,26 @@ export default function AvaliacoesView() {
   const [newExamAccessCode, setNewExamAccessCode] = useState("SENAI-2026");
   const [isGeneratingExamVariants, setIsGeneratingExamVariants] = useState(false);
   const [generatedExamVariants, setGeneratedExamVariants] = useState<any[]>([]);
+  const [realClasses, setRealClasses] = useState<any[]>([]);
 
   useEffect(() => {
     fetchExamsList();
+    fetchClasses();
   }, []);
+
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/classes"));
+      const data = await safeJsonResponse(res);
+      const list = Array.isArray(data) ? data : (data?.classes || []);
+      setRealClasses(list);
+      if (list.length > 0 && !ocrSelectedClass) {
+        setOcrSelectedClass(list[0].name);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar turmas reais em AvaliacoesView:", e);
+    }
+  };
 
   // Anti-Cheat: Blur and Visibility Change Detection
   useEffect(() => {
@@ -2549,9 +2565,14 @@ export default function AvaliacoesView() {
                     onChange={(e) => setOcrSelectedClass(e.target.value)}
                     className="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg px-3 py-2 outline-none font-mono mt-1"
                   >
-                    <option value="Desenvolvimento Web 1A">Desenvolvimento Web 1A</option>
-                    <option value="Sistemas Embarcados 1C">Sistemas Embarcados 1C</option>
-                    <option value="Automação Industrial 2B">Automação Industrial 2B</option>
+                    {realClasses.map((cls) => (
+                      <option key={cls.id} value={cls.name}>
+                        {cls.name}
+                      </option>
+                    ))}
+                    {realClasses.length === 0 && (
+                      <option value="Turma Geral SENAI">Turma Geral SENAI</option>
+                    )}
                   </select>
                 </div>
 
