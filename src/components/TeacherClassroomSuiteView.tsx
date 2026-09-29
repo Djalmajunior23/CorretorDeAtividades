@@ -26,7 +26,10 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldCheck,
-  ChevronDown
+  ChevronDown,
+  Plus,
+  Trash2,
+  Bookmark
 } from "lucide-react";
 import {
   TeacherClassroomExamStudioService,
@@ -42,30 +45,78 @@ import {
   PracticalLabChallenge,
 } from "../services/teacherInteractiveLessonKitService";
 
+const MULTI_SUBJECT_PRESETS = [
+  {
+    name: "Simulado Geral SENAI / SAEP (40 Questões)",
+    questionCount: 40,
+    topic: "Simulado Integrador de Competências Técnicas em Desenvolvimento de Sistemas",
+    subjects: [
+      "Algoritmos & Estruturas de Dados",
+      "Banco de Dados Relacional & SQL",
+      "Engenharia de Software & Clean Code",
+      "Segurança da Informação, DevSecOps & LGPD"
+    ]
+  },
+  {
+    name: "Maratona Técnica Full-Stack (50 Questões)",
+    questionCount: 50,
+    topic: "Avaliação Global de Desenvolvimento, Arquitetura e Infraestrutura",
+    subjects: [
+      "Algoritmos & Estruturas de Dados",
+      "Banco de Dados & Modelagem",
+      "Engenharia de Software & Padrões GoF",
+      "Arquitetura de Microsserviços & Resiliência",
+      "DevOps, CI/CD & Contêineres Docker"
+    ]
+  },
+  {
+    name: "Exame Integrador Enade / Concurso (60 Questões)",
+    questionCount: 60,
+    topic: "Exame Nacional Integrado de Tecnologia e Ciência da Computação",
+    subjects: [
+      "Algoritmos & Complexidade Big-O",
+      "Bancos de Dados Relacionais & NoSQL",
+      "Engenharia de Software & Metodologias Ágeis",
+      "Segurança, Criptografia & LGPD",
+      "Redes de Computadores & Protocolos Web",
+      "Indústria 4.0, IoT & Sistemas Embarcados"
+    ]
+  }
+];
+
 export const TeacherClassroomSuiteView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"EXAMS" | "OMR" | "LABS" | "LESSON_PLAN">("EXAMS");
 
   // State: Exam Generator
   const [examSubject, setExamSubject] = useState("Desenvolvimento de Software");
-  const [examTopic, setExamTopic] = useState("Estruturas de Dados e Algoritmos de Alta Performance");
+  const [examTopic, setExamTopic] = useState("Simulado Integrador de Competências Técnicas");
   const [examCourse, setExamCourse] = useState("Técnico em Desenvolvimento de Sistemas - SENAI");
   const [examLevel, setExamLevel] = useState<"SENAI_TECNICO" | "SUPERIOR" | "ENSINO_MEDIO" | "CONCURSO_ENADE">("SENAI_TECNICO");
-  const [questionCount, setQuestionCount] = useState(5);
+  const [questionCount, setQuestionCount] = useState(40); // Padrão 40 questões conforme solicitado
   const [variantCount, setVariantCount] = useState(4);
   const [isGeneratingExam, setIsGeneratingExam] = useState(false);
   const [generatedExamSuite, setGeneratedExamSuite] = useState<TeacherExamSuite | null>(null);
   const [selectedVariantTab, setSelectedVariantTab] = useState("A");
 
+  // Multi-subject management
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([
+    "Algoritmos & Estruturas de Dados",
+    "Banco de Dados Relacional & SQL",
+    "Engenharia de Software & Clean Code",
+    "Segurança da Informação, DevSecOps & LGPD"
+  ]);
+  const [newSubjectInput, setNewSubjectInput] = useState("");
+
   // State: OMR Corrector
   const [omrStudentName, setOmrStudentName] = useState("Carlos Eduardo Silva");
   const [omrStudentId, setOmrStudentId] = useState("ALUNO-2026-089");
   const [omrSelectedVariant, setOmrSelectedVariant] = useState("A");
-  const [omrMarkedAnswers, setOmrMarkedAnswers] = useState<Record<number, string>>({
-    1: "A",
-    2: "A",
-    3: "B",
-    4: "A",
-    5: "C",
+  const [omrMarkedAnswers, setOmrMarkedAnswers] = useState<Record<number, string>>(() => {
+    const initial: Record<number, string> = {};
+    for (let i = 1; i <= 40; i++) {
+      initial[i] = ["A", "B", "C", "D"][(i * 3 + 1) % 4];
+    }
+    return initial;
   });
   const [singleOmrResult, setSingleOmrResult] = useState<StudentOmrGradingResult | null>(null);
   const [batchOmrReport, setBatchOmrReport] = useState<ClassOmrBatchReport | null>(null);
@@ -81,13 +132,35 @@ export const TeacherClassroomSuiteView: React.FC = () => {
   const [revealedHintTiers, setRevealedHintTiers] = useState<number[]>([]);
   const [selectedPollAnswer, setSelectedPollAnswer] = useState<string | null>(null);
 
-  // Action: Gerar Suíte de Prova
+  // Apply Preset
+  const handleApplyPreset = (preset: typeof MULTI_SUBJECT_PRESETS[0]) => {
+    setQuestionCount(preset.questionCount);
+    setExamTopic(preset.topic);
+    setSelectedSubjects([...preset.subjects]);
+  };
+
+  const handleAddSubject = () => {
+    const trimmed = newSubjectInput.trim();
+    if (trimmed && !selectedSubjects.includes(trimmed)) {
+      setSelectedSubjects([...selectedSubjects, trimmed]);
+      setNewSubjectInput("");
+    }
+  };
+
+  const handleRemoveSubject = (sub: string) => {
+    if (selectedSubjects.length > 1) {
+      setSelectedSubjects(selectedSubjects.filter((s) => s !== sub));
+    }
+  };
+
+  // Action: Gerar Suíte de Prova Multiassunto
   const handleGenerateExamSuite = async () => {
     setIsGeneratingExam(true);
     try {
       const suite = await TeacherClassroomExamStudioService.generateExamSuite({
         subject: examSubject,
         topic: examTopic,
+        multiSubjects: selectedSubjects,
         courseName: examCourse,
         educationLevel: examLevel,
         questionCount,
@@ -143,15 +216,44 @@ export const TeacherClassroomSuiteView: React.FC = () => {
       alert("Gere uma avaliação primeiro para ter o gabarito oficial de referência.");
       return;
     }
+    const qTotal = generatedExamSuite.masterQuestions.length;
     const sampleBatch: StudentOmrSubmission[] = [
-      { studentId: "ALU-01", studentName: "Ana Clara Souza", variantCode: "A", markedAnswers: { 1: "A", 2: "A", 3: "A", 4: "A", 5: "A" } },
-      { studentId: "ALU-02", studentName: "Bruno Henrique Costa", variantCode: "B", markedAnswers: { 1: "B", 2: "A", 3: "D", 4: "C", 5: "A" } },
-      { studentId: "ALU-03", studentName: "Camila Rodrigues Lima", variantCode: "C", markedAnswers: { 1: "C", 2: "B", 3: "A", 4: "D", 5: "C" } },
-      { studentId: "ALU-04", studentName: "Diego Fernandes", variantCode: "A", markedAnswers: { 1: "A", 2: "C", 3: "A", 4: "A", 5: "B" } },
-      { studentId: "ALU-05", studentName: "Elena Vasconcelos", variantCode: "D", markedAnswers: { 1: "A", 2: "B", 3: "C", 4: "D", 5: "A" } },
-      { studentId: "ALU-06", studentName: "Fabio Gabriel Mendes", variantCode: "B", markedAnswers: { 1: "C", 2: "A", 3: "B", 4: "A", 5: "C" } },
-      { studentId: "ALU-07", studentName: "Gabriela Prado", variantCode: "A", markedAnswers: { 1: "A", 2: "A", 3: "A", 4: "A", 5: "D" } },
-      { studentId: "ALU-08", studentName: "Heitor Guimarães", variantCode: "C", markedAnswers: { 1: "A", 2: "A", 3: "A", 4: "A", 5: "A" } },
+      {
+        studentId: "ALU-01",
+        studentName: "Ana Clara Souza",
+        variantCode: "A",
+        markedAnswers: Object.fromEntries(Array.from({ length: qTotal }, (_, i) => [i + 1, generatedExamSuite.variants[0]?.answerKeyMap[i + 1] || "A"])),
+      },
+      {
+        studentId: "ALU-02",
+        studentName: "Bruno Henrique Costa",
+        variantCode: "B",
+        markedAnswers: Object.fromEntries(Array.from({ length: qTotal }, (_, i) => [i + 1, (i % 4 === 0 ? "C" : generatedExamSuite.variants[1]?.answerKeyMap[i + 1] || "B")])),
+      },
+      {
+        studentId: "ALU-03",
+        studentName: "Camila Rodrigues Lima",
+        variantCode: "C",
+        markedAnswers: Object.fromEntries(Array.from({ length: qTotal }, (_, i) => [i + 1, (i % 3 === 0 ? "D" : generatedExamSuite.variants[2]?.answerKeyMap[i + 1] || "A")])),
+      },
+      {
+        studentId: "ALU-04",
+        studentName: "Diego Fernandes",
+        variantCode: "A",
+        markedAnswers: Object.fromEntries(Array.from({ length: qTotal }, (_, i) => [i + 1, (i % 2 === 0 ? "B" : generatedExamSuite.variants[0]?.answerKeyMap[i + 1] || "C")])),
+      },
+      {
+        studentId: "ALU-05",
+        studentName: "Elena Vasconcelos",
+        variantCode: "D",
+        markedAnswers: Object.fromEntries(Array.from({ length: qTotal }, (_, i) => [i + 1, generatedExamSuite.variants[3]?.answerKeyMap[i + 1] || "A"])),
+      },
+      {
+        studentId: "ALU-06",
+        studentName: "Fabio Gabriel Mendes",
+        variantCode: "B",
+        markedAnswers: Object.fromEntries(Array.from({ length: qTotal }, (_, i) => [i + 1, (i % 5 === 0 ? "A" : generatedExamSuite.variants[1]?.answerKeyMap[i + 1] || "D")])),
+      },
     ];
 
     const report = TeacherClassroomExamStudioService.gradeBatchSubmissions(sampleBatch, generatedExamSuite);
@@ -203,16 +305,16 @@ export const TeacherClassroomSuiteView: React.FC = () => {
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <span className="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
-              SENAI Pro Suite
+              SENAI Pro Suite • Multiassunto 40+Q
             </span>
-            <span className="text-xs text-blue-300 font-mono">SENAI • BNCC • SAEP Certified</span>
+            <span className="text-xs text-blue-300 font-mono">SENAI • BNCC • ENADE • SAEP Ready</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
             <Cpu className="text-amber-400 w-8 h-8" />
-            Estúdio Pedagógico de Alta Produtividade Docente
+            Estúdio Pedagógico & Provas Multiassunto (40+ Questões)
           </h1>
           <p className="text-slate-300 text-sm max-w-3xl">
-            Geração hiper-paramétrica de provas multiversão com anti-cola, correção óptica expressa de cartões-resposta (OMR), laboratórios práticos com auto-grading e planos de aula minuto a minuto.
+            Geração de simulados e avaliações multidisciplinares integradas (40 a 100+ questões), cadernos multiversão A/B/C/D anti-cola, leitura óptica expressa de cartões-resposta (OMR), laboratórios guiados e planos de aula.
           </p>
         </div>
 
@@ -225,7 +327,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                 : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"
             }`}
           >
-            <FileText className="w-4 h-4" /> Provas & Gabaritos
+            <FileText className="w-4 h-4" /> Provas & Gabaritos (40+Q)
           </button>
           <button
             onClick={() => setActiveTab("OMR")}
@@ -261,29 +363,53 @@ export const TeacherClassroomSuiteView: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: ESTÚDIO DE PROVAS & SIMULADOS MULTIVERSÃO                          */}
+      {/* TAB 1: ESTÚDIO DE PROVAS & SIMULADOS MULTIVERSÃO (40+ QUESTÕES)            */}
       {/* ========================================================================= */}
       {activeTab === "EXAMS" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna 1: Painel de Configuração */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
-            <div className="flex items-center gap-2 text-amber-400 font-bold text-base pb-3 border-b border-slate-800">
-              <Sliders className="w-5 h-5" /> Configuração da Avaliação
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-base">
+                <Sliders className="w-5 h-5" /> Configuração Multiassunto
+              </div>
+              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded">
+                Min. 40 Questões
+              </span>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Disciplina / Módulo</label>
-                <input
-                  type="text"
-                  value={examSubject}
-                  onChange={(e) => setExamSubject(e.target.value)}
-                  className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                />
+            {/* Presets Rápidos */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <Bookmark className="w-3.5 h-3.5 text-blue-400" /> Presets de Simulados Integrados
+              </label>
+              <div className="grid grid-cols-1 gap-1.5">
+                {MULTI_SUBJECT_PRESETS.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleApplyPreset(preset)}
+                    className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-blue-500/60 text-left transition-all group"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-white group-hover:text-blue-300">
+                        {preset.name}
+                      </span>
+                      <span className="text-[10px] font-mono bg-blue-900/40 text-blue-300 px-1.5 py-0.5 rounded">
+                        {preset.questionCount}Q
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                      {preset.subjects.join(" • ")}
+                    </p>
+                  </button>
+                ))}
               </div>
+            </div>
 
+            <div className="space-y-3 pt-2">
               <div>
-                <label className="text-xs font-semibold text-slate-400">Tópico Central / Habilidade</label>
+                <label className="text-xs font-semibold text-slate-400">Título / Ementa Geral do Simulado</label>
                 <input
                   type="text"
                   value={examTopic}
@@ -292,14 +418,54 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-400">Curso / Turma</label>
-                <input
-                  type="text"
-                  value={examCourse}
-                  onChange={(e) => setExamCourse(e.target.value)}
-                  className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                />
+              {/* Disciplinas / Eixos Temáticos Multiassunto */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-400">
+                    Eixos Temáticos Multiassunto ({selectedSubjects.length})
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    ~{Math.round(questionCount / selectedSubjects.length)}q/eixo
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedSubjects.map((sub, sIdx) => (
+                    <span
+                      key={sIdx}
+                      className="bg-blue-950 border border-blue-700/60 text-blue-200 text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm"
+                    >
+                      {sub}
+                      {selectedSubjects.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSubject(sub)}
+                          className="text-slate-400 hover:text-rose-400 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Adicionar novo eixo temático..."
+                    value={newSubjectInput}
+                    onChange={(e) => setNewSubjectInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddSubject()}
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSubject}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Adicionar
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -312,8 +478,8 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                   >
                     <option value="SENAI_TECNICO">SENAI Técnico</option>
                     <option value="SUPERIOR">Ensino Superior</option>
-                    <option value="ENSINO_MEDIO">Ensino Médio / BNCC</option>
                     <option value="CONCURSO_ENADE">Enade / Concurso</option>
+                    <option value="ENSINO_MEDIO">Ensino Médio / BNCC</option>
                   </select>
                 </div>
 
@@ -332,15 +498,40 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Botões Rápidos de Quantidade de Questões */}
               <div>
-                <label className="text-xs font-semibold text-slate-400">Número de Questões ({questionCount})</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-400">
+                    Quantidade de Questões: <strong className="text-amber-400 font-mono text-sm">{questionCount}Q</strong>
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-mono">10 a 100 Questões</span>
+                </div>
+
+                <div className="flex gap-1.5 mt-1.5">
+                  {[20, 40, 50, 60, 80, 100].map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => setQuestionCount(count)}
+                      className={`flex-1 py-1 text-xs font-bold font-mono rounded-lg transition-all ${
+                        questionCount === count
+                          ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30 scale-105"
+                          : "bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {count}Q
+                    </button>
+                  ))}
+                </div>
+
                 <input
                   type="range"
-                  min={3}
-                  max={15}
+                  min={10}
+                  max={100}
+                  step={5}
                   value={questionCount}
                   onChange={(e) => setQuestionCount(Number(e.target.value))}
-                  className="w-full mt-2 accent-blue-500 cursor-pointer"
+                  className="w-full mt-2 accent-amber-500 cursor-pointer"
                 />
               </div>
             </div>
@@ -348,15 +539,15 @@ export const TeacherClassroomSuiteView: React.FC = () => {
             <button
               onClick={handleGenerateExamSuite}
               disabled={isGeneratingExam}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
             >
               {isGeneratingExam ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Gerando Suíte de Avaliações...
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Gerando {questionCount} Questões Multiassunto...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 text-amber-300" /> Gerar Provas & Gabaritos Cruzados
+                  <Sparkles className="w-4 h-4 text-amber-300" /> Gerar Simulado Multiassunto ({questionCount}Q)
                 </>
               )}
             </button>
@@ -366,7 +557,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                 onClick={handleExportExamPdf}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all"
               >
-                <Download className="w-4 h-4" /> Baixar Caderno de Provas + Gabarito (PDF)
+                <Download className="w-4 h-4" /> Baixar Caderno Completo ({generatedExamSuite.masterQuestions.length}Q) em PDF
               </button>
             )}
           </div>
@@ -376,25 +567,31 @@ export const TeacherClassroomSuiteView: React.FC = () => {
             {!generatedExamSuite ? (
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center space-y-4">
                 <FileText className="w-16 h-16 text-slate-600 mx-auto animate-pulse" />
-                <h3 className="text-lg font-bold text-slate-300">Nenhuma prova gerada ainda</h3>
+                <h3 className="text-lg font-bold text-slate-300">Nenhum simulado gerado ainda</h3>
                 <p className="text-sm text-slate-500 max-w-md mx-auto">
-                  Configure os parâmetros à esquerda e clique em <strong>Gerar Provas & Gabaritos</strong> para visualizar as variantes de sala com anti-cola permutado.
+                  Selecione um preset (ex: <strong>Simulado Geral 40Q</strong>) ou configure a lista de disciplinas à esquerda e clique em <strong>Gerar Simulado Multiassunto</strong>.
                 </p>
               </div>
             ) : (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5 shadow-xl">
                 {/* Header da Prova Gerada */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-4 border-b border-slate-800">
-                  <div>
+                  <div className="space-y-1">
                     <h2 className="text-xl font-extrabold text-white">{generatedExamSuite.title}</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {generatedExamSuite.courseName} • {generatedExamSuite.masterQuestions.length} Questões • Total 100 Pts
-                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                      <span className="font-bold text-amber-400 font-mono">
+                        {generatedExamSuite.masterQuestions.length} Questões Multidisciplinares
+                      </span>
+                      <span>•</span>
+                      <span>Total 100 Pontos ({generatedExamSuite.masterQuestions[0]?.points} pts/q)</span>
+                      <span>•</span>
+                      <span>Duração: {generatedExamSuite.durationMinutes} min</span>
+                    </div>
                   </div>
 
                   {/* Seletor de Variante A/B/C/D */}
-                  <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-                    <span className="text-xs font-bold text-slate-400 px-2">Variante:</span>
+                  <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                    <span className="text-xs font-bold text-slate-400 px-1.5">Variante:</span>
                     {generatedExamSuite.variants.map((v) => (
                       <button
                         key={v.variantCode}
@@ -405,7 +602,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                             : "text-slate-400 hover:text-white"
                         }`}
                       >
-                        Versão {v.variantCode}
+                        Tipo {v.variantCode}
                       </button>
                     ))}
                     <button
@@ -416,14 +613,38 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                           : "text-amber-400 hover:text-amber-300"
                       }`}
                     >
-                      Gabarito Mestre
+                      Gabarito Cruzado
                     </button>
                   </div>
                 </div>
 
+                {/* Breakdown por Disciplina */}
+                {generatedExamSuite.subjectBreakdown && generatedExamSuite.subjectBreakdown.length > 0 && (
+                  <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 space-y-2">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Distribuição dos Eixos Temáticos na Prova
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {generatedExamSuite.subjectBreakdown.map((sb, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-slate-900 border border-slate-800 p-2 rounded-lg text-center"
+                        >
+                          <div className="text-xs font-bold text-white truncate" title={sb.subject}>
+                            {sb.subject}
+                          </div>
+                          <div className="text-[11px] font-mono text-emerald-400 mt-0.5">
+                            {sb.questionCount} Questões ({sb.percentage}%)
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Exibição das Questões da Variante Selecionada */}
                 {selectedVariantTab !== "MASTER_KEY" ? (
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
                     {generatedExamSuite.variants
                       .find((v) => v.variantCode === selectedVariantTab)
                       ?.questions.map((q) => (
@@ -431,12 +652,19 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                           key={q.variantIndex}
                           className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3"
                         >
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="bg-blue-900/60 text-blue-300 font-bold px-2.5 py-1 rounded-md border border-blue-700/40">
-                              Questão {q.variantIndex} • {q.points} Pts
-                            </span>
+                          <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-blue-900/60 text-blue-300 font-bold px-2.5 py-1 rounded-md border border-blue-700/40 font-mono">
+                                Questão {q.variantIndex < 10 ? "0" + q.variantIndex : q.variantIndex}
+                              </span>
+                              {q.subjectArea && (
+                                <span className="bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded text-[10px] font-semibold border border-indigo-800/50">
+                                  {q.subjectArea}
+                                </span>
+                              )}
+                            </div>
                             <span className="text-slate-400 font-mono text-[11px]">
-                              Tipo: {q.type} • Gabarito Nesta Versão: <strong className="text-emerald-400">({q.correctOptionId})</strong>
+                              Gabarito: <strong className="text-emerald-400">({q.correctOptionId})</strong> • {q.points} Pts
                             </span>
                           </div>
 
@@ -483,17 +711,17 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                     <div className="bg-amber-950/30 border border-amber-600/40 p-4 rounded-xl flex items-center gap-3 text-amber-300 text-xs">
                       <ShieldCheck className="w-5 h-5 shrink-0" />
                       <span>
-                        Matriz de Resolução Cruzada: As questões e alternativas foram permutadas de forma determinística em cada versão, eliminando a viabilidade de cola presencial entre alunos vizinhos.
+                        Matriz de Resolução Cruzada ({generatedExamSuite.masterQuestions.length} Questões): Cada versão possui permutação determinística com mapeamento de gabarito sincronizado para correção em segundos.
                       </span>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto max-h-[500px] border border-slate-800 rounded-xl">
                       <table className="w-full text-xs text-left">
-                        <thead className="bg-slate-950 text-slate-400 uppercase font-bold border-b border-slate-800">
+                        <thead className="bg-slate-950 text-slate-400 uppercase font-bold border-b border-slate-800 sticky top-0">
                           <tr>
                             <th className="p-3">Item</th>
+                            <th className="p-3">Eixo Temático</th>
                             <th className="p-3">Competência</th>
-                            <th className="p-3">Taxonomia Bloom</th>
                             {generatedExamSuite.variants.map((v) => (
                               <th key={v.variantCode} className="p-3 text-center text-blue-400">
                                 Versão {v.variantCode}
@@ -501,15 +729,15 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800">
+                        <tbody className="divide-y divide-slate-800 bg-slate-900">
                           {generatedExamSuite.masterQuestions.map((mq, idx) => (
                             <tr key={mq.id} className="hover:bg-slate-950/50">
-                              <td className="p-3 font-bold text-white">Questão {idx + 1}</td>
-                              <td className="p-3 font-mono text-slate-300">{mq.competencyCode}</td>
-                              <td className="p-3 text-slate-400">{mq.bloomTaxonomyLevel}</td>
+                              <td className="p-3 font-bold text-white font-mono">Q{idx + 1 < 10 ? "0" + (idx + 1) : idx + 1}</td>
+                              <td className="p-3 text-slate-300 truncate max-w-[180px]">{mq.subjectArea || "Geral"}</td>
+                              <td className="p-3 font-mono text-slate-400">{mq.competencyCode}</td>
                               {generatedExamSuite.variants.map((v) => (
-                                <td key={v.variantCode} className="p-3 text-center font-bold text-emerald-400">
-                                  {v.answerKeyMap[idx + 1] || "-"}
+                                <td key={v.variantCode} className="p-3 text-center font-bold text-emerald-400 font-mono">
+                                  [ {v.answerKeyMap[idx + 1] || "-"} ]
                                 </td>
                               ))}
                             </tr>
@@ -572,17 +800,35 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Matriz de Bolhas de Resposta */}
+              {/* Matriz de Bolhas de Resposta (40 Questões em 2 colunas compactas) */}
               <div className="space-y-2 pt-2">
-                <label className="text-xs font-semibold text-slate-400">Grade de Bolhas Preenchidas</label>
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {[1, 2, 3, 4, 5].map((qNum) => (
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-400">Grade de Bolhas (40 Questões)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const randomized: Record<number, string> = {};
+                      for (let i = 1; i <= 40; i++) {
+                        randomized[i] = ["A", "B", "C", "D"][Math.floor(Math.random() * 4)];
+                      }
+                      setOmrMarkedAnswers(randomized);
+                    }}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Preencher Aleatório
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+                  {Array.from({ length: 40 }, (_, i) => i + 1).map((qNum) => (
                     <div
                       key={qNum}
-                      className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800"
+                      className="flex items-center justify-between bg-slate-950 p-1.5 rounded-lg border border-slate-800"
                     >
-                      <span className="text-xs font-bold text-slate-300">Item {qNum < 10 ? "0" + qNum : qNum}</span>
-                      <div className="flex gap-2">
+                      <span className="text-[11px] font-bold text-slate-300 font-mono">
+                        Q{qNum < 10 ? "0" + qNum : qNum}
+                      </span>
+                      <div className="flex gap-1">
                         {["A", "B", "C", "D"].map((opt) => {
                           const isSelected = omrMarkedAnswers[qNum] === opt;
                           return (
@@ -595,7 +841,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                                   [qNum]: isSelected ? "" : opt,
                                 }))
                               }
-                              className={`w-7 h-7 rounded-full text-xs font-bold transition-all ${
+                              className={`w-5 h-5 rounded-full text-[10px] font-bold transition-all ${
                                 isSelected
                                   ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/50 scale-110"
                                   : "bg-slate-800 text-slate-400 hover:bg-slate-700"
@@ -616,7 +862,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
               <button
                 onClick={handleGradeSingleOmr}
                 disabled={isGradingOmr}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all text-xs"
               >
                 <CheckCircle className="w-4 h-4" /> Corrigir Cartão Instantaneamente
               </button>
@@ -625,7 +871,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                 onClick={handleSimulateClassBatchOmr}
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all text-xs"
               >
-                <Users className="w-4 h-4" /> Simular Correção de Lote da Turma (8 Alunos)
+                <Users className="w-4 h-4" /> Simular Correção em Lote da Turma (6 Alunos)
               </button>
             </div>
           </div>
@@ -654,28 +900,20 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Itens Corrigidos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {singleOmrResult.itemDetails.map((item) => (
-                    <div
-                      key={item.questionIndex}
-                      className={`p-3 rounded-lg border text-xs flex justify-between items-center ${
-                        item.isCorrect
-                          ? "bg-emerald-950/20 border-emerald-800/40 text-emerald-200"
-                          : "bg-rose-950/20 border-rose-800/40 text-rose-200"
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold">Item {item.questionIndex} ({item.competency})</div>
-                        <div className="text-[11px] opacity-80 mt-0.5">
-                          Marcou: <strong>{item.marked}</strong> | Esperado: <strong>{item.expected}</strong>
-                        </div>
-                      </div>
-                      <span className="font-mono font-bold">
-                        {item.pointsEarned} / {item.pointsPossible} pts
-                      </span>
-                    </div>
-                  ))}
+                {/* Resumo de Acertos / Erros */}
+                <div className="grid grid-cols-3 gap-3 text-center text-xs">
+                  <div className="bg-emerald-950/30 border border-emerald-800/40 p-2.5 rounded-xl text-emerald-300">
+                    <strong className="text-lg font-black block font-mono">{singleOmrResult.correctCount}</strong>
+                    Acertos
+                  </div>
+                  <div className="bg-rose-950/30 border border-rose-800/40 p-2.5 rounded-xl text-rose-300">
+                    <strong className="text-lg font-black block font-mono">{singleOmrResult.wrongCount}</strong>
+                    Erros
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-slate-300">
+                    <strong className="text-lg font-black block font-mono">{singleOmrResult.blankCount}</strong>
+                    Em Branco
+                  </div>
                 </div>
 
                 {/* Feedback Formativo */}
@@ -692,13 +930,13 @@ export const TeacherClassroomSuiteView: React.FC = () => {
             {batchOmrReport && (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
                 <div className="flex items-center gap-2 text-indigo-400 font-bold text-base pb-3 border-b border-slate-800">
-                  <BarChart2 className="w-5 h-5" /> Relatório Consolidado de Desempenho da Turma
+                  <BarChart2 className="w-5 h-5" /> Relatório Consolidado de Desempenho no Simulado
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                     <div className="text-2xl font-black text-white">{batchOmrReport.classAverage}%</div>
-                    <div className="text-[11px] text-slate-400">Média Geral da Turma</div>
+                    <div className="text-[11px] text-slate-400">Média da Turma</div>
                   </div>
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                     <div className="text-2xl font-black text-emerald-400">{batchOmrReport.approvalRate}%</div>
@@ -728,10 +966,10 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                         >
                           <div className="font-bold flex justify-between">
                             <span>Questão #{hq.questionIndex} ({hq.topicDescription})</span>
-                            <span className="text-rose-400 font-mono font-bold">{hq.errorRatePercentage}% de Erro</span>
+                            <span className="text-rose-400 font-mono font-bold">{hq.errorRatePercentage}% Erro</span>
                           </div>
                           <div className="text-[11px] text-rose-300/80">
-                            Distrator Mais Assinalado: <strong>{hq.mostCommonWrongAnswer}</strong>
+                            Distrator Mais Marcado: <strong>{hq.mostCommonWrongAnswer}</strong>
                           </div>
                         </div>
                       ))}

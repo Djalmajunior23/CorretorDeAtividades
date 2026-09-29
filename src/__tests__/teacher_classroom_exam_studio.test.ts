@@ -10,15 +10,16 @@ import {
 } from "../services/teacherInteractiveLessonKitService";
 
 describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
-  let examSuite: TeacherExamSuite;
+  let examSuite5Q: TeacherExamSuite;
+  let examSuite40Q: TeacherExamSuite;
   let lessonKit: TeacherLessonKit;
 
   // =========================================================================
-  // 1. GERAÇÃO DE SUÍTE DE PROVAS MULTIVERSÃO COM GABARITOS CRUZADOS
+  // 1. GERAÇÃO DE SUÍTE DE PROVAS MULTIVERSÃO COM GABARITOS CRUZADOS (5Q & 40Q)
   // =========================================================================
   describe("Gerador Hiper-Paramétrico de Provas Multiversão (A, B, C, D)", () => {
-    it("deve gerar uma suíte de avaliação mestre com total de 100 pontos", async () => {
-      examSuite = await TeacherClassroomExamStudioService.generateExamSuite({
+    it("deve gerar uma suíte de avaliação mestre básica com total de 100 pontos", async () => {
+      examSuite5Q = await TeacherClassroomExamStudioService.generateExamSuite({
         subject: "Banco de Dados & Big Data",
         topic: "Modelagem Relacional e Otimização de Índices",
         courseName: "Técnico em Desenvolvimento de Sistemas - SENAI",
@@ -29,14 +30,14 @@ describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
         academicPeriod: "2026/1",
       });
 
-      expect(examSuite).toBeDefined();
-      expect(examSuite.id).toMatch(/^EXAM-/);
-      expect(examSuite.masterQuestions).toHaveLength(5);
+      expect(examSuite5Q).toBeDefined();
+      expect(examSuite5Q.id).toMatch(/^EXAM-/);
+      expect(examSuite5Q.masterQuestions).toHaveLength(5);
 
-      const totalPoints = examSuite.masterQuestions.reduce((acc, q) => acc + q.points, 0);
-      expect(totalPoints).toBe(100);
+      const totalPoints = examSuite5Q.masterQuestions.reduce((acc, q) => acc + q.points, 0);
+      expect(Math.round(totalPoints)).toBe(100);
 
-      examSuite.masterQuestions.forEach((q) => {
+      examSuite5Q.masterQuestions.forEach((q) => {
         expect(q.statement).toBeTruthy();
         expect(q.bloomTaxonomyLevel).toBeDefined();
         expect(q.competencyCode).toBeTruthy();
@@ -46,13 +47,53 @@ describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
       });
     });
 
-    it("deve gerar 4 variantes (A, B, C, D) com permutação e gabarito mapeado", async () => {
-      expect(examSuite.variants).toHaveLength(4);
+    it("deve gerar uma prova de NO MÍNIMO 40 QUESTÕES MULTIASSUNTO com breakdown de disciplinas", async () => {
+      const multiSubjects = [
+        "Algoritmos & Estruturas de Dados",
+        "Banco de Dados Relacional & SQL",
+        "Engenharia de Software & Clean Code",
+        "Segurança da Informação, DevSecOps & LGPD"
+      ];
 
-      const variantCodes = examSuite.variants.map((v) => v.variantCode);
+      examSuite40Q = await TeacherClassroomExamStudioService.generateExamSuite({
+        subject: "Desenvolvimento de Software",
+        topic: "Simulado Integrador Geral Multiassunto",
+        multiSubjects,
+        courseName: "Técnico em Desenvolvimento de Sistemas - SENAI",
+        educationLevel: "SENAI_TECNICO",
+        questionCount: 40,
+        variantCount: 4,
+        teacherName: "Prof. Coordenador SENAI",
+        academicPeriod: "2026/1",
+      });
+
+      expect(examSuite40Q).toBeDefined();
+      expect(examSuite40Q.masterQuestions).toHaveLength(40);
+      expect(examSuite40Q.durationMinutes).toBe(180);
+
+      // Verificar total de 100 pontos distribuídos
+      const totalPoints = examSuite40Q.masterQuestions.reduce((acc, q) => acc + q.points, 0);
+      expect(Math.round(totalPoints)).toBe(100);
+
+      // Verificar breakdown multiassunto
+      expect(examSuite40Q.subjectBreakdown).toBeDefined();
+      expect(examSuite40Q.subjectBreakdown!.length).toBeGreaterThanOrEqual(4);
+
+      // Verificar que cada uma das 4 variantes tem exatamente 40 questões permutadas
+      expect(examSuite40Q.variants).toHaveLength(4);
+      examSuite40Q.variants.forEach((v) => {
+        expect(v.questions).toHaveLength(40);
+        expect(Object.keys(v.answerKeyMap)).toHaveLength(40);
+      });
+    });
+
+    it("deve gerar 4 variantes (A, B, C, D) com permutação e gabarito mapeado", async () => {
+      expect(examSuite5Q.variants).toHaveLength(4);
+
+      const variantCodes = examSuite5Q.variants.map((v) => v.variantCode);
       expect(variantCodes).toEqual(["A", "B", "C", "D"]);
 
-      examSuite.variants.forEach((variant) => {
+      examSuite5Q.variants.forEach((variant) => {
         expect(variant.questions).toHaveLength(5);
         expect(variant.antiCheatSeed).toBeTruthy();
         expect(variant.qrCodeSignature).toBeTruthy();
@@ -67,36 +108,35 @@ describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
   });
 
   // =========================================================================
-  // 2. CORREÇÃO ÓPTICA EXPRESSA DE CARTÕES-RESPOSTA (OMR ENGINE)
+  // 2. CORREÇÃO ÓPTICA EXPRESSA DE CARTÕES-RESPOSTA (OMR ENGINE - 40Q)
   // =========================================================================
   describe("Avaliador Óptico Express de Cartão-Resposta (OMR Engine)", () => {
-    it("deve avaliar com 100% de acerto um aluno que marcou o gabarito exato", () => {
-      const variantA = examSuite.variants[0];
+    it("deve avaliar com 100% de acerto um simulado de 40 questões com gabarito perfeito", () => {
+      const variantA = examSuite40Q.variants[0];
+      const markedAnswers: Record<number, string> = {};
+      for (let i = 1; i <= 40; i++) {
+        markedAnswers[i] = variantA.answerKeyMap[i];
+      }
+
       const perfectSubmission: StudentOmrSubmission = {
-        studentId: "ALUNO-PERFEITO-01",
-        studentName: "Lucas Alcantara",
-        variantCode: variantA.variantCode,
-        markedAnswers: {
-          1: variantA.answerKeyMap[1],
-          2: variantA.answerKeyMap[2],
-          3: variantA.answerKeyMap[3],
-          4: variantA.answerKeyMap[4],
-          5: variantA.answerKeyMap[5],
-        },
+        studentId: "ALUNO-40Q-PERFEITO",
+        studentName: "Juliana Mendes Vasconcelos",
+        variantCode: "A",
+        markedAnswers,
       };
 
-      const result = TeacherClassroomExamStudioService.gradeStudentSubmission(perfectSubmission, examSuite);
+      const result = TeacherClassroomExamStudioService.gradeStudentSubmission(perfectSubmission, examSuite40Q);
 
       expect(result.scorePercentage).toBe(100);
       expect(result.isApproved).toBe(true);
-      expect(result.correctCount).toBe(5);
+      expect(result.correctCount).toBe(40);
       expect(result.wrongCount).toBe(0);
       expect(result.blankCount).toBe(0);
-      expect(result.pedagogicalFeedback).toContain("Excelente desempenho");
+      expect(result.pedagogicalFeedback).toContain("Excelente desempenho multidisciplinar");
     });
 
     it("deve reprovar (isApproved = false) aluno com nota < 60% e gerar plano de reforço", () => {
-      const variantB = examSuite.variants[1];
+      const variantB = examSuite5Q.variants[1];
       const failingSubmission: StudentOmrSubmission = {
         studentId: "ALUNO-RECUPERACAO-02",
         studentName: "Mariana Costa",
@@ -110,7 +150,7 @@ describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
         },
       };
 
-      const result = TeacherClassroomExamStudioService.gradeStudentSubmission(failingSubmission, examSuite);
+      const result = TeacherClassroomExamStudioService.gradeStudentSubmission(failingSubmission, examSuite5Q);
 
       expect(result.scorePercentage).toBeLessThan(60);
       expect(result.isApproved).toBe(false);
@@ -119,30 +159,30 @@ describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
       expect(result.pedagogicalFeedback).toContain("Abaixo do critério de proficiência mínima");
     });
 
-    it("deve processar lote de submissões da turma e gerar métricas e diagnósticos de distratores", () => {
-      const variantA = examSuite.variants[0];
+    it("deve processar lote de submissões de simulado 40Q e gerar métricas de turma", () => {
+      const variantA = examSuite40Q.variants[0];
       const batchSubmissions: StudentOmrSubmission[] = [
         {
-          studentId: "STU-01",
-          studentName: "Aluno 1",
+          studentId: "STU-40Q-01",
+          studentName: "Aluno Nota 100",
           variantCode: "A",
-          markedAnswers: { 1: variantA.answerKeyMap[1], 2: variantA.answerKeyMap[2], 3: variantA.answerKeyMap[3], 4: variantA.answerKeyMap[4], 5: variantA.answerKeyMap[5] },
+          markedAnswers: Object.fromEntries(Array.from({ length: 40 }, (_, i) => [i + 1, variantA.answerKeyMap[i + 1]])),
         },
         {
-          studentId: "STU-02",
-          studentName: "Aluno 2",
+          studentId: "STU-40Q-02",
+          studentName: "Aluno Mediano",
           variantCode: "A",
-          markedAnswers: { 1: variantA.answerKeyMap[1], 2: "B", 3: "C", 4: variantA.answerKeyMap[4], 5: "D" },
+          markedAnswers: Object.fromEntries(Array.from({ length: 40 }, (_, i) => [i + 1, (i % 2 === 0 ? variantA.answerKeyMap[i + 1] : "Z")])),
         },
         {
-          studentId: "STU-03",
-          studentName: "Aluno 3",
+          studentId: "STU-40Q-03",
+          studentName: "Aluno Crítico",
           variantCode: "A",
-          markedAnswers: { 1: "C", 2: "C", 3: "C", 4: "C", 5: "C" },
+          markedAnswers: Object.fromEntries(Array.from({ length: 40 }, (_, i) => [i + 1, (i % 4 === 0 ? variantA.answerKeyMap[i + 1] : "Z")])),
         },
       ];
 
-      const report = TeacherClassroomExamStudioService.gradeBatchSubmissions(batchSubmissions, examSuite);
+      const report = TeacherClassroomExamStudioService.gradeBatchSubmissions(batchSubmissions, examSuite40Q);
 
       expect(report.totalSubmissions).toBe(3);
       expect(report.classAverage).toBeGreaterThan(0);
@@ -153,18 +193,18 @@ describe("Teacher Classroom Exam Studio & Interactive Lesson Kit Suite", () => {
   });
 
   // =========================================================================
-  // 3. EXPORTADOR DE CADERNO DE PROVAS E CARTÕES OMR EM PDF
+  // 3. EXPORTADOR DE CADERNO DE PROVAS E CARTÕES OMR EM PDF (40+Q MULTIPÁGINA)
   // =========================================================================
-  describe("Exportador Unificado de Caderno de Provas & Gabaritos em PDF", () => {
-    it("deve gerar Buffer de PDF válido para impressão", async () => {
-      const pdfBuffer = await TeacherClassroomExamStudioService.exportExamBundlePdf(examSuite, {
+  describe("Exportador Unificado de Caderno de Provas & Gabaritos em PDF (40Q)", () => {
+    it("deve gerar Buffer de PDF válido com 2 colunas OMR para 40 questões", async () => {
+      const pdfBuffer = await TeacherClassroomExamStudioService.exportExamBundlePdf(examSuite40Q, {
         includeVariants: ["A", "B"],
         includeTeacherMasterKey: true,
         includeOmrBubbleSheets: true,
       });
 
       expect(pdfBuffer).toBeDefined();
-      expect(pdfBuffer.length).toBeGreaterThan(1000);
+      expect(pdfBuffer.length).toBeGreaterThan(5000);
       // Validar assinatura do cabeçalho PDF (%PDF-)
       const headerStr = Buffer.from(pdfBuffer).subarray(0, 5).toString("utf-8");
       expect(headerStr).toContain("%PDF");
