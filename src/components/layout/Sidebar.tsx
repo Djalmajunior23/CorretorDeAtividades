@@ -99,6 +99,7 @@ export default function Sidebar({
     { id: "resource_library", label: "Biblioteca", icon: Library, desc: "Recursos e Repositório", visible: true },
     { id: "reports", label: "Pareceres e Relatórios", icon: FileCheck, desc: "Geração de Documentos", visible: true },
     { id: "avaliacoes", label: "Avaliações", icon: FileText, desc: "Provas, Simulados e Evidências", visible: true },
+    { id: "teacher_classroom_suite", label: "Estúdio de Provas & OMR", icon: Cpu, desc: "Provas A/B/C/D, OMR Express & Labs", visible: true },
     { id: "corrector", label: "Correções", icon: Terminal, desc: "Parâmetros e Sandbox", visible: true },
     { id: "diagram_assessment", label: "Diagramas & Modelagem", icon: Network, desc: "Auditoria DER, DDL & UML", visible: true },
     { id: "competencies", label: "Competências", icon: Award, desc: "Mapeamento Curricular SENAI", visible: featureFlags.ENABLE_COMPETENCY_MANAGER !== false },

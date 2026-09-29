@@ -50,6 +50,8 @@ import { TechMockInterviewService } from "./src/services/techMockInterviewServic
 import { StylometricAuthenticityService } from "./src/services/stylometricAuthenticityService";
 import { DigitalCredentialPortfolioService } from "./src/services/digitalCredentialPortfolioService";
 import { TeacherVoiceFeedbackService } from "./src/services/teacherVoiceFeedbackService";
+import { TeacherClassroomExamStudioService } from "./src/services/teacherClassroomExamStudioService";
+import { TeacherInteractiveLessonKitService } from "./src/services/teacherInteractiveLessonKitService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -8948,6 +8950,136 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     try {
       const leaderboard = CodeArenaService.getLeaderboard();
       res.json({ success: true, leaderboard });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // TEACHER CLASSROOM PRODUCTIVITY SUITE APIS (EXAMS, OMR & LESSON KITS)
+  // =========================================================================
+
+  // In-memory cache de suítes de exames e kits de aula gerados
+  const teacherExamSuiteCache = new Map<string, any>();
+  const teacherLessonKitCache = new Map<string, any>();
+
+  // POST: Gerador Hiper-Paramétrico de Provas Multiversão (A, B, C, D)
+  app.post("/api/teacher/classroom/generate-exam-suite", async (req, res) => {
+    try {
+      const suite = await TeacherClassroomExamStudioService.generateExamSuite(req.body);
+      teacherExamSuiteCache.set(suite.id, suite);
+      res.json({ success: true, suite });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // GET: Obter Suíte de Exame pelo ID
+  app.get("/api/teacher/classroom/exam-suite/:id", (req, res) => {
+    try {
+      const suite = teacherExamSuiteCache.get(req.params.id);
+      if (!suite) {
+        return res.status(404).json({ success: false, error: "Suíte de avaliação não encontrada." });
+      }
+      res.json({ success: true, suite });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Caderno de Provas, Gabarito e Cartões OMR em PDF
+  app.post("/api/teacher/classroom/export-exam-bundle-pdf", async (req, res) => {
+    try {
+      const { suiteId, suiteData, includeVariants, includeTeacherMasterKey, includeOmrBubbleSheets, studentList } = req.body;
+      const suite = suiteData || teacherExamSuiteCache.get(suiteId);
+      if (!suite) {
+        return res.status(400).json({ success: false, error: "Dados da suíte de avaliação necessários para geração do PDF." });
+      }
+
+      const pdfBuffer = await TeacherClassroomExamStudioService.exportExamBundlePdf(suite, {
+        includeVariants,
+        includeTeacherMasterKey,
+        includeOmrBubbleSheets,
+        studentList,
+        saveFilename: `Caderno_Avaliacao_${suite.id}.pdf`
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Caderno_Avaliacao_${suite.id}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Correção Óptica Expressa de Cartão-Resposta (OMR Engine)
+  app.post("/api/teacher/classroom/grade-omr-bubble-sheet", async (req, res) => {
+    try {
+      const { suiteId, suiteData, submission, batchSubmissions } = req.body;
+      const suite = suiteData || teacherExamSuiteCache.get(suiteId);
+      if (!suite) {
+        return res.status(400).json({ success: false, error: "Suíte de avaliação não encontrada para conferência do gabarito." });
+      }
+
+      if (batchSubmissions && Array.isArray(batchSubmissions)) {
+        const batchReport = TeacherClassroomExamStudioService.gradeBatchSubmissions(batchSubmissions, suite);
+        return res.json({ success: true, batchReport });
+      }
+
+      if (submission) {
+        const singleResult = TeacherClassroomExamStudioService.gradeStudentSubmission(submission, suite);
+        return res.json({ success: true, singleResult });
+      }
+
+      res.status(400).json({ success: false, error: "Informe 'submission' ou 'batchSubmissions' para correção." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Gerador de Kit de Aula Completo (Plano + Labs Hands-on + Slides)
+  app.post("/api/teacher/classroom/generate-lesson-kit", async (req, res) => {
+    try {
+      const kit = await TeacherInteractiveLessonKitService.generateLessonKit(req.body);
+      teacherLessonKitCache.set(kit.id, kit);
+      res.json({ success: true, kit });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // GET: Obter Kit de Aula pelo ID
+  app.get("/api/teacher/classroom/lesson-kit/:id", (req, res) => {
+    try {
+      const kit = teacherLessonKitCache.get(req.params.id);
+      if (!kit) {
+        return res.status(404).json({ success: false, error: "Kit de aula não encontrado." });
+      }
+      res.json({ success: true, kit });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST: Exportar Kit de Aula em PDF
+  app.post("/api/teacher/classroom/export-lesson-kit-pdf", async (req, res) => {
+    try {
+      const { kitId, kitData, includeTeacherSchedule, includeStudentLabGuide, includeSaepRubric } = req.body;
+      const kit = kitData || teacherLessonKitCache.get(kitId);
+      if (!kit) {
+        return res.status(400).json({ success: false, error: "Dados do kit de aula necessários para geração do PDF." });
+      }
+
+      const pdfBuffer = await TeacherInteractiveLessonKitService.exportLessonKitPdf(kit, {
+        includeTeacherSchedule,
+        includeStudentLabGuide,
+        includeSaepRubric,
+        saveFilename: `Plano_Aula_${kit.id}.pdf`
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="Plano_Aula_${kit.id}.pdf"`);
+      res.send(pdfBuffer);
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

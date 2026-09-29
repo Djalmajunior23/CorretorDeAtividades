@@ -87,6 +87,7 @@ const PedagogicalAuthoringStudioView = React.lazy(() => import("./components/Ped
 const GitAutoGradingStudioView = React.lazy(() => import("./components/GitAutoGradingStudioView"));
 const SocraticTutorScaffoldingView = React.lazy(() => import("./components/SocraticTutorScaffoldingView"));
 const StudentAcademyMasteryView = React.lazy(() => import("./components/StudentAcademyMasteryView"));
+const TeacherClassroomSuiteView = React.lazy(() => import("./components/TeacherClassroomSuiteView").then(m => ({ default: m.TeacherClassroomSuiteView })));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2703,6 +2704,10 @@ export default function App() {
 
           {currentTab === "avaliacoes" && (
             <AvaliacoesView />
+          )}
+
+          {currentTab === "teacher_classroom_suite" && (
+            <TeacherClassroomSuiteView />
           )}
 
           {currentTab === "competencies" && (

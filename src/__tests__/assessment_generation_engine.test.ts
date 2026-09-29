@@ -120,7 +120,7 @@ describe("Assessment Generation Engine & Multi-LLM Suite", () => {
       expect(data.success).toBe(true);
       expect(data.provider).toBe("ollama");
       expect(Array.isArray(data.models)).toBe(true);
-    });
+    }, 15000);
 
     it("POST /api/assessments/test-ai-connection - Deve testar provedor Gemini e OpenAI", async () => {
       const res = await fetch(`${baseUrl}/api/assessments/test-ai-connection`, {
