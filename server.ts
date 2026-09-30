@@ -43,6 +43,7 @@ import * as xlsx from "xlsx";
 import PDFDocument from "pdfkit";
 import { GoogleGenAI, Type } from "@google/genai";
 import { generateJwtToken, verifyJwtToken } from "./src/utils/security.ts";
+import { WafSecurityEngine } from "./src/security/WafSecurityEngine.ts";
 
 dns.setDefaultResultOrder("ipv4first");
 dotenv.config();
@@ -88,62 +89,8 @@ app.options(/.*/, cors(corsOptions));
 
 
 // ============================================
-// HARDENING & SECURITY MIDDLEWARES
+// ENTERPRISE WAF & MULTI-LAYER DEFENSE SUITE
 // ============================================
-
-// Rate Limiter implementation
-const rateLimitCache = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 300; // Allow 300 requests/min per IP
-
-function apiRateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!req.path.startsWith("/api/")) {
-    return next();
-  }
-  
-  const ip = req.ip || req.headers["x-forwarded-for"]?.toString() || "127.0.0.1";
-  const now = Date.now();
-  const limitData = rateLimitCache.get(ip);
-
-  if (!limitData || now > limitData.resetTime) {
-    rateLimitCache.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return next();
-  }
-
-  limitData.count++;
-  if (limitData.count > RATE_LIMIT_MAX_REQUESTS) {
-    console.warn(`[RATE LIMIT EXCEEDED] IP: ${ip} | Path: ${req.path}`);
-    return res.status(429).json({
-      error: "Muitas requisições. Por favor, aguarde um minuto antes de tentar novamente."
-    });
-  }
-
-  next();
-}
-
-// Security Headers Middleware (custom, fine-tuned implementation of Helmet & CSP)
-function securityHeaders(req: express.Request, res: express.Response, next: express.NextFunction) {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
-  res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
-  
-  // Custom Content Security Policy supporting local/remote CDNs & tools used (like Monaco editor and fonts)
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://*",
-    "connect-src 'self' https://* wss://*",
-    "worker-src 'self' blob:",
-    "child-src 'self' blob:",
-    "frame-src 'self' *",
-    "object-src 'none'"
-  ].join("; ");
-  
-  res.setHeader("Content-Security-Policy", csp);
-  next();
-}
 
 // Basic XSS Sanitization for inputs
 function xssSanitizer(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -166,9 +113,44 @@ function xssSanitizer(req: express.Request, res: express.Response, next: express
   next();
 }
 
-app.use(securityHeaders);
-app.use(apiRateLimiter);
+app.use(WafSecurityEngine.securityHeadersMiddleware());
+app.use(WafSecurityEngine.antiBypassMiddleware());
+app.use(WafSecurityEngine.ddosProtectionMiddleware());
+app.use(WafSecurityEngine.pathTraversalInspectorMiddleware());
+app.use(WafSecurityEngine.sqlInjectionInspectorMiddleware());
+app.use(WafSecurityEngine.xxeInspectorMiddleware());
 app.use(xssSanitizer);
+
+// ============================================
+// WAF & CYBER DEFENSE TELEMETRY APIS
+// ============================================
+app.get("/api/security/waf-status", (_req, res) => {
+  return res.json({
+    success: true,
+    data: WafSecurityEngine.getWafStatus()
+  });
+});
+
+app.get("/api/security/threat-logs", (req, res) => {
+  const limit = Number(req.query.limit) || 100;
+  return res.json({
+    success: true,
+    data: WafSecurityEngine.getThreatLogs(limit)
+  });
+});
+
+app.post("/api/security/unban-ip", (req, res) => {
+  const { ip } = req.body;
+  if (!ip) {
+    return res.status(400).json({ success: false, error: "Endereço IP é obrigatório." });
+  }
+  const unbanned = WafSecurityEngine.unbanIp(ip);
+  return res.json({
+    success: true,
+    message: unbanned ? `IP ${ip} desbanido com sucesso.` : `IP ${ip} não constava em lista de quarentena.`,
+    unbanned
+  });
+});
 
 // ============================================
 // AUTHENTICATION ROUTES (JWT & RBAC Security)
