@@ -88,6 +88,7 @@ const GitAutoGradingStudioView = React.lazy(() => import("./components/GitAutoGr
 const SocraticTutorScaffoldingView = React.lazy(() => import("./components/SocraticTutorScaffoldingView"));
 const StudentAcademyMasteryView = React.lazy(() => import("./components/StudentAcademyMasteryView"));
 const TeacherClassroomSuiteView = React.lazy(() => import("./components/TeacherClassroomSuiteView").then(m => ({ default: m.TeacherClassroomSuiteView })));
+const TeacherGlobalSuperAuthoringView = React.lazy(() => import("./components/TeacherGlobalSuperAuthoringView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2706,6 +2707,10 @@ export default function App() {
 
           {currentTab === "teacher_classroom_suite" && (
             <TeacherClassroomSuiteView />
+          )}
+
+          {currentTab === "super_authoring" && (
+            <TeacherGlobalSuperAuthoringView />
           )}
 
           {currentTab === "competencies" && (

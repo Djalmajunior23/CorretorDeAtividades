@@ -57,6 +57,7 @@ import { CognitiveTwinAndVoiceDefenseService } from "./src/services/cognitiveTwi
 import { CodeArenaDuelsAndHackathonService } from "./src/services/codeArenaDuelsAndHackathonService";
 import { LmsAndOfflineSyncService } from "./src/services/lmsAndOfflineSyncService";
 import { KeystrokeForensicsAndXaiService } from "./src/services/keystrokeForensicsAndXaiService";
+import { TeacherGlobalSuperAuthoringService } from "./src/services/teacherGlobalSuperAuthoringService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -9523,6 +9524,101 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         latencyDays
       );
       res.json({ success: true, diagnostic });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // SUPER-AUTORIA DOCENTE & SALA DE AULA GLOBAL (7 SUPER-PODERES)
+  // =========================================================================
+  app.post("/api/teacher/super-authoring/differentiate", (req, res) => {
+    try {
+      const { topic, language, contextRules } = req.body;
+      const result = TeacherGlobalSuperAuthoringService.generateMultiTierDifferentiatedContent(
+        topic || "Modelagem de Banco de Dados e Consultas Otimizadas",
+        language || "sql",
+        contextRules
+      );
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/super-authoring/pre-flight-simulation", (req, res) => {
+    try {
+      const { activityTitle, activityPrompt } = req.body;
+      const report = TeacherGlobalSuperAuthoringService.runSyntheticStudentSimulation(
+        activityTitle || "Atividade de Modelagem 3FN",
+        activityPrompt || "Crie um esquema de banco de dados para e-commerce com tabelas de clientes e pedidos."
+      );
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/super-authoring/slides", (req, res) => {
+    try {
+      const { topicTitle, targetAudience, codeLanguage } = req.body;
+      const deck = TeacherGlobalSuperAuthoringService.generateExecutableSlideDeck(
+        topicTitle || "Normalização 3FN & Otimização de Queries",
+        targetAudience || "Estudantes Técnicos SENAI",
+        codeLanguage || "sql"
+      );
+      res.json({ success: true, deck });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/super-authoring/rubrics", (req, res) => {
+    try {
+      const { activityTitle, domainCompetency } = req.body;
+      const rubrics = TeacherGlobalSuperAuthoringService.generateBloomSaepRubricMatrix(
+        activityTitle || "Projeto de Banco de Dados Corporativo",
+        domainCompetency
+      );
+      res.json({ success: true, rubrics });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/super-authoring/bug-hunt", (req, res) => {
+    try {
+      const { topic, category } = req.body;
+      const challenge = TeacherGlobalSuperAuthoringService.generateBugHuntChallenge(
+        topic || "Segurança em Autenticação e SQL Injection",
+        category || "SECURITY_INJECTION"
+      );
+      res.json({ success: true, challenge });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/super-authoring/live-orchestrator", (req, res) => {
+    try {
+      const { topic } = req.body;
+      const session = TeacherGlobalSuperAuthoringService.generateLiveClassroomSession(
+        topic || "Consultas com JOIN e Normalização"
+      );
+      res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/teacher/super-authoring/industry-case", (req, res) => {
+    try {
+      const { segment, topic } = req.body;
+      const caseStudy = TeacherGlobalSuperAuthoringService.generateIndustryCaseStudy(
+        segment || "Fintech",
+        topic
+      );
+      res.json({ success: true, caseStudy });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
