@@ -44,6 +44,7 @@ import PDFDocument from "pdfkit";
 import { GoogleGenAI, Type } from "@google/genai";
 import { generateJwtToken, verifyJwtToken } from "./src/utils/security.ts";
 import { WafSecurityEngine } from "./src/security/WafSecurityEngine.ts";
+import { DataProtectionEngine } from "./src/security/DataProtectionEngine.ts";
 
 dns.setDefaultResultOrder("ipv4first");
 dotenv.config();
@@ -75,6 +76,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   next(err);
 });
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
+
+// Data Loss Prevention (DLP) - Automatically scrubs all sensitive passwords, keys and database credentials from outgoing JSON
+app.use(DataProtectionEngine.dlpResponseSanitizerMiddleware());
 
 // CORS middleware - allow any origin with credentials for preview and iframe support
 const corsOptions: cors.CorsOptions = {
@@ -12580,14 +12584,8 @@ async function main() {
     res.status(404).json({ success: false, error: "API Endpoint Not Found" });
   });
 
-  // Global Error Handler to guarantee JSON responses
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (err && (err.message === "Origin not allowed by CORS" || err.message === "Not allowed by CORS")) {
-      return res.status(403).json({ success: false, error: "CORS Blocked", details: err.message });
-    }
-    console.error("Unhandled Error:", err);
-    res.status(500).json({ success: false, error: "Internal Server Error", details: err.message });
-  });
+  // Global Cloaked Error Handler (prevents database schema, query, or stack trace exposure)
+  app.use(DataProtectionEngine.errorCloakingMiddleware());
 
   if (process.env.NODE_ENV !== "production") {
     // Vite middleware for rendering frontend

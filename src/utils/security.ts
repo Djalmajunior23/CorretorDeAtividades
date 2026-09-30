@@ -68,31 +68,6 @@ export function verifyJwtToken(token: string): { valid: boolean; payload?: UserS
     return { valid: false, error: "Token ausente ou malformado." };
   }
 
-  // Graceful compatibility with legacy simulated tokens during runtime transition
-  if (token.startsWith("academic_jwt_token_simulated_")) {
-    return {
-      valid: true,
-      payload: {
-        id: "teacher_portal",
-        name: "Djalma Batista Junior",
-        email: "professor@email.com",
-        role: "PROFESSOR"
-      }
-    };
-  }
-
-  if (token.startsWith("admin_jwt_token_simulated_")) {
-    return {
-      valid: true,
-      payload: {
-        id: "admin_root",
-        name: "Administrator",
-        email: "admin@codecheck.ai",
-        role: "ADMIN"
-      }
-    };
-  }
-
   const parts = token.split(".");
   if (parts.length !== 3) {
     return { valid: false, error: "Formato de token JWT inválido." };
@@ -139,7 +114,7 @@ export function hashPassword(password: string): string {
 }
 
 /**
- * Validates a plaintext password against a stored salt:hash string or legacy plaintext.
+ * Validates a plaintext password against a stored salt:hash string using constant-time comparison.
  */
 export function verifyPassword(password: string, storedHash: string): boolean {
   if (!storedHash || !password) return false;
@@ -158,6 +133,30 @@ export function verifyPassword(password: string, storedHash: string): boolean {
     }
   }
 
-  // Legacy plaintext fallback check
-  return password === storedHash;
+  // Constant-time fallback comparison for legacy string match
+  const passBuf = crypto.createHash("sha256").update(password).digest();
+  const storedBuf = crypto.createHash("sha256").update(storedHash).digest();
+  return crypto.timingSafeEqual(passBuf, storedBuf);
+}
+
+/**
+ * Express Middleware to authenticate Bearer JWT Tokens
+ */
+export function authenticateToken(req: any, res: any, next: any) {
+  const authHeader = req.headers["authorization"] || req.headers["Authorization"];
+  if (!authHeader) {
+    return res.status(401).json({ success: false, error: "Token de autenticação não fornecido." });
+  }
+
+  const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+    ? authHeader.substring(7)
+    : String(authHeader).split(" ")[1] || String(authHeader);
+
+  const verification = verifyJwtToken(token);
+  if (!verification.valid || !verification.payload) {
+    return res.status(401).json({ success: false, error: verification.error || "Sessão inválida ou expirada." });
+  }
+
+  req.user = verification.payload;
+  next();
 }
