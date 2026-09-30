@@ -52,6 +52,11 @@ import { DigitalCredentialPortfolioService } from "./src/services/digitalCredent
 import { TeacherVoiceFeedbackService } from "./src/services/teacherVoiceFeedbackService";
 import { TeacherClassroomExamStudioService } from "./src/services/teacherClassroomExamStudioService";
 import { TeacherInteractiveLessonKitService } from "./src/services/teacherInteractiveLessonKitService";
+import { DiagramInteractiveStudioService } from "./src/services/diagramInteractiveStudioService";
+import { CognitiveTwinAndVoiceDefenseService } from "./src/services/cognitiveTwinAndVoiceDefenseService";
+import { CodeArenaDuelsAndHackathonService } from "./src/services/codeArenaDuelsAndHackathonService";
+import { LmsAndOfflineSyncService } from "./src/services/lmsAndOfflineSyncService";
+import { KeystrokeForensicsAndXaiService } from "./src/services/keystrokeForensicsAndXaiService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -9311,6 +9316,213 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="Plano_Aula_${kit.id}.pdf"`);
       res.send(pdfBuffer);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // PILAR 1: MODELAGEM VISUAL & ENGENHARIA DE BANCO DE DADOS INTERATIVA
+  // =========================================================================
+  app.post("/api/diagrams/interactive/mermaid", (req, res) => {
+    try {
+      const { schema } = req.body;
+      if (!schema) return res.status(400).json({ success: false, error: "Schema é obrigatório." });
+      const mermaidCode = DiagramInteractiveStudioService.schemaToMermaid(schema);
+      res.json({ success: true, mermaidCode });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/diagrams/interactive/ddl", (req, res) => {
+    try {
+      const { schema } = req.body;
+      if (!schema) return res.status(400).json({ success: false, error: "Schema é obrigatório." });
+      const ddlSql = DiagramInteractiveStudioService.generateProductionDdl(schema);
+      res.json({ success: true, ddlSql });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/diagrams/interactive/query-plan-cost", (req, res) => {
+    try {
+      const { schema, tableName, filterColumn, queryType } = req.body;
+      if (!schema || !tableName || !filterColumn) {
+        return res.status(400).json({ success: false, error: "Parâmetros schema, tableName e filterColumn são obrigatórios." });
+      }
+      const planCost = DiagramInteractiveStudioService.simulateQueryPlanCost(schema, tableName, filterColumn, queryType);
+      res.json({ success: true, planCost });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/diagrams/interactive/acid-simulation", (req, res) => {
+    try {
+      const { isolationLevel, targetTable } = req.body;
+      const result = DiagramInteractiveStudioService.simulateAcidConcurrency(isolationLevel || "READ COMMITTED", targetTable || "pedidos");
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // PILAR 2: HIPER-PERSONALIZAÇÃO, GÊMEO COGNITIVO & DEFESA ORAL POR VOZ
+  // =========================================================================
+  app.get("/api/cognitive-twin/:studentId", (req, res) => {
+    try {
+      const studentName = String(req.query.studentName || "Aluno SENAI");
+      const profile = CognitiveTwinAndVoiceDefenseService.getCognitiveTwinProfile(req.params.studentId, studentName);
+      res.json({ success: true, profile });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/cognitive-twin/self-healing-path", (req, res) => {
+    try {
+      const { studentId, topic } = req.body;
+      const path = CognitiveTwinAndVoiceDefenseService.generateSelfHealingPath(studentId || "student_1", topic);
+      res.json({ success: true, path });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/cognitive-twin/voice-defense/evaluate", (req, res) => {
+    try {
+      const { studentId, topicTitle, transcription } = req.body;
+      if (!transcription) {
+        return res.status(400).json({ success: false, error: "Transcrição do áudio é obrigatória." });
+      }
+      const evaluation = CognitiveTwinAndVoiceDefenseService.evaluateVoiceOralDefense(
+        studentId || "student_1",
+        topicTitle || "Defesa Oral de Código e Arquitetura",
+        transcription
+      );
+      res.json({ success: true, evaluation });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // PILAR 3: ARENA DE DUELOS 1V1, HACKATHON & BADGES W3C
+  // =========================================================================
+  app.post("/api/arena/duels/create", (req, res) => {
+    try {
+      const { player1, player2, language } = req.body;
+      const room = CodeArenaDuelsAndHackathonService.createDuelRoom(player1, player2, language);
+      res.json({ success: true, room });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/arena/duels/calculate-elo", (req, res) => {
+    try {
+      const { ratingA, ratingB, winner, kFactor } = req.body;
+      const elo = CodeArenaDuelsAndHackathonService.calculateEloAdjustment(ratingA, ratingB, winner, kFactor);
+      res.json({ success: true, elo });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/arena/hackathon/leaderboard", (_req, res) => {
+    try {
+      const leaderboard = CodeArenaDuelsAndHackathonService.getHackathonLeaderboard();
+      res.json({ success: true, leaderboard });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/arena/badges/issue", (req, res) => {
+    try {
+      const { studentEmail, badgeName, skillDescription } = req.body;
+      if (!studentEmail || !badgeName) {
+        return res.status(400).json({ success: false, error: "E-mail do aluno e nome do badge são obrigatórios." });
+      }
+      const badge = CodeArenaDuelsAndHackathonService.issueVerifiableBadge(studentEmail, badgeName, skillDescription);
+      res.json({ success: true, badge });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // PILAR 4: LMS (LTI 1.3), WEBHOOKS & OFFLINE SYNC
+  // =========================================================================
+  app.post("/api/lms/lti/grade-passback", async (req, res) => {
+    try {
+      const result = await LmsAndOfflineSyncService.dispatchLtiGradePassback(req.body);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/lms/webhooks/sign", (req, res) => {
+    try {
+      const { payload, secretKey } = req.body;
+      const signed = LmsAndOfflineSyncService.signWebhookPayload(payload, secretKey);
+      res.json({ success: true, signed });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/lms/offline-sync", (req, res) => {
+    try {
+      const result = LmsAndOfflineSyncService.resolveOfflineSync(req.body);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // =========================================================================
+  // PILAR 5: AUDITORIA FORENSE DE DIGITAÇÃO, XAI & EARLY DROP-OUT RADAR
+  // =========================================================================
+  app.post("/api/forensics/keystrokes/analyze", (req, res) => {
+    try {
+      const { studentId, keystrokes, totalCodeChars } = req.body;
+      const result = KeystrokeForensicsAndXaiService.analyzeKeystrokeDynamics(
+        studentId || "student_1",
+        keystrokes || [],
+        totalCodeChars || 100
+      );
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/forensics/xai/annotations", (req, res) => {
+    try {
+      const { code, language } = req.body;
+      const annotations = KeystrokeForensicsAndXaiService.generateXaiCodeAnnotations(code || "", language);
+      res.json({ success: true, annotations });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/forensics/dropout-risk", (req, res) => {
+    try {
+      const { studentId, studentName, avgGrade, attendanceRate, latencyDays } = req.body;
+      const diagnostic = KeystrokeForensicsAndXaiService.evaluateDropoutRisk(
+        studentId || "student_1",
+        studentName,
+        avgGrade,
+        attendanceRate,
+        latencyDays
+      );
+      res.json({ success: true, diagnostic });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

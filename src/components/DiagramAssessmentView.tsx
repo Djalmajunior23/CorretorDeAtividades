@@ -47,7 +47,10 @@ import {
   Lock,
   Workflow,
   Binary,
-  CheckSquare
+  CheckSquare,
+  Mic,
+  BrainCircuit,
+  Trophy
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -134,7 +137,7 @@ export default function DiagramAssessmentView() {
   const [isGeneratingRef, setIsGeneratingRef] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [assessment, setAssessment] = useState<DatabaseModelAssessmentResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"feedback" | "studentTables" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram" | "benchmark" | "multi_sgbd" | "migrations" | "lgpd_governance">("feedback");
+  const [activeTab, setActiveTab] = useState<"feedback" | "studentTables" | "rubrics" | "normalization" | "physical" | "ddl" | "diagram" | "benchmark" | "multi_sgbd" | "migrations" | "lgpd_governance" | "query_cost" | "acid_lab" | "voice_defense" | "cognitive_twin" | "arena_duels">("feedback");
   const [profileModalStudentId, setProfileModalStudentId] = useState<string | null>(null);
 
   // Advanced Benchmark & Vision Recognition States
@@ -156,6 +159,26 @@ export default function DiagramAssessmentView() {
   // LGPD Governance Audit States
   const [lgpdReport, setLgpdReport] = useState<LgpdGovernanceAuditResult | null>(null);
   const [isAuditingLgpd, setIsAuditingLgpd] = useState<boolean>(false);
+
+  // Next-Gen Ecosystem Evolution States
+  const [queryCostResult, setQueryCostResult] = useState<any | null>(null);
+  const [selectedCostTable, setSelectedCostTable] = useState<string>("tb_pedido");
+  const [selectedCostColumn, setSelectedCostColumn] = useState<string>("cliente_id");
+  const [isSimulatingCost, setIsSimulatingCost] = useState<boolean>(false);
+
+  const [acidResult, setAcidResult] = useState<any | null>(null);
+  const [selectedAcidIsolation, setSelectedAcidIsolation] = useState<"READ UNCOMMITTED" | "READ COMMITTED" | "REPEATABLE READ" | "SERIALIZABLE">("READ COMMITTED");
+  const [isSimulatingAcid, setIsSimulatingAcid] = useState<boolean>(false);
+
+  const [voiceDefenseText, setVoiceDefenseText] = useState<string>("Decidi criar a chave estrangeira cliente_id na tabela tb_pedido para garantir a integridade referencial, e apliquei a 3FN separando dados de clientes e produtos para evitar redundâncias e anomalias de atualização.");
+  const [voiceDefenseResult, setVoiceDefenseResult] = useState<any | null>(null);
+  const [isEvaluatingVoice, setIsEvaluatingVoice] = useState<boolean>(false);
+
+  const [cognitiveTwinProfile, setCognitiveTwinProfile] = useState<any | null>(null);
+  const [isLoadingTwin, setIsLoadingTwin] = useState<boolean>(false);
+
+  const [hackathonStandings, setHackathonStandings] = useState<any[]>([]);
+  const [isLoadingArena, setIsLoadingArena] = useState<boolean>(false);
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -668,6 +691,148 @@ CREATE TABLE tb_item_pedido (
     }
   };
 
+  const handleSimulateQueryCost = async () => {
+    setIsSimulatingCost(true);
+    try {
+      const res = await fetch(apiUrl("/api/diagrams/interactive/query-plan-cost"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schema: {
+            id: "schema_current",
+            title: "Modelo em Avaliação",
+            sgbd: targetSgbd,
+            tables: assessment?.extractedTables ? assessment.extractedTables.map(t => ({
+              id: t.name,
+              name: t.name,
+              position: { x: 0, y: 0 },
+              attributes: t.columns.map(c => ({
+                name: c.name,
+                type: (c.dataType?.toUpperCase() || "VARCHAR") as any,
+                isPrimaryKey: c.isPrimaryKey || false,
+                isForeignKey: c.isForeignKey || false,
+                isNullable: c.isNullable ?? true,
+                hasIndex: c.isPrimaryKey || c.isForeignKey
+              }))
+            })) : [
+              {
+                id: "tb_pedido",
+                name: "tb_pedido",
+                position: { x: 0, y: 0 },
+                attributes: [
+                  { name: "id", type: "UUID", isPrimaryKey: true, isNullable: false },
+                  { name: "cliente_id", type: "UUID", isPrimaryKey: false, isForeignKey: true, isNullable: false, hasIndex: true },
+                  { name: "data_pedido", type: "TIMESTAMP", isPrimaryKey: false, isNullable: false }
+                ]
+              }
+            ],
+            relationships: []
+          },
+          tableName: selectedCostTable,
+          filterColumn: selectedCostColumn
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQueryCostResult(data.planCost);
+        setActiveTab("query_cost");
+        toast.success("✓ Simulação de Custo EXPLAIN ANALYZE concluída!");
+      }
+    } catch (e) {
+      toast.error("Falha ao simular plano de execução.");
+    } finally {
+      setIsSimulatingCost(false);
+    }
+  };
+
+  const handleSimulateAcid = async () => {
+    setIsSimulatingAcid(true);
+    try {
+      const res = await fetch(apiUrl("/api/diagrams/interactive/acid-simulation"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isolationLevel: selectedAcidIsolation,
+          targetTable: selectedCostTable || "pedidos"
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAcidResult(data.result);
+        setActiveTab("acid_lab");
+        toast.success("✓ Simulação de Concorrência ACID executada!");
+      }
+    } catch (e) {
+      toast.error("Falha ao simular concorrência ACID.");
+    } finally {
+      setIsSimulatingAcid(false);
+    }
+  };
+
+  const handleEvaluateVoiceDefense = async () => {
+    if (!voiceDefenseText.trim()) {
+      toast.error("Insira a transcrição da defesa oral.");
+      return;
+    }
+    setIsEvaluatingVoice(true);
+    try {
+      const res = await fetch(apiUrl("/api/cognitive-twin/voice-defense/evaluate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: selectedStudentId || "student_1",
+          topicTitle: "Defesa de Modelagem & Arquitetura de Dados",
+          transcription: voiceDefenseText
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVoiceDefenseResult(data.evaluation);
+        setActiveTab("voice_defense");
+        toast.success("✓ Laudo de Defesa Oral emitido com sucesso!");
+      }
+    } catch (e) {
+      toast.error("Erro ao avaliar defesa oral.");
+    } finally {
+      setIsEvaluatingVoice(false);
+    }
+  };
+
+  const handleLoadCognitiveTwin = async () => {
+    setIsLoadingTwin(true);
+    try {
+      const studentObj = students.find(s => s.id === selectedStudentId);
+      const res = await fetch(apiUrl(`/api/cognitive-twin/${selectedStudentId || "student_1"}?studentName=${encodeURIComponent(studentObj?.name || "Aluno SENAI")}`));
+      if (res.ok) {
+        const data = await res.json();
+        setCognitiveTwinProfile(data.profile);
+        setActiveTab("cognitive_twin");
+        toast.success("✓ Perfil do Gêmeo Cognitivo carregado!");
+      }
+    } catch (e) {
+      toast.error("Erro ao carregar gêmeo cognitivo.");
+    } finally {
+      setIsLoadingTwin(false);
+    }
+  };
+
+  const handleLoadArenaLeaderboard = async () => {
+    setIsLoadingArena(true);
+    try {
+      const res = await fetch(apiUrl("/api/arena/hackathon/leaderboard"));
+      if (res.ok) {
+        const data = await res.json();
+        setHackathonStandings(data.leaderboard);
+        setActiveTab("arena_duels");
+        toast.success("✓ Placar ao vivo da Arena de Duelos carregado!");
+      }
+    } catch (e) {
+      toast.error("Erro ao carregar leaderboard da arena.");
+    } finally {
+      setIsLoadingArena(false);
+    }
+  };
+
   const handleExportPdf = async () => {
     if (!assessment) return;
     setIsExportingPdf(true);
@@ -1166,6 +1331,61 @@ CREATE TABLE tb_item_pedido (
                   }`}
                 >
                   Auditoria LGPD
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("query_cost");
+                    if (!queryCostResult) handleSimulateQueryCost();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "query_cost" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-amber-400 hover:text-amber-300"
+                  }`}
+                >
+                  Custo EXPLAIN
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("acid_lab");
+                    if (!acidResult) handleSimulateAcid();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "acid_lab" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-cyan-400 hover:text-cyan-300"
+                  }`}
+                >
+                  Concorrência ACID
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("voice_defense");
+                    if (!voiceDefenseResult) handleEvaluateVoiceDefense();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "voice_defense" ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "text-purple-400 hover:text-purple-300"
+                  }`}
+                >
+                  Defesa Oral IA
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("cognitive_twin");
+                    if (!cognitiveTwinProfile) handleLoadCognitiveTwin();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "cognitive_twin" ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" : "text-blue-400 hover:text-blue-300"
+                  }`}
+                >
+                  Gêmeo Cognitivo
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("arena_duels");
+                    if (hackathonStandings.length === 0) handleLoadArenaLeaderboard();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                    activeTab === "arena_duels" ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30" : "text-yellow-400 hover:text-yellow-300"
+                  }`}
+                >
+                  Arena Duelos
                 </button>
               </div>
 
@@ -1683,6 +1903,323 @@ CREATE TABLE tb_item_pedido (
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Tab: Query Plan & Index Cost Simulator */}
+              {activeTab === "query_cost" && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-amber-400 flex items-center gap-1.5 font-mono">
+                          <Activity className="w-4 h-4" /> Simulador Virtual de Query Plan & Custo de Índices (1M Tuplas)
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          Estime o impacto de planos de execução (Seq Scan vs Index Scan) sem onerar o banco de produção.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleSimulateQueryCost}
+                        disabled={isSimulatingCost}
+                        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs transition cursor-pointer"
+                      >
+                        {isSimulatingCost ? "Simulando..." : "Re-executar EXPLAIN"}
+                      </button>
+                    </div>
+
+                    {queryCostResult && (
+                      <div className="space-y-3 pt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">Tipo de Varredura</span>
+                            <span className="text-xs font-bold text-amber-300">{queryCostResult.scanType}</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">Custo Estimado (Cost)</span>
+                            <span className="text-xs font-bold text-white font-mono">{queryCostResult.costScore.toFixed(1)}</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">Latência Estimada (1M linhas)</span>
+                            <span className="text-xs font-bold text-emerald-400 font-mono">{queryCostResult.executionTimeMsEstimated} ms</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
+                          <strong className="text-white">Diagnóstico: </strong> {queryCostResult.recommendation}
+                        </div>
+
+                        {queryCostResult.suggestedIndexSql && (
+                          <div className="space-y-1">
+                            <span className="text-xs font-mono font-bold text-emerald-400">Índice Recomendado para Mitigação:</span>
+                            <pre className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30 text-xs font-mono text-emerald-300 overflow-x-auto">
+                              {queryCostResult.suggestedIndexSql}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: ACID Concurrency & Isolation Lab */}
+              {activeTab === "acid_lab" && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-cyan-400 flex items-center gap-1.5 font-mono">
+                          <Layers className="w-4 h-4" /> Laboratório de Transações & Concorrência ACID
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          Simule anomalias de concorrência (Dirty Read, Non-Repeatable Read, Phantom Read) por nível de isolamento.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedAcidIsolation}
+                          onChange={(e) => setSelectedAcidIsolation(e.target.value as any)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-cyan-300 font-mono text-xs"
+                        >
+                          <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
+                          <option value="READ COMMITTED">READ COMMITTED</option>
+                          <option value="REPEATABLE READ">REPEATABLE READ</option>
+                          <option value="SERIALIZABLE">SERIALIZABLE</option>
+                        </select>
+                        <button
+                          onClick={handleSimulateAcid}
+                          disabled={isSimulatingAcid}
+                          className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs transition cursor-pointer"
+                        >
+                          {isSimulatingAcid ? "Testando..." : "Simular"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {acidResult && (
+                      <div className="space-y-3 pt-2">
+                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                          <span className="text-xs font-mono text-slate-300">Status de Integridade Transacional:</span>
+                          <span className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${
+                            acidResult.isSafe ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          }`}>
+                            {acidResult.isSafe ? "✓ CONCORRÊNCIA SEGURA" : "⚠ ANOMALIA DETECTADA"}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {acidResult.steps.map((step: any, sIdx: number) => (
+                            <div key={sIdx} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1 text-xs font-mono">
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span className="text-sky-400 font-bold">Passo {step.stepIndex}</span>
+                                {step.anomalyDetected && (
+                                  <span className="text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded">
+                                    {step.anomalyDetected}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-slate-200">Tx A: {step.transactionA}</div>
+                              <div className="text-slate-300">Tx B: {step.transactionB}</div>
+                              <div className="text-slate-400 font-sans text-[11px] pt-1">{step.explanation}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
+                          <strong className="text-white">Parecer Pedagógico: </strong> {acidResult.mitigationAdvice}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: Voice-First Oral Defense & Socratic Interview */}
+              {activeTab === "voice_defense" && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-purple-400 flex items-center gap-1.5 font-mono">
+                          <Mic className="w-4 h-4" /> Defesa Oral Socrática por Voz & Autoria
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          Avaliação de fluência técnica, coerência conceitual e validação de autoria contra respostas de IA externa.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleEvaluateVoiceDefense}
+                        disabled={isEvaluatingVoice}
+                        className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-mono font-bold text-xs transition cursor-pointer"
+                      >
+                        {isEvaluatingVoice ? "Analisando..." : "Avaliar Defesa"}
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-mono text-slate-400">Transcrição da Explicação Oral do Aluno:</label>
+                      <textarea
+                        value={voiceDefenseText}
+                        onChange={(e) => setVoiceDefenseText(e.target.value)}
+                        rows={3}
+                        className="w-full p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-purple-500 font-sans"
+                        placeholder="Digite ou grave a defesa oral do estudante..."
+                      />
+                    </div>
+
+                    {voiceDefenseResult && (
+                      <div className="space-y-3 pt-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">Vocabulário Técnico</span>
+                            <span className="text-sm font-bold text-purple-300">{voiceDefenseResult.metrics.technicalVocabularyScore}%</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">Profundidade</span>
+                            <span className="text-sm font-bold text-sky-300">{voiceDefenseResult.metrics.conceptualDepthScore}%</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">Coerência</span>
+                            <span className="text-sm font-bold text-emerald-300">{voiceDefenseResult.metrics.argumentationCoherenceScore}%</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase block">Autoria Legítima</span>
+                            <span className="text-sm font-bold text-yellow-300">{voiceDefenseResult.metrics.authenticAuthorshipConfidence}%</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/30 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-mono font-bold text-purple-300">Veredito da Defesa:</span>
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-500/20 text-purple-300">
+                              {voiceDefenseResult.overallVerdict}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300 font-sans">{voiceDefenseResult.formalPedagogicalFeedback}</p>
+                          <div className="pt-1 text-xs text-slate-400">
+                            <strong className="text-purple-400">Pergunta Socrática de Aprofundamento: </strong>
+                            {voiceDefenseResult.socraticFollowUpQuestion}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: Cognitive Twin & Self-Healing */}
+              {activeTab === "cognitive_twin" && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-blue-400 flex items-center gap-1.5 font-mono">
+                          <BrainCircuit className="w-4 h-4" /> Gêmeo Cognitivo do Aluno (BKT & Retenção Ebbinghaus)
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          Mapeamento bayesiano de domínio de competências e prevenção de esquecimento.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleLoadCognitiveTwin}
+                        disabled={isLoadingTwin}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-mono font-bold text-xs transition cursor-pointer"
+                      >
+                        {isLoadingTwin ? "Carregando..." : "Atualizar Gêmeo"}
+                      </button>
+                    </div>
+
+                    {cognitiveTwinProfile && (
+                      <div className="space-y-3 pt-2">
+                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                          <div>
+                            <span className="text-xs font-bold text-white block">{cognitiveTwinProfile.studentName}</span>
+                            <span className="text-[11px] text-slate-400">Velocidade Cognitiva: {cognitiveTwinProfile.cognitiveVelocity}x • {cognitiveTwinProfile.retentionRiskCount} tópicos em risco</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-lg font-black text-blue-400 font-mono">{cognitiveTwinProfile.overallMasteryIndex}%</span>
+                            <span className="text-[10px] text-slate-500 block uppercase">Índice Global de Domínio</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {cognitiveTwinProfile.competencies.map((comp: any, cIdx: number) => (
+                            <div key={cIdx} className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-bold text-white">{comp.name}</span>
+                                <span className="font-mono text-blue-300 font-bold">{Math.round(comp.pKnown * 100)}% Domínio</span>
+                              </div>
+                              <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full" style={{ width: `${comp.pKnown * 100}%` }} />
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Retenção na Memória: {comp.retentionPercent}%</span>
+                                <span className="text-amber-400">{comp.recommendedAction}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: Arena Duels & Hackathon Leaderboard */}
+              {activeTab === "arena_duels" && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-yellow-400 flex items-center gap-1.5 font-mono">
+                          <Trophy className="w-4 h-4" /> Placar ao Vivo da Arena de Duelos & Hackathon
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          Classificação oficial estilo Maratona de Programação ICPC com balões por problema resolvido.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleLoadArenaLeaderboard}
+                        disabled={isLoadingArena}
+                        className="px-3 py-1.5 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-black font-mono font-bold text-xs transition cursor-pointer"
+                      >
+                        {isLoadingArena ? "Atualizando..." : "Atualizar Placar"}
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      {hackathonStandings.map((team, tIdx) => (
+                        <div key={tIdx} className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs font-mono">
+                          <div className="flex items-center gap-3">
+                            <span className="w-6 h-6 rounded-full bg-yellow-500/20 text-yellow-300 font-bold flex items-center justify-center text-xs">
+                              {team.rank}
+                            </span>
+                            <div>
+                              <span className="font-bold text-white block">{team.teamName}</span>
+                              <span className="text-[11px] text-slate-400">{team.solvedProblems} problemas • {team.totalPenaltyMinutes} min penalidade</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {team.problemSubmissions.map((prob: any, pIdx: number) => (
+                              <span
+                                key={pIdx}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs text-white"
+                                style={{
+                                  backgroundColor: prob.isSolved ? prob.balloonColor : "#1e293b",
+                                  border: `1px solid ${prob.isSolved ? prob.balloonColor : "#334155"}`
+                                }}
+                              >
+                                {prob.problemCode}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
