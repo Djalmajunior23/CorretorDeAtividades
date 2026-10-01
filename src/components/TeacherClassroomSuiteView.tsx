@@ -31,7 +31,8 @@ import {
   Trash2,
   Bookmark,
   GraduationCap,
-  Building2
+  Building2,
+  Camera
 } from "lucide-react";
 import {
   TeacherClassroomExamStudioService,
@@ -46,6 +47,8 @@ import {
   TeacherLessonKit,
   PracticalLabChallenge,
 } from "../services/teacherInteractiveLessonKitService";
+import { OmrWebcamScannerModal } from "./OmrWebcamScannerModal";
+import { PrintableAnswerSheetModal } from "./PrintableAnswerSheetModal";
 import { apiUrl, safeJsonResponse } from "../config/api";
 
 const MULTI_SUBJECT_PRESETS = [
@@ -131,6 +134,8 @@ export const TeacherClassroomSuiteView: React.FC = () => {
   const [singleOmrResult, setSingleOmrResult] = useState<StudentOmrGradingResult | null>(null);
   const [batchOmrReport, setBatchOmrReport] = useState<ClassOmrBatchReport | null>(null);
   const [isGradingOmr, setIsGradingOmr] = useState(false);
+  const [showWebcamScannerModal, setShowWebcamScannerModal] = useState(false);
+  const [showPrintableSheetModal, setShowPrintableSheetModal] = useState(false);
 
   // State: Lesson Kit & Labs
   const [lessonTopic, setLessonTopic] = useState("APIs RESTful Resilientes com Cláusulas de Guarda e Clean Code");
@@ -672,12 +677,21 @@ export const TeacherClassroomSuiteView: React.FC = () => {
             </button>
 
             {generatedExamSuite && (
-              <button
-                onClick={handleExportExamPdf}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all"
-              >
-                <Download className="w-4 h-4" /> Baixar Caderno Completo ({generatedExamSuite.masterQuestions.length}Q) em PDF
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={handleExportExamPdf}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4" /> Baixar Caderno Completo ({generatedExamSuite.masterQuestions.length}Q) em PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPrintableSheetModal(true)}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir Folhas de Resposta OMR com QR Code
+                </button>
+              </div>
             )}
           </div>
 
@@ -995,6 +1009,22 @@ export const TeacherClassroomSuiteView: React.FC = () => {
             </div>
 
             <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowWebcamScannerModal(true)}
+                className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-950 flex items-center justify-center gap-2 transition-all text-xs cursor-pointer"
+              >
+                <Camera className="w-4 h-4" /> Escanear Cartão OMR com Webcam / Câmera
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPrintableSheetModal(true)}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-all text-xs cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-blue-400" /> Imprimir Folha de Resposta Oficial
+              </button>
+
               <button
                 onClick={handleGradeSingleOmr}
                 disabled={isGradingOmr}
@@ -1449,6 +1479,75 @@ export const TeacherClassroomSuiteView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* MODAL: LEITOR ÓPTICO OMR VIA WEBCAM / CÂMERA */}
+      <OmrWebcamScannerModal
+        isOpen={showWebcamScannerModal}
+        onClose={() => setShowWebcamScannerModal(false)}
+        examTitle={generatedExamSuite?.title || examTopic}
+        variantCode={omrSelectedVariant}
+        answerKeyMap={
+          generatedExamSuite?.variants.find(v => v.variantCode === omrSelectedVariant)?.answerKeyMap || {
+            1: "A", 2: "B", 3: "C", 4: "D", 5: "A", 6: "B", 7: "C", 8: "D"
+          }
+        }
+        onApplyScannedGrading={(result) => {
+          setOmrStudentName(result.studentName);
+          setOmrStudentId(result.studentId);
+          setOmrSelectedVariant(result.variantCode);
+          setOmrMarkedAnswers(result.markedAnswers);
+
+          // Auto-trigger grading
+          const grading = TeacherClassroomExamStudioService.gradeStudentSubmission(
+            {
+              studentId: result.studentId,
+              studentName: result.studentName,
+              variantCode: result.variantCode,
+              markedAnswers: result.markedAnswers
+            },
+            generatedExamSuite || {
+              id: "exam-temp",
+              title: examTopic,
+              subject: examSubject,
+              courseName: examCourse,
+              targetAudience: "SENAI",
+              totalPoints: 100,
+              durationMinutes: 90,
+              instructions: [],
+              masterQuestions: [],
+              variants: [
+                {
+                  variantCode: result.variantCode,
+                  variantTitle: `Tipo ${result.variantCode}`,
+                  antiCheatSeed: "SEED-TEST",
+                  qrCodeSignature: "QR-TEST",
+                  questions: [],
+                  answerKeyMap: result.markedAnswers
+                }
+              ],
+              createdAt: new Date().toISOString(),
+              institutionHeader: {
+                institution: "SENAI",
+                department: "TI",
+                teacherName: "Docente",
+                academicPeriod: "2026.1"
+              }
+            }
+          );
+          setSingleOmrResult(grading);
+          setActiveTab("OMR");
+        }}
+      />
+
+      {/* MODAL: IMPRESSÃO DA FOLHA DE RESPOSTAS OFICIAL COM QR CODE */}
+      <PrintableAnswerSheetModal
+        isOpen={showPrintableSheetModal}
+        onClose={() => setShowPrintableSheetModal(false)}
+        examTitle={generatedExamSuite?.title || examTopic}
+        variantCode={selectedVariantTab !== "MASTER_KEY" ? selectedVariantTab : "A"}
+        totalQuestions={generatedExamSuite?.masterQuestions.length || questionCount || 40}
+        studentsList={classStudents}
+      />
     </div>
   );
 };

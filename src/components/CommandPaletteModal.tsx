@@ -72,6 +72,30 @@ export function CommandPaletteModal({
   const commands: CommandItem[] = [
     // Ações Rápidas
     {
+      id: "action-live-lab",
+      label: "Abrir Modo Bancada & Lab Companion (Ao Vivo)",
+      category: "Ações Rápidas",
+      desc: "Mapa visual de bancadas, fila Estou Travado e evidências práticas",
+      icon: Radio,
+      keywords: ["bancada", "mesas", "laboratorio", "travado", "duvidas", "mentor", "evidencias", "pomodoro"],
+      action: () => {
+        onNavigate("live_lab_companion");
+        onClose();
+      }
+    },
+    {
+      id: "action-superpowers",
+      label: "Abrir Cockpit de Superpoderes Docentes (Autopilot)",
+      category: "Ações Rápidas",
+      desc: "Omnikit 1-clique, correção em lote turbo, disparador de feedbacks e blitz",
+      icon: Sparkles,
+      keywords: ["superpoderes", "autopilot", "omnikit", "lote", "turbo", "quiz", "diario", "intervencao"],
+      action: () => {
+        onNavigate("teacher_superpowers");
+        onClose();
+      }
+    },
+    {
       id: "action-export-bi",
       label: "Exportar Histórico de Submissões (BI / Excel)",
       category: "Ações Rápidas",

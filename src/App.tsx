@@ -89,6 +89,8 @@ const SocraticTutorScaffoldingView = React.lazy(() => import("./components/Socra
 const StudentAcademyMasteryView = React.lazy(() => import("./components/StudentAcademyMasteryView"));
 const TeacherClassroomSuiteView = React.lazy(() => import("./components/TeacherClassroomSuiteView").then(m => ({ default: m.TeacherClassroomSuiteView })));
 const TeacherGlobalSuperAuthoringView = React.lazy(() => import("./components/TeacherGlobalSuperAuthoringView"));
+const TeacherSuperpowersCockpitView = React.lazy(() => import("./components/TeacherSuperpowersCockpitView"));
+const TeacherLiveLabCompanionView = React.lazy(() => import("./components/TeacherLiveLabCompanionView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2711,6 +2713,14 @@ export default function App() {
 
           {currentTab === "super_authoring" && (
             <TeacherGlobalSuperAuthoringView />
+          )}
+
+          {(currentTab === "teacher_superpowers" || currentTab === "teacher_cockpit") && (
+            <TeacherSuperpowersCockpitView />
+          )}
+
+          {(currentTab === "live_lab_companion" || currentTab === "lab_companion") && (
+            <TeacherLiveLabCompanionView />
           )}
 
           {currentTab === "competencies" && (

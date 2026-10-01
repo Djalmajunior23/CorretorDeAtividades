@@ -79,6 +79,8 @@ export default function Sidebar({
 
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: Briefcase, desc: "Central de Comando Docente", visible: true },
+    { id: "live_lab_companion", label: "Modo Bancada (Ao Vivo)", icon: Radio, desc: "Mapa de Mesas, Dúvidas & Evidências", visible: true },
+    { id: "teacher_superpowers", label: "Superpoderes Docentes", icon: Sparkles, desc: "Ações 1-Clique, Omnikit & Autopilot", visible: true },
     { id: "planejamento", label: "Planejamento", icon: Layers, desc: "Ecosistema Semestral F12", visible: true },
     { id: "aulas", label: "Aulas", icon: FileText, desc: "Registro e Histórico de Aulas", visible: true },
     { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Diário de Aula Inteligente", visible: featureFlags.ENABLE_SMART_CLASS_DIARY !== false },
