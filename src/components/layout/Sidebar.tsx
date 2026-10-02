@@ -138,6 +138,7 @@ export default function Sidebar({
         { id: "quick_understanding_check", label: "Verificação Rápida (Exit Ticket)", icon: HelpCircle, desc: "Checkpoints de Entendimento & Predição de Código", isNew: true },
         { id: "assisted_class_diary", label: "Registro de Aula Assistido", icon: BookOpen, desc: "Diário Homologado com Evidências de Bancada", isNew: true },
         { id: "dashboard", label: "Dashboard Docente", icon: Briefcase, desc: "Central de Comando & Métricas" },
+        { id: "notas", label: "Caderneta & Gestão de Notas", icon: Award, desc: "Lançamento de Notas, Médias & Boletim Oficial", isNew: true },
         { id: "live_lab_companion", label: "Modo Bancada (Ao Vivo)", icon: Radio, desc: "Mapa de Mesas & Dúvidas em Tempo Real" },
         { id: "teacher_superpowers", label: "Superpoderes Docentes", icon: Sparkles, desc: "Ações 1-Clique, Omnikit & Autopilot" },
         { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Registro Inteligente de Frequência & Aulas" },
