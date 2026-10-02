@@ -58,6 +58,8 @@ import { CodeArenaDuelsAndHackathonService } from "./src/services/codeArenaDuels
 import { LmsAndOfflineSyncService } from "./src/services/lmsAndOfflineSyncService";
 import { KeystrokeForensicsAndXaiService } from "./src/services/keystrokeForensicsAndXaiService";
 import { TeacherGlobalSuperAuthoringService } from "./src/services/teacherGlobalSuperAuthoringService";
+import { SystemIntegrityDiagnosticsService } from "./src/services/systemIntegrityDiagnosticsService";
+import { SmartCodeRefactorService } from "./src/services/smartCodeRefactorService";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -9619,6 +9621,48 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         topic
       );
       res.json({ success: true, caseStudy });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ==========================================
+  // System Diagnostics & Self-Healing Routes
+  // ==========================================
+  app.get("/api/system/diagnostics/full-report", async (_req, res) => {
+    try {
+      const report = await SystemIntegrityDiagnosticsService.runFullDiagnostics();
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/system/diagnostics/self-heal", async (_req, res) => {
+    try {
+      const result = await SystemIntegrityDiagnosticsService.triggerSelfHealingRoutine();
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ==========================================
+  // Smart Code Refactor & Remediation Studio
+  // ==========================================
+  app.post("/api/code/smart-refactor", async (req, res) => {
+    try {
+      const { code, language, contextTopic, customAI } = req.body;
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ success: false, error: "Código-fonte não fornecido." });
+      }
+      const analysis = await SmartCodeRefactorService.analyzeAndRefactorCode({
+        code,
+        language,
+        contextTopic,
+        customAI
+      });
+      res.json({ success: true, analysis });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

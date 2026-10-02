@@ -37,7 +37,9 @@ import {
   ArrowRight,
   Command,
   CornerDownLeft,
-  X
+  X,
+  HeartPulse,
+  Code2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -128,6 +130,30 @@ export function CommandPaletteModal({
       keywords: ["ia", "assistente", "copiloto", "socratico", "plano de aula"],
       action: () => {
         onNavigate("assistant");
+        onClose();
+      }
+    },
+    {
+      id: "action-system-diagnostics",
+      label: "Diagnóstico de Infraestrutura & Self-Healing",
+      category: "Ações Rápidas",
+      desc: "Auditoria contínua de WAF, Sandbox, PostgreSQL e auto-cura preventiva",
+      icon: HeartPulse,
+      keywords: ["diagnostico", "saude", "infraestrutura", "self-healing", "waf", "sandbox", "asvs", "seguranca"],
+      action: () => {
+        onNavigate("system_diagnostics");
+        onClose();
+      }
+    },
+    {
+      id: "action-smart-refactor",
+      label: "Estúdio de Refatoração & Remediação de Vulnerabilidades",
+      category: "Ações Rápidas",
+      desc: "Complexidade ciclomática, Big-O, remediação de falhas e guia pedagógico",
+      icon: Code2,
+      keywords: ["refatorar", "clean code", "vulnerabilidade", "ast", "complexidade", "big-o", "cwe"],
+      action: () => {
+        onNavigate("smart_code_refactor");
         onClose();
       }
     },

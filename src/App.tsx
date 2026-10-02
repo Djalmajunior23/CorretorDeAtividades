@@ -116,6 +116,8 @@ const ClassOperationsCentralView = lazyRetry(() => import("./components/ClassOpe
 const StudentExperiencePreviewView = lazyRetry(() => import("./components/StudentExperiencePreviewView"));
 const PedagogicalConfigHierarchyView = lazyRetry(() => import("./components/PedagogicalConfigHierarchyView"));
 const UnifiedNotificationCenterView = lazyRetry(() => import("./components/UnifiedNotificationCenterView"));
+const SystemIntegrityDiagnosticsModal = lazyRetry(() => import("./components/SystemIntegrityDiagnosticsModal"));
+const SmartCodeRefactorStudioModal = lazyRetry(() => import("./components/SmartCodeRefactorStudioModal"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2615,6 +2617,14 @@ export default function App() {
 
           {currentTab === "teacher_review_queue" && (
             <TeacherReviewCentralView />
+          )}
+
+          {currentTab === "system_diagnostics" && (
+            <SystemIntegrityDiagnosticsModal isOpen={true} onClose={() => setTab("dashboard")} />
+          )}
+
+          {currentTab === "smart_code_refactor" && (
+            <SmartCodeRefactorStudioModal isOpen={true} onClose={() => setTab("dashboard")} initialCode={code} initialLanguage={language} />
           )}
 
           {currentTab === "guided_refactoring" && (

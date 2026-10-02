@@ -52,7 +52,9 @@ import {
   ArrowRightLeft,
   EyeOff,
   MessageSquare,
-  Bell
+  Bell,
+  HeartPulse,
+  Code2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -183,6 +185,7 @@ export default function Sidebar({
       color: "text-indigo-400",
       items: [
         { id: "guided_refactoring", label: "Ciclo de Refação Orientada", icon: RefreshCw, desc: "Scaffolding, Dicas & Justificativa", isNew: true },
+        { id: "smart_code_refactor", label: "Estúdio de Refatoração & Clean Code", icon: Code2, desc: "Complexidade Ciclomática, AST & AppSec", isNew: true },
         { id: "student_portal", label: "Portal do Aluno", icon: GraduationCap, desc: "Ambiente do Estudante & Submissões" },
         { id: "pedagogical_tracks", label: "Trilhas de Aprendizagem", icon: ClipboardList, desc: "Planos de Estudos & Nivelamento" },
         { id: "competencies", label: "Competências & Habilidades", icon: Award, desc: "Matriz Curricular SENAI" },
@@ -213,6 +216,7 @@ export default function Sidebar({
       icon: Settings,
       color: "text-rose-400",
       items: [
+        { id: "system_diagnostics", label: "Diagnóstico de Infraestrutura & Self-Healing", icon: HeartPulse, desc: "Auditoria Contínua ASVS L2 & Auto-Cura", isNew: true },
         { id: "sql_dialect_lab", label: "Laboratório SQL Multi-Dialeto", icon: Database, desc: "PostgreSQL, MySQL & SQLite Isolados", isNew: true },
         { id: "peer_review", label: "Revisão por Pares (Peer Review)", icon: Users, desc: "Avaliação Duplo-Cega & Moderação", isNew: true },
         { id: "system_health", label: "Saúde do Sistema & Observabilidade", icon: Activity, desc: "Telemetria Real de BD, IA & Sandbox" },

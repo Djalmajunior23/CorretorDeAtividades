@@ -138,7 +138,7 @@ Retorne ESTRITAMENTE em formato JSON (sem markdown externo):
       };
     } catch {
       // Deterministic Offline Fallback Heuristics
-      const ocrRes = await OCRService.extractTextFromImage(cleanBase64).catch(() => "");
+      const ocrRes = await OCRService.extractTextFromImage(cleanBase64, true).catch(() => ({ text: "", aiAnalysisAvailable: false }));
       const ocrText = typeof ocrRes === "string" ? ocrRes : (ocrRes as any)?.text || "";
       
       const entities: RecognizedEntity[] = [
