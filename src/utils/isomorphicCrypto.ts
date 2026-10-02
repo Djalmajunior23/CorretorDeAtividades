@@ -113,19 +113,39 @@ export class IsomorphicCrypto {
   }
 
   /**
+   * Generates random bytes Buffer/Uint8Array-like object compatible with node crypto
+   */
+  public static randomBytes(size: number): Uint8Array & { toString: (format?: string) => string } {
+    const bytes = new Uint8Array(size);
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+      crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < size; i++) {
+        bytes[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+    return Object.assign(bytes, {
+      toString: (format = "hex") => {
+        if (format === "hex") return hex;
+        if (format === "base64") {
+          if (typeof btoa !== "undefined") {
+            return btoa(String.fromCharCode(...bytes));
+          }
+          if (typeof Buffer !== "undefined") {
+            return Buffer.from(bytes).toString("base64");
+          }
+        }
+        return hex;
+      }
+    });
+  }
+
+  /**
    * Generates random hex bytes
    */
   public static randomBytesHex(length: number): string {
-    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
-      const bytes = new Uint8Array(length);
-      crypto.getRandomValues(bytes);
-      return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
-    }
-    let hex = "";
-    for (let i = 0; i < length; i++) {
-      hex += Math.floor(Math.random() * 256).toString(16).padStart(2, "0");
-    }
-    return hex;
+    return IsomorphicCrypto.randomBytes(length).toString("hex");
   }
 
   /**

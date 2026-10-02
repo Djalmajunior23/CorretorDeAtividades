@@ -58,8 +58,7 @@ export default function LoginPage() {
     setError("");
 
     let response: Response | null = null;
-    
-    const url = API_BASE_URL.endsWith("/auth/login") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/login`;
+    const url = apiUrl("/api/auth/login");
 
     try {
       response = await fetch(url, {

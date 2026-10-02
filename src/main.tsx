@@ -28,10 +28,17 @@ loader.config({
   }
 });
 
+import { BrowserRouter } from 'react-router-dom';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <AppErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
+    </AppErrorBoundary>
   </React.StrictMode>
 );

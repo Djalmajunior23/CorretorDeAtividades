@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             return;
           }
 
-          const url = API_BASE_URL.endsWith("/auth/me") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/me`;
+          const url = apiUrl("/api/auth/me");
 
           const response = await fetch(url, {
             headers: {

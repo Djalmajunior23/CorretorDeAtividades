@@ -2209,7 +2209,11 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginPage />;
+    return (
+      <AppErrorBoundary>
+        <LoginPage />
+      </AppErrorBoundary>
+    );
   }
 
   return (
