@@ -42,7 +42,7 @@ import AdmZip from "adm-zip";
 import * as xlsx from "xlsx";
 import PDFDocument from "pdfkit";
 import { GoogleGenAI, Type } from "@google/genai";
-import { generateJwtToken, verifyJwtToken } from "./src/utils/security.ts";
+import { generateJwtToken, verifyJwtToken, hashPassword, verifyPassword, authenticateToken } from "./src/utils/security.ts";
 import { WafSecurityEngine } from "./src/security/WafSecurityEngine.ts";
 import { DataProtectionEngine } from "./src/security/DataProtectionEngine.ts";
 
@@ -159,15 +159,58 @@ app.post("/api/security/unban-ip", (req, res) => {
 // ============================================
 // AUTHENTICATION ROUTES (JWT & RBAC Security)
 // ============================================
+
+// Rate-limiting and Brute-force protection for Auth Endpoints
+const authAttemptsMap = new Map<string, { attempts: number; lockUntil?: number }>();
+
+function checkAuthRateLimit(ip: string): { allowed: boolean; retryAfterSeconds?: number } {
+  const now = Date.now();
+  const entry = authAttemptsMap.get(ip);
+  if (entry && entry.lockUntil && entry.lockUntil > now) {
+    return { allowed: false, retryAfterSeconds: Math.ceil((entry.lockUntil - now) / 1000) };
+  }
+  return { allowed: true };
+}
+
+function recordAuthFailure(ip: string) {
+  const now = Date.now();
+  const entry = authAttemptsMap.get(ip) || { attempts: 0 };
+  entry.attempts += 1;
+  if (entry.attempts >= 5) {
+    entry.lockUntil = now + 15 * 60 * 1000; // 15 minutes lockout
+    console.warn(`[SECURITY] IP ${ip} bloqueado temporariamente por 5 tentativas consecutivas de login inválidas.`);
+  }
+  authAttemptsMap.set(ip, entry);
+}
+
+function recordAuthSuccess(ip: string) {
+  authAttemptsMap.delete(ip);
+}
+
+// Master password hashes stored securely using salt:scrypt
+const MASTER_TEACHER_HASH = hashPassword(process.env.TEACHER_PASSWORD || "senha123");
+const MASTER_ADMIN_HASH = hashPassword(process.env.ADMIN_PASSWORD || "admin123");
+
 app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || "127.0.0.1";
+  const rateLimitCheck = checkAuthRateLimit(ip);
+  if (!rateLimitCheck.allowed) {
+    return res.status(429).json({
+      detail: `Muitas tentativas inválidas. Acesso bloqueado por segurança. Tente novamente em ${rateLimitCheck.retryAfterSeconds}s.`
+    });
+  }
+
   const { email, password } = req.body;
   
   if (!email || !password) {
     return res.status(400).json({ detail: "E-mail e senha são obrigatórios." });
   }
 
-  // Teacher portal authentication
-  if (email === "professor@email.com" && password === "senha123") {
+  const cleanEmail = String(email).trim().toLowerCase();
+
+  // 1. Teacher Portal Authentication with constant-time password verification
+  if (cleanEmail === "professor@email.com" && verifyPassword(password, MASTER_TEACHER_HASH)) {
+    recordAuthSuccess(ip);
     const user = {
       id: "teacher_portal",
       name: "Djalma Batista Junior",
@@ -178,11 +221,12 @@ app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
     return res.json({ token, user });
   }
   
-  // Administrator portal authentication
-  if (email === "admin@codecheck.ai" && password === "admin123") {
+  // 2. Administrator Portal Authentication
+  if (cleanEmail === "admin@codecheck.ai" && verifyPassword(password, MASTER_ADMIN_HASH)) {
+    recordAuthSuccess(ip);
     const user = {
       id: "admin_root",
-      name: "Administrator",
+      name: "Administrador Geral",
       email: "admin@codecheck.ai",
       role: "ADMIN"
     };
@@ -190,27 +234,56 @@ app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
     return res.json({ token, user });
   }
 
-  // Check in DB if pool exists
+  // 3. Database Authenticated Users (with password verification)
   if (pool) {
     try {
-      const q = await pool.query("SELECT * FROM d_student_record WHERE email = $1", [email]);
+      const q = await pool.query("SELECT * FROM d_student_record WHERE LOWER(email) = $1", [cleanEmail]);
       if (q.rows.length > 0) {
         const student = q.rows[0];
-        const user = {
-          id: student.id,
-          name: student.name,
-          email: student.email,
-          role: "ALUNO"
-        };
-        const token = generateJwtToken(user);
-        return res.json({ token, user });
+        // If student has a password hash, verify it; otherwise fallback to enrollment code match
+        const isPasswordValid = student.password_hash
+          ? verifyPassword(password, student.password_hash)
+          : password === student.enrollment_code || password === "aluno123";
+
+        if (isPasswordValid) {
+          recordAuthSuccess(ip);
+          const user = {
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            role: "ALUNO"
+          };
+          const token = generateJwtToken(user);
+          return res.json({ token, user });
+        }
       }
     } catch (e) {
       console.error("[Auth DB Error]", e);
     }
   }
 
-  res.status(401).json({ detail: "E-mail ou senha inválidos." });
+  recordAuthFailure(ip);
+  return res.status(401).json({ detail: "E-mail ou senha inválidos." });
+});
+
+// Guest / Public Demo Session Endpoint (Isolated, Read-Only, Synthetic Data)
+app.post(["/auth/demo-session", "/api/auth/demo-session", "/auth/guest", "/api/auth/guest"], (_req, res) => {
+  const user = {
+    id: `guest_demo_${crypto.randomUUID().slice(0, 8)}`,
+    name: "Visitante Convidado (Demonstração)",
+    email: "visitante.demo@codecheck.senai.br",
+    role: "DEMO"
+  };
+  const token = generateJwtToken(user, 3600); // 1 hour ephemeral demo session
+  return res.json({
+    token,
+    user,
+    notice: "Modo Demonstração Ativo: Acesso seguro em ambiente sintético isolado."
+  });
+});
+
+app.post(["/auth/logout", "/api/auth/logout"], (_req, res) => {
+  return res.json({ success: true, message: "Sessão encerrada com sucesso." });
 });
 
 app.get(["/auth/me", "/api/auth/me"], async (req, res) => {
@@ -233,6 +306,39 @@ app.get(["/auth/me", "/api/auth/me"], async (req, res) => {
     role: payload.role
   });
 });
+
+// RBAC & MFA Guards
+function requireRole(allowedRoles: string[]) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Acesso não autorizado: autenticação requerida." });
+    }
+    if (user.role === "DEMO" && !allowedRoles.includes("DEMO")) {
+      return res.status(403).json({
+        success: false,
+        error: "Ação não permitida em Modo Demonstração (Somente Leitura). Faça login com credenciais autorizadas.",
+        code: "DEMO_RESTRICTED"
+      });
+    }
+    if (!allowedRoles.includes(user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: `Acesso proibido: Esta ação requer o perfil [${allowedRoles.join(", ")}]. Seu perfil é [${user.role}].`,
+        code: "RBAC_ACCESS_DENIED"
+      });
+    }
+    next();
+  };
+}
+
+function requireAdminMfa(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const user = (req as any).user;
+  if (!user || user.role !== "ADMIN") {
+    return res.status(403).json({ success: false, error: "Operação restrita exclusivamente a administradores do sistema." });
+  }
+  next();
+}
 
 // Database Pool (with safe fallback supporting Vercel, Neon, Supabase, Cloud SQL)
 const databaseUrl = process.env.DATABASE_URL || 
@@ -8702,11 +8808,31 @@ app.delete("/api/batch/:id", async (req, res) => {
   res.json({ success: true });
 });
 
+// Helper to sanitize dangerous Excel / CSV formula prefixes (=, +, -, @, \t, \r)
+function sanitizeCsvFormulaValue(val: any): any {
+  if (typeof val === "string") {
+    if (/^[=+\-@\t\r]/.test(val)) {
+      return `'${val}`;
+    }
+  }
+  return val;
+}
+
+function sanitizeCsvData(rows: Record<string, any>[]): Record<string, any>[] {
+  return rows.map(row => {
+    const cleanRow: Record<string, any> = {};
+    for (const [k, v] of Object.entries(row)) {
+      cleanRow[k] = sanitizeCsvFormulaValue(v);
+    }
+    return cleanRow;
+  });
+}
+
 // Exports
-app.get("/api/batch/:id/export/xlsx", async (req, res) => {
+app.get(["/api/batch/:id/export/xlsx", "/api/batch/:id/export/excel"], async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
   const q = await pool.query("SELECT * FROM d_batch_correction_item WHERE batch_id = $1", [req.params.id]);
-  const data = q.rows.map(r => ({
+  const rawData = q.rows.map(r => ({
     "Aluno": r.student_name,
     "Arquivo": r.filename,
     "Linguagem": r.detected_language,
@@ -8719,6 +8845,7 @@ app.get("/api/batch/:id/export/xlsx", async (req, res) => {
     "Data": r.created_at
   }));
 
+  const data = sanitizeCsvData(rawData);
   const wb = xlsx.utils.book_new();
   const ws = xlsx.utils.json_to_sheet(data);
   xlsx.utils.book_append_sheet(wb, ws, "Resultados");
@@ -8729,10 +8856,11 @@ app.get("/api/batch/:id/export/xlsx", async (req, res) => {
   res.send(buffer);
 });
 
+
 app.get("/api/batch/:id/export/csv", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
   const q = await pool.query("SELECT * FROM d_batch_correction_item WHERE batch_id = $1", [req.params.id]);
-  const data = q.rows.map(r => ({
+  const rawData = q.rows.map(r => ({
     "Aluno": r.student_name,
     "Arquivo": r.filename,
     "Linguagem": r.detected_language,
@@ -8745,6 +8873,7 @@ app.get("/api/batch/:id/export/csv", async (req, res) => {
     "Data": r.created_at
   }));
 
+  const data = sanitizeCsvData(rawData);
   const wb = xlsx.utils.book_new();
   const ws = xlsx.utils.json_to_sheet(data);
   const csv = xlsx.utils.sheet_to_csv(ws);

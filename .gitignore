@@ -21,3 +21,4 @@ uploads/
 reports/
 backups/
 *.traineddata
+tmp_sandbox/

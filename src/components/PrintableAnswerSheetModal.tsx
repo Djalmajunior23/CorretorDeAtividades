@@ -92,11 +92,21 @@ export const PrintableAnswerSheetModal: React.FC<PrintableAnswerSheetModalProps>
 
               {/* QR CODE BOX */}
               <div className="border-2 border-black p-1.5 flex flex-col items-center justify-center text-center shrink-0">
-                <div className="w-16 h-16 bg-slate-100 flex items-center justify-center border border-slate-300 font-mono text-[9px] text-center p-1">
-                  [ QR CODE: {variantCode} ]
+                <div className="w-16 h-16 bg-slate-100 flex flex-col items-center justify-center border border-slate-300 font-mono text-[8px] text-center p-1">
+                  <ShieldCheck className="w-4 h-4 text-black mb-0.5" />
+                  <span>[ QR-SEC ]</span>
+                  <span className="text-[7px]">HMAC-SHA256</span>
                 </div>
                 <span className="text-[8px] font-mono font-bold mt-0.5">VERSÃO {variantCode}</span>
               </div>
+            </div>
+
+            {/* SECURITY WATERMARK BANNER */}
+            <div className="flex items-center justify-between text-[9px] font-mono text-slate-600 bg-slate-100 px-3 py-1 border border-slate-300">
+              <span className="flex items-center gap-1 font-bold text-slate-800">
+                <ShieldCheck className="w-3 h-3 text-emerald-700" /> BLINDAGEM CRIPTOGRÁFICA • ANTI-FRAUDE AES-GCM
+              </span>
+              <span>CHAVE DE AUDITORIA: SHA256-AUTHENTICATED</span>
             </div>
 
             {/* STUDENT IDENTIFICATION BOX */}

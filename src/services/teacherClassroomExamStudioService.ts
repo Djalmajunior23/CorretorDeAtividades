@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
+import { ConfidentialFileVault, EncryptedFilePackage } from "../security/ConfidentialFileVault";
 
 export type { CustomAIRequestOptions };
 
@@ -412,11 +413,17 @@ RETORNE ESTRITAMENTE UM JSON VÁLIDO no seguinte formato:
         }
       });
 
+      const qrCodeSignature = ConfidentialFileVault.generateExamQrSignature({
+        examId: "SUITE-EXAM",
+        variantCode: code,
+        studentId: "ALL_STUDENTS"
+      });
+
       variants.push({
         variantCode: code,
         variantTitle: `Caderno de Prova — Versão ${code}`,
         antiCheatSeed: `VAR-${code}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-        qrCodeSignature: `CC-EXAM-V${code}-${Date.now().toString(36)}`,
+        qrCodeSignature,
         questions: variantQuestions,
         answerKeyMap,
       });
@@ -1666,5 +1673,53 @@ RETORNE ESTRITAMENTE UM JSON VÁLIDO no seguinte formato:
     }
 
     return this.formatPdfOutput(doc, options.saveFilename || `Suíte_Avaliacoes_${suite.id}.pdf`);
+  }
+
+  /**
+   * =========================================================================
+   * DEFENSE-IN-DEPTH: EXAM SUITE ENCRYPTED EXPORT / IMPORT & QR VERIFICATION
+   * =========================================================================
+   */
+
+  /**
+   * Exporta a suíte completa de provas e gabaritos criptografada em AES-256-GCM
+   * com assinatura HMAC para integridade estrita e não-repúdio.
+   */
+  public static exportEncryptedExamSuite(suite: TeacherExamSuite, ownerId?: string): EncryptedFilePackage {
+    const rawJson = JSON.stringify(suite);
+    return ConfidentialFileVault.encryptConfidentialFile({
+      fileName: `exam-suite-${suite.id}.json`,
+      category: "OFFICIAL_EXAMS",
+      content: rawJson,
+      ownerId: ownerId || suite.institutionHeader.teacherName,
+      metadata: {
+        examId: suite.id,
+        title: suite.title,
+        courseName: suite.courseName,
+        totalPoints: suite.totalPoints,
+        questionsCount: suite.masterQuestions.length,
+        variantsCount: suite.variants.length
+      }
+    });
+  }
+
+  /**
+   * Importa e decodifica uma suíte de provas criptografada, validando a integridade
+   * criptográfica AES-GCM e a assinatura digital HMAC.
+   */
+  public static importEncryptedExamSuite(pkg: EncryptedFilePackage, actorId: string = "system"): TeacherExamSuite {
+    const decrypted = ConfidentialFileVault.decryptConfidentialFile(pkg, actorId);
+    return JSON.parse(decrypted.plainContent) as TeacherExamSuite;
+  }
+
+  /**
+   * Valida a autenticidade digital de um QR Code lido pelo scanner OMR
+   */
+  public static verifyVariantQrSignature(qrBase64: string): {
+    isValid: boolean;
+    data?: { examId: string; variantCode: string; studentId: string; timestamp: number };
+    errorReason?: string;
+  } {
+    return ConfidentialFileVault.verifyExamQrSignature(qrBase64);
   }
 }

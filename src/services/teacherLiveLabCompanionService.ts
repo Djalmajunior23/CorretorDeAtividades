@@ -1,4 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
+import { ConfidentialFileVault, EncryptedFilePackage } from "../security/ConfidentialFileVault";
 
 export interface StudentDesk {
   deskId: string;
@@ -204,11 +205,15 @@ export class TeacherLiveLabCompanionService {
     codeSnippet?: string;
     customAI?: CustomAIRequestOptions;
   }): Promise<{ hintText: string; promptReflection: string }> {
+    const sanitizedStudent = ConfidentialFileVault.sanitizeInputAgainstInjection(params.studentName).sanitizedText;
+    const sanitizedDoubt = ConfidentialFileVault.sanitizeInputAgainstInjection(params.doubtSummary).sanitizedText;
+    const sanitizedSnippet = ConfidentialFileVault.sanitizeInputAgainstInjection(params.codeSnippet || "Sem snippet").sanitizedText;
+
     const prompt = `Você é o Copiloto da Bancada do Laboratório SENAI.
 Um aluno está travado durante a aula prática.
-ALUNO: "${params.studentName}"
-DÚVIDA/ERRO: "${params.doubtSummary}"
-CÓDIGO: "${params.codeSnippet || "Sem snippet"}"
+ALUNO: "${sanitizedStudent}"
+DÚVIDA/ERRO: "${sanitizedDoubt}"
+CÓDIGO: "${sanitizedSnippet}"
 
 Gere uma micro-dica socrática de no máximo 2 frases, que estimule o aluno a encontrar o erro sem entregar a resposta pronta mastigada.
 Formato JSON estrito:
@@ -300,6 +305,70 @@ Gere o Dossiê Rápido de Fechamento da Aula em JSON estrito:
           { name: "Mariana Oliveira Costa", reason: "Evolução expressiva após intervenção na bancada." }
         ],
         generatedAt: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * =========================================================================
+   * DEFENSE-IN-DEPTH: LAB BENCH ACADEMIC EVIDENCE ENCRYPTION & INTEGRITY
+   * =========================================================================
+   */
+
+  /**
+   * Registra uma evidência de bancada (código/screenshot/observação) com criptografia
+   * AES-256-GCM, autenticação HMAC e carimbo de data/hora no audit ledger.
+   */
+  public static recordEncryptedBenchEvidence(params: {
+    deskNumber: number;
+    studentId: string;
+    studentName: string;
+    evidenceTitle: string;
+    codeSnippetOrNotes: string;
+    teacherObservation?: string;
+    teacherId?: string;
+  }): EncryptedFilePackage {
+    const payload = JSON.stringify({
+      deskNumber: params.deskNumber,
+      studentId: params.studentId,
+      studentName: params.studentName,
+      evidenceTitle: params.evidenceTitle,
+      codeSnippetOrNotes: params.codeSnippetOrNotes,
+      teacherObservation: params.teacherObservation || "Evidência coletada em bancada com sucesso",
+      recordedAt: new Date().toISOString()
+    });
+
+    return ConfidentialFileVault.encryptConfidentialFile({
+      fileName: `bench-evidence-desk${params.deskNumber}-${params.studentId}.json`,
+      category: "ACADEMIC_EVIDENCES",
+      content: payload,
+      ownerId: params.teacherId || "docente-lab",
+      metadata: {
+        deskNumber: params.deskNumber,
+        studentId: params.studentId,
+        studentName: params.studentName,
+        evidenceTitle: params.evidenceTitle
+      }
+    });
+  }
+
+  /**
+   * Decodifica e verifica a autenticidade e integridade da evidência de bancada
+   */
+  public static verifyBenchEvidenceIntegrity(
+    pkg: EncryptedFilePackage,
+    actorId: string = "system"
+  ): { isValid: boolean; evidenceData?: any; error?: string } {
+    try {
+      const decrypted = ConfidentialFileVault.decryptConfidentialFile(pkg, actorId);
+      return {
+        isValid: true,
+        evidenceData: JSON.parse(decrypted.plainContent)
+      };
+    } catch (err: any) {
+      return {
+        isValid: false,
+        error: err.message
       };
     }
   }

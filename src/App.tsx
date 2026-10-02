@@ -13,6 +13,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { Toaster, toast } from 'sonner';
 import Sidebar from "./components/layout/Sidebar";
 import { VercelCloudSyncModal } from "./components/VercelCloudSyncModal";
+import { useAuth } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage";
+import { LogOut, ShieldAlert } from "lucide-react";
 
 // Dynamic Code Splitting (React.lazy) for high performance & minimal initial bundle size
 const GeneratorView = React.lazy(() => import("./components/GeneratorView"));
@@ -91,6 +94,26 @@ const TeacherClassroomSuiteView = React.lazy(() => import("./components/TeacherC
 const TeacherGlobalSuperAuthoringView = React.lazy(() => import("./components/TeacherGlobalSuperAuthoringView"));
 const TeacherSuperpowersCockpitView = React.lazy(() => import("./components/TeacherSuperpowersCockpitView"));
 const TeacherLiveLabCompanionView = React.lazy(() => import("./components/TeacherLiveLabCompanionView"));
+const TeacherReviewCentralView = React.lazy(() => import("./components/TeacherReviewCentralView"));
+const GuidedRefactoringCycleView = React.lazy(() => import("./components/GuidedRefactoringCycleView"));
+const ActivityPreflightValidatorView = React.lazy(() => import("./components/ActivityPreflightValidatorView"));
+const SqlMultiDialectLabView = React.lazy(() => import("./components/SqlMultiDialectLabView"));
+const DiagnosticInterventionHubView = React.lazy(() => import("./components/DiagnosticInterventionHubView"));
+const PeerReviewStudioView = React.lazy(() => import("./components/PeerReviewStudioView"));
+const TeacherMyDayView = React.lazy(() => import("./components/TeacherMyDayView"));
+const TeacherActionQueueView = React.lazy(() => import("./components/TeacherActionQueueView"));
+const ReusableFeedbackBankView = React.lazy(() => import("./components/ReusableFeedbackBankView"));
+const SmartLessonPlannerView = React.lazy(() => import("./components/SmartLessonPlannerView"));
+const QuickUnderstandingCheckView = React.lazy(() => import("./components/QuickUnderstandingCheckView"));
+const AssistedClassDiaryView = React.lazy(() => import("./components/AssistedClassDiaryView"));
+const BlindGradingStudioView = React.lazy(() => import("./components/BlindGradingStudioView"));
+const GradeRuleSimulatorView = React.lazy(() => import("./components/GradeRuleSimulatorView"));
+const CohortComparisonStudioView = React.lazy(() => import("./components/CohortComparisonStudioView"));
+const TeacherHandoverDossierView = React.lazy(() => import("./components/TeacherHandoverDossierView"));
+const ClassOperationsCentralView = React.lazy(() => import("./components/ClassOperationsCentralView"));
+const StudentExperiencePreviewView = React.lazy(() => import("./components/StudentExperiencePreviewView"));
+const PedagogicalConfigHierarchyView = React.lazy(() => import("./components/PedagogicalConfigHierarchyView"));
+const UnifiedNotificationCenterView = React.lazy(() => import("./components/UnifiedNotificationCenterView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -300,6 +323,7 @@ function normalizeCorrectionVault(response: any) {
 }
 
 export default function App() {
+  const { user, logout, isLoading, isDemoMode } = useAuth();
   const [currentTab, setTab] = useState<string>("dashboard");
   const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
   const [selectedCorrectorStudent, setSelectedCorrectorStudent] = useState<string>('');
@@ -2180,6 +2204,14 @@ export default function App() {
 
   const isEnvironmentUnvailable = ["java", "c", "cpp", "csharp", "php", "go", "rust", "kotlin"].includes(language.toLowerCase());
 
+  if (isLoading) {
+    return <ViewLoadingFallback />;
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
+
   return (
     <div className="flex h-screen bg-[#030712] overflow-hidden text-slate-100 font-sans antialiased">
       {/* Visual Sidebar Layout */}
@@ -2195,6 +2227,22 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#070a1a]">
         
+        {/* PUBLIC DEMO MODE ISOLATION BANNER */}
+        {isDemoMode && (
+          <div className="bg-amber-500/10 border-b border-amber-500/30 px-6 py-2 text-amber-300 text-xs font-mono flex items-center justify-between z-50 shrink-0">
+            <span className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+              <span><strong>MODO DEMONSTRAÇÃO PÚBLICA (VISITANTE):</strong> Acesso seguro a dados sintéticos isolados. Operações de infraestrutura e backups reais estão bloqueadas.</span>
+            </span>
+            <button
+              onClick={logout}
+              className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-bold border border-amber-500/30 transition-all cursor-pointer"
+            >
+              Sair da Demo
+            </button>
+          </div>
+        )}
+
         {/* Top bar header */}
         <header className="h-20 border-b border-slate-800 px-8 flex items-center justify-between bg-[#040815] relative z-45">
           <div className="flex items-center gap-3">
@@ -2202,31 +2250,21 @@ export default function App() {
               <h2 className="text-sm font-bold tracking-tight text-white font-display flex items-center gap-2">
                 {(() => {
                   const hr = new Date().getHours();
-                  if (hr < 12) {
-                    return (
-                      <>
-                        <Sun className="w-4 h-4 text-amber-400 animate-spin-slow" />
-                        <span>Bom dia, Professor Djalma</span>
-                      </>
-                    );
-                  } else if (hr < 18) {
-                    return (
-                      <>
-                        <Sun className="w-4 h-4 text-emerald-400" />
-                        <span>Boa tarde, Professor Djalma</span>
-                      </>
-                    );
-                  } else {
-                    return (
-                      <>
-                        <Moon className="w-4 h-4 text-indigo-400 animate-pulse" />
-                        <span>Boa noite, Professor Djalma</span>
-                      </>
-                    );
-                  }
+                  const greeting = hr < 12 ? "Bom dia" : hr < 18 ? "Boa tarde" : "Boa noite";
+                  const Icon = hr < 12 ? Sun : hr < 18 ? Sun : Moon;
+                  const iconColor = hr < 12 ? "text-amber-400" : hr < 18 ? "text-emerald-400" : "text-indigo-400";
+                  return (
+                    <>
+                      <Icon className={`w-4 h-4 ${iconColor}`} />
+                      <span>{greeting}, {user.name}</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold uppercase">
+                        {user.role}
+                      </span>
+                    </>
+                  );
                 })()}
               </h2>
-              <span className="text-[10px] text-slate-500 font-mono">Última conexão: {new Date().toLocaleDateString("pt-BR")}</span>
+              <span className="text-[10px] text-slate-500 font-mono">Sessão Autenticada • {new Date().toLocaleDateString("pt-BR")}</span>
             </div>
           </div>
 
@@ -2394,6 +2432,18 @@ export default function App() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               ONLINE
             </span>
+
+            {/* User Profile & Secure Logout Button */}
+            <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
+              <button
+                onClick={logout}
+                title="Encerrar Sessão Segura"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-rose-500/20 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-rose-200 text-xs font-mono font-semibold transition-all cursor-pointer shadow-sm"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span>Sair</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -2489,6 +2539,90 @@ export default function App() {
 
             {currentTab === "dashboard" && (
             <DashboardView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "teacher_my_day" && (
+            <TeacherMyDayView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "teacher_action_queue" && (
+            <TeacherActionQueueView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "reusable_feedback_bank" && (
+            <ReusableFeedbackBankView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "smart_lesson_planner" && (
+            <SmartLessonPlannerView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "quick_understanding_check" && (
+            <QuickUnderstandingCheckView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "assisted_class_diary" && (
+            <AssistedClassDiaryView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "blind_grading_studio" && (
+            <BlindGradingStudioView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "grade_rule_simulator" && (
+            <GradeRuleSimulatorView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "cohort_comparison" && (
+            <CohortComparisonStudioView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "teacher_handover" && (
+            <TeacherHandoverDossierView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "class_operations_central" && (
+            <ClassOperationsCentralView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "student_experience_preview" && (
+            <StudentExperiencePreviewView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "pedagogical_config_hierarchy" && (
+            <PedagogicalConfigHierarchyView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "unified_notification_center" && (
+            <UnifiedNotificationCenterView onNavigate={(tab) => setTab(tab)} />
+          )}
+
+          {currentTab === "teacher_review_queue" && (
+            <TeacherReviewCentralView />
+          )}
+
+          {currentTab === "guided_refactoring" && (
+            <GuidedRefactoringCycleView />
+          )}
+
+          {currentTab === "activity_validator" && (
+            <ActivityPreflightValidatorView />
+          )}
+
+          {currentTab === "sql_dialect_lab" && (
+            <SqlMultiDialectLabView />
+          )}
+
+          {currentTab === "diagnostic_intervention" && (
+            <DiagnosticInterventionHubView />
+          )}
+
+          {currentTab === "peer_review" && (
+            <PeerReviewStudioView />
+          )}
+
+          {currentTab === "educational_analytics" && (
+            <EducationalAnalyticsView />
           )}
 
           {currentTab === "planejamento" && (

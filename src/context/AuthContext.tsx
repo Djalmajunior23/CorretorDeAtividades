@@ -73,26 +73,48 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   token: null,
   login: () => {},
+  guestLogin: () => {},
   logout: () => {},
   isLoading: true,
+  isDemoMode: false,
   diagnoseResponse,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(
-    localStorage.getItem("token"),
-  );
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const storedUser = localStorage.getItem("user");
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("token");
+    } catch {
+      return null;
+    }
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const validateToken = async () => {
       const storedToken = localStorage.getItem("token");
-      if (storedToken) {
+      const storedUser = localStorage.getItem("user");
+
+      if (storedToken && storedUser) {
         try {
-          
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser.role === "DEMO" || parsedUser.isGuest) {
+            setUser(parsedUser);
+            setToken(storedToken);
+            setIsLoading(false);
+            return;
+          }
+
           const url = API_BASE_URL.endsWith("/auth/me") ? API_BASE_URL : `${API_BASE_URL.replace(/\/+$/, "")}/auth/me`;
 
           const response = await fetch(url, {
@@ -107,10 +129,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             setUser(userData);
             setToken(storedToken);
           } else {
-            throw new Error("Invalid token");
+            throw new Error("Token expired or invalid");
           }
         } catch (e) {
-          console.error("Token validation failed:", e);
+          console.warn("Token validation failed, clearing session:", e);
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           setToken(null);
@@ -125,12 +147,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     validateToken();
   }, []);
 
-  const login = (token: string, user: User) => {
-    user.role = normalizeRole(user.role) || "ALUNO";
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(user));
-    setToken(token);
-    setUser(user);
+  const login = (authToken: string, authUser: User) => {
+    authUser.role = normalizeRole(authUser.role) || "ALUNO";
+    localStorage.setItem("token", authToken);
+    localStorage.setItem("user", JSON.stringify(authUser));
+    setToken(authToken);
+    setUser(authUser);
+  };
+
+  const guestLogin = () => {
+    const guestUser: User = {
+      id: "guest-demo-visitor",
+      name: "Visitante Convidado (Modo Demonstração)",
+      email: "visitante.demo@codecheck.senai.br",
+      role: "DEMO",
+      isGuest: true
+    };
+    const guestToken = `demo_guest_session_${Date.now()}`;
+    localStorage.setItem("token", guestToken);
+    localStorage.setItem("user", JSON.stringify(guestUser));
+    setToken(guestToken);
+    setUser(guestUser);
   };
 
   const logout = () => {
@@ -140,8 +177,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser(null);
   };
 
+  const isDemoMode = user?.role === "DEMO" || user?.isGuest === true;
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, diagnoseResponse }}>
+    <AuthContext.Provider value={{ user, token, login, guestLogin, logout, isLoading, isDemoMode, diagnoseResponse }}>
       {children}
     </AuthContext.Provider>
   );

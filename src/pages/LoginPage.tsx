@@ -2,7 +2,7 @@ import { apiUrl, API_BASE_URL } from "../config/api";
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Code, LogIn, Sparkles, Terminal, ShieldAlert, BadgeCheck } from "lucide-react";
+import { Code, LogIn, Sparkles, Terminal, ShieldAlert, BadgeCheck, Eye } from "lucide-react";
 import { normalizeRole } from "../utils/roles";
 
 import { motion, AnimatePresence } from "motion/react";
@@ -29,7 +29,7 @@ const INSTITUTIONAL_SLIDES = [
 ];
 
 export default function LoginPage() {
-  const { login, user, diagnoseResponse } = useAuth();
+  const { login, guestLogin, user, diagnoseResponse } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -230,9 +230,27 @@ export default function LoginPage() {
               ) : (
                 <>
                   <LogIn className="w-4 h-4 text-slate-950" />
-                  <span className="text-xs font-bold uppercase tracking-wider">Acessar e Validar</span>
+                  <span className="text-xs font-bold uppercase tracking-wider">Acessar com Credenciais</span>
                 </>
               )}
+            </button>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-800"></div>
+              <span className="flex-shrink mx-3 text-[10px] font-mono uppercase text-slate-500">ou</span>
+              <div className="flex-grow border-t border-slate-800"></div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                guestLogin();
+                navigate("/teacher/dashboard");
+              }}
+              className="w-full flex items-center justify-center space-x-2 py-3 px-4 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500/40 text-slate-200 text-xs font-bold rounded-xl transition-all shadow-sm"
+            >
+              <Eye className="w-4 h-4 text-emerald-400" />
+              <span>Explorar em Modo Demonstração (Visitante Seguro)</span>
             </button>
           </form>
 

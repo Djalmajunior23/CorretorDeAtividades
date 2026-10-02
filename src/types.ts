@@ -57,14 +57,18 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  isGuest?: boolean;
+  mfaVerified?: boolean;
 }
 
 export interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (token: string, user: User) => void;
+  guestLogin: () => void;
   logout: () => void;
   isLoading: boolean;
+  isDemoMode: boolean;
   diagnoseResponse?: any;
 }
 

@@ -17,6 +17,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Star,
   Award,
   Users,
@@ -45,7 +46,13 @@ import {
   ShieldCheck,
   GitBranch,
   Lightbulb,
-  Target
+  Target,
+  Sliders,
+  GitCompare,
+  ArrowRightLeft,
+  EyeOff,
+  MessageSquare,
+  Bell
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -58,6 +65,23 @@ interface SidebarProps {
   onOpenCommandPalette?: () => void;
 }
 
+interface NavItem {
+  id: string;
+  label: string;
+  icon: any;
+  desc: string;
+  visible?: boolean;
+  isNew?: boolean;
+}
+
+interface NavPillar {
+  id: string;
+  title: string;
+  icon: any;
+  color: string;
+  items: NavItem[];
+}
+
 export default function Sidebar({ 
   currentTab = "dashboard", 
   setTab = () => {}, 
@@ -68,268 +92,323 @@ export default function Sidebar({
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [openPillars, setOpenPillars] = useState<Record<string, boolean>>({
+    ensino: true,
+    atividades: true,
+    correcao: true,
+    aprendizagem: true,
+    gestao: true,
+    administracao: true
+  });
+
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("codecheck_favorites");
-      return saved ? JSON.parse(saved) : ["dashboard", "planejamento"];
+      return saved ? JSON.parse(saved) : ["dashboard", "teacher_review_queue", "guided_refactoring", "activity_validator"];
     } catch {
-      return ["dashboard", "planejamento"];
+      return ["dashboard", "teacher_review_queue", "guided_refactoring", "activity_validator"];
     }
   });
 
-  const menuItems = [
-    { id: "dashboard", label: "Dashboard", icon: Briefcase, desc: "Central de Comando Docente", visible: true },
-    { id: "live_lab_companion", label: "Modo Bancada (Ao Vivo)", icon: Radio, desc: "Mapa de Mesas, Dúvidas & Evidências", visible: true },
-    { id: "teacher_superpowers", label: "Superpoderes Docentes", icon: Sparkles, desc: "Ações 1-Clique, Omnikit & Autopilot", visible: true },
-    { id: "planejamento", label: "Planejamento", icon: Layers, desc: "Ecosistema Semestral F12", visible: true },
-    { id: "aulas", label: "Aulas", icon: FileText, desc: "Registro e Histórico de Aulas", visible: true },
-    { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Diário de Aula Inteligente", visible: featureFlags.ENABLE_SMART_CLASS_DIARY !== false },
-    { id: "turmas", label: "Turmas", icon: Users, desc: "Gestão Corporativa de Turmas", visible: true },
-    { id: "students", label: "Alunos", icon: Users, desc: "Gestão e Importação CSV", visible: true },
-    { id: "notas", label: "Notas", icon: Award, desc: "Gestão de Avaliações e Médias", visible: true },
-    { id: "evidences", label: "Evidências", icon: FileCheck, desc: "Histórico Pedagógico", visible: true },
-    { id: "activities", label: "Atividades", icon: Zap, desc: "Controle de Entregas, IA & Autor", visible: true },
-    { id: "student_portal", label: "Portal do Aluno", icon: GraduationCap, desc: "Visão do Estudante & Submissão", visible: true },
-    { id: "academy_mastery", label: "CiberAcademy Profundo", icon: Brain, desc: "Modelos Mentais, Socrático & SM-2", visible: true },
-    { id: "question_bank", label: "Banco de Questões", icon: Database, desc: "Questões e Desafios IA", visible: true },
-    { id: "batch", label: "Correção em Lote", icon: Layers, desc: "Processamento Massivo ZIP", visible: true },
-    { id: "similarity", label: "Similaridade", icon: FileSearch, desc: "Análise de Códigos", visible: true },
-    { id: "smart_labs", label: "Laboratórios", icon: FlaskConical, desc: "Experimentação & IA", visible: true },
-    { id: "pedagogical_tracks", label: "Trilhas e Planos", icon: ClipboardList, desc: "Recuperação e Intervenção", visible: true },
-    { id: "pedagogical_executive", label: "Painel Executivo", icon: BarChart3, desc: "Coordenação & Analytics", visible: true },
-    { id: "analytics", label: "Analytics Detalhado", icon: BarChart3, desc: "Indicadores de Aprendizagem", visible: false },
-    { id: "resource_library", label: "Biblioteca", icon: Library, desc: "Recursos e Repositório", visible: true },
-    { id: "reports", label: "Pareceres e Relatórios", icon: FileCheck, desc: "Geração de Documentos", visible: true },
-    { id: "avaliacoes", label: "Avaliações", icon: FileText, desc: "Provas, Simulados e Evidências", visible: true },
-    { id: "teacher_classroom_suite", label: "Estúdio de Provas & OMR", icon: Cpu, desc: "Provas A/B/C/D, OMR Express & Labs", visible: true },
-    { id: "super_authoring", label: "Super-Autoria & Sala Global", icon: Sparkles, desc: "Diferenciador 3 Níveis, Alunos Virtuais, Slides & Ghost Mode", visible: true },
-    { id: "corrector", label: "Correções", icon: Terminal, desc: "Parâmetros e Sandbox", visible: true },
-    { id: "diagram_assessment", label: "Diagramas & Modelagem", icon: Network, desc: "Auditoria DER, DDL & UML", visible: true },
-    { id: "competencies", label: "Competências", icon: Award, desc: "Mapeamento Curricular SENAI", visible: featureFlags.ENABLE_COMPETENCY_MANAGER !== false },
-    { id: "skill_tree", label: "Skill Tree & Portfólio", icon: Network, desc: "Grafo Curricular & Portfólio Tech", visible: true },
-    { id: "recuperacao", label: "Recuperação", icon: RefreshCw, desc: "Estudos Paralelos F13", visible: true },
-    { id: "materiais", label: "Materiais", icon: BookOpen, desc: "Biblioteca & Apoio Didático", visible: true },
-    { id: "assistant", label: "Assistente IA", icon: Sparkles, desc: "Copiloto Pedagógico IA", visible: featureFlags.ENABLE_TEACHER_AI_ASSISTANT !== false },
-    { id: "help_center", label: "Central de Ajuda", icon: HelpCircle, desc: "Manual, FAQ e Onboarding", visible: true },
-    { id: "system_health", label: "Saúde do Sistema", icon: Activity, desc: "Status e Auditoria", visible: true },
-    { id: "multi_agent", label: "Multi-Agent IA", icon: Cpu, desc: "Agentes Especializados RAG", visible: true },
-    { id: "predictive_analytics", label: "Analytics Preditivo", icon: TrendingUp, desc: "Previsão de Evasão & Risco", visible: true },
-    { id: "ai_predictive_insights", label: "Insights Preditivos IA", icon: TrendingUp, desc: "Previsão de Evasão (AI_PEDAGOGICAL_MODEL)", visible: true },
-    { id: "ai_executive_dashboard", label: "Dashboard Executivo IA", icon: BarChart2, desc: "AI_PEDAGOGICAL_MODEL • Prazos & SLAs", visible: true },
-    { id: "ai_visionary_teacher", label: "IA Visionary Teacher", icon: Sparkles, desc: "AI_GENERAL_MODEL • Variações de Exercícios", visible: true },
-    { id: "ai_vision_model", label: "Visão IA (LLaVA)", icon: Eye, desc: "AI_VISION_MODEL • OCR & Rubrica", visible: true },
-    { id: "ai_curriculum_architect", label: "Arquiteto Escolar", icon: BookOpen, desc: "AI_GENERAL_MODEL • Ementas, Matrizes & SLAs", visible: true },
-    { id: "predictive_performance", label: "Desempenho Preditivo", icon: TrendingUp, desc: "AI_PEDAGOGICAL_MODEL • Retenção e Bloqueio", visible: true },
-    { id: "collab_sandbox", label: "Sandbox Live", icon: Users, desc: "Programação Colaborativa", visible: true },
-    { id: "lms_integration", label: "Integração LMS", icon: BookOpen, desc: "Moodle & Google Classroom", visible: true },
-    { id: "ai_powerhouse", label: "Super IA do Professor", icon: Sparkles, desc: "Banca Socrática, Aulas & Forense", visible: true },
-    { id: "complex_activities", label: "Atividades Complexas & Estudo de Caso", icon: Target, desc: "Comando Rígido, Test-Drive, SAEP & Voz", visible: true },
-    { id: "item_bank_studio", label: "Banco de Itens & Engenharia de Provas", icon: Layers, desc: "TRI, Distratores, Anti-Cola & Cadernos A/B/C/D", visible: true },
-    { id: "tech_interview", label: "Mock Interview & Empregabilidade", icon: Briefcase, desc: "STAR, Live Coding & Laudo PDF", visible: true },
-    { id: "cognitive_radar", label: "Radar Cognitivo Live", icon: Activity, desc: "Cadência, Churn & Micro-Dicas IA", visible: true },
-    { id: "capstone_architect", label: "Arquiteto Capstone & PBL", icon: Layers, desc: "Gherkin, Squads & Rubricas 360°", visible: true },
-    { id: "code_arena", label: "Code Arena & Duelos", icon: Swords, desc: "1v1, Co-op & Ranking Elo", visible: true },
-    { id: "pr_review", label: "AI Code Review & PR", icon: GitPullRequest, desc: "GitOps, Clean Code & Diff", visible: true },
-    { id: "mutation_lab", label: "Mutation Testing Lab", icon: Bug, desc: "TDD & Testes de Mutação", visible: true },
-    { id: "a11y_inspector", label: "Inspetor de Acessibilidade", icon: Eye, desc: "WCAG 2.2, Contraste & Daltonismo", visible: true },
-    { id: "arch_board", label: "Banca de Arquitetura", icon: Building2, desc: "Sabatina Multi-Agente & ADR", visible: true },
-    { id: "devsecops_lab", label: "DevSecOps Red/Blue Lab", icon: ShieldAlert, desc: "STRIDE, DREAD & Exploit Red/Blue", visible: true },
-    { id: "chaos_simulator", label: "Chaos Engineering Lab", icon: Flame, desc: "Stress, Jitter & Circuit Breakers", visible: true },
-    { id: "pair_copilot", label: "AI Pair Copilot & TDD", icon: Users, desc: "Mentoria Socrática & Ping-Pong TDD", visible: true },
-    { id: "saep_readiness", label: "SAEP / ENADE Simulator", icon: GraduationCap, desc: "Matriz CHA, TRI & Plano de Ação", visible: true },
-    { id: "wasm_sandbox", label: "Wasm Micro-VM Sandbox", icon: Cpu, desc: "Compilador & Micro-VM In-Browser", visible: true },
-    { id: "viva_voce", label: "AI Viva-Voce Arguição Oral", icon: Volume2, desc: "Defesa Técnica & Oratória por Voz", visible: true },
-    { id: "agile_squad", label: "Virtual Agile Scrum Squad", icon: Users, desc: "Scrum Master AI, PO & GitOps", visible: true },
-    { id: "iot_industry", label: "Indústria 4.0 & IoT Lab", icon: Radio, desc: "Hardware-in-the-Loop & MQTT", visible: true },
-    { id: "pedagogical_authoring", label: "Estúdio de Autoria Docente", icon: BookOpen, desc: "Apostilas, SA (CHA), Debug Labs & ADR", visible: true },
-    { id: "parametric_exam", label: "Provas Paramétricas Anti-Cola", icon: ShieldCheck, desc: "Variantes A/B/C/D & Dossiê PDF", visible: true },
-    { id: "git_autograde", label: "GitHub & GitLab CI/CD", icon: GitBranch, desc: "Auto-Grading & Webhook Studio", visible: true },
-    { id: "socratic_tutor", label: "Tutor Socrático Adaptativo", icon: Lightbulb, desc: "Scaffolding em 4 Degraus & Radar", visible: true },
-    { id: "advanced_ai", label: "Hub de IA Avançada", icon: Brain, desc: "Visão, Redes Neurais & NLP", visible: true },
-    { id: "settings", label: "Configurações", icon: Settings, desc: "Conexões e Chaves", visible: true },
-  ];
-
-  const filteredItems = menuItems.filter(item => {
-    if (!item.visible) return false;
-    if (!searchQuery) return true;
-    return item.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
-           item.desc.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const togglePillar = (pillarId: string) => {
+    setOpenPillars(prev => ({ ...prev, [pillarId]: !prev[pillarId] }));
+  };
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    let updated;
-    if (favorites.includes(id)) {
-      updated = favorites.filter(fav => fav !== id);
-    } else {
-      updated = [...favorites, id];
-    }
-    setFavorites(updated);
-    localStorage.setItem("codecheck_favorites", JSON.stringify(updated));
+    setFavorites(prev => {
+      const next = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      localStorage.setItem("codecheck_favorites", JSON.stringify(next));
+      return next;
+    });
   };
 
+  // 6 Core Pedagogical Pillars Configuration
+  const pillars: NavPillar[] = [
+    {
+      id: "ensino",
+      title: "1. Ensino & Sala de Aula",
+      icon: BookOpen,
+      color: "text-emerald-400",
+      items: [
+        { id: "class_operations_central", label: "Central de Operações da Turma", icon: Activity, desc: "Cockpit Operacional, Entregas & Falhas", isNew: true },
+        { id: "teacher_my_day", label: "Meu Dia Docente", icon: Briefcase, desc: "Agenda Diária, Materiais & Retomada 1-Clique", isNew: true },
+        { id: "teacher_action_queue", label: "Fila Inteligente de Trabalho", icon: ClipboardList, desc: "Triagem de Correções, Dúvidas & Reforços", isNew: true },
+        { id: "smart_lesson_planner", label: "Preparação da Próxima Aula", icon: Sparkles, desc: "Roteiro em 5 Blocos Baseado em Evidências", isNew: true },
+        { id: "quick_understanding_check", label: "Verificação Rápida (Exit Ticket)", icon: HelpCircle, desc: "Checkpoints de Entendimento & Predição de Código", isNew: true },
+        { id: "assisted_class_diary", label: "Registro de Aula Assistido", icon: BookOpen, desc: "Diário Homologado com Evidências de Bancada", isNew: true },
+        { id: "dashboard", label: "Dashboard Docente", icon: Briefcase, desc: "Central de Comando & Métricas" },
+        { id: "live_lab_companion", label: "Modo Bancada (Ao Vivo)", icon: Radio, desc: "Mapa de Mesas & Dúvidas em Tempo Real" },
+        { id: "teacher_superpowers", label: "Superpoderes Docentes", icon: Sparkles, desc: "Ações 1-Clique, Omnikit & Autopilot" },
+        { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Registro Inteligente de Frequência & Aulas" },
+        { id: "planejamento", label: "Planejamento Semestral", icon: Layers, desc: "Ecosistema Curricular & Cronograma" },
+        { id: "turmas", label: "Turmas & Alunos", icon: Users, desc: "Gestão Corporativa de Turmas" },
+        { id: "materiais", label: "Materiais & Apoio", icon: Library, desc: "Repositório Didático & Apostilas" }
+      ]
+    },
+    {
+      id: "atividades",
+      title: "2. Atividades & Avaliações",
+      icon: Target,
+      color: "text-cyan-400",
+      items: [
+        { id: "student_experience_preview", label: "Prévia como Aluno", icon: Eye, desc: "Experiência do Estudante & Ensaio", isNew: true },
+        { id: "activity_validator", label: "Validador Pré-Publicação", icon: ShieldCheck, desc: "QA Automatizado do Gabarito & Rubrica", isNew: true },
+        { id: "pedagogical_authoring", label: "Estúdio de Autoria", icon: BookOpen, desc: "Criação de Atividades, SA & Desafios" },
+        { id: "question_bank", label: "Banco de Questões", icon: Database, desc: "Questões & Desafios com IA" },
+        { id: "parametric_exam", label: "Provas Paramétricas Anti-Cola", icon: ShieldCheck, desc: "Variantes A/B/C/D & Dossiê PDF" },
+        { id: "item_bank_studio", label: "Banco de Itens (TRI)", icon: Layers, desc: "Engenharia de Provas & Distratores" }
+      ]
+    },
+    {
+      id: "correcao",
+      title: "3. Correção & Auditoria",
+      icon: Terminal,
+      color: "text-amber-400",
+      items: [
+        { id: "blind_grading_studio", label: "Correção sem Identificação", icon: EyeOff, desc: "Avaliação Duplo-Cega por Pseudônimos", isNew: true },
+        { id: "reusable_feedback_bank", label: "Banco de Feedback @Tags", icon: MessageSquare, desc: "Biblioteca de Snippets por Competência", isNew: true },
+        { id: "teacher_review_queue", label: "Central de Revisão Docente", icon: ShieldCheck, desc: "Fila de Triagem, Recursos & Homologação", isNew: true },
+        { id: "batch", label: "Correção em Lote (ZIP/CSV)", icon: Layers, desc: "Processamento Massivo com Mapeamento" },
+        { id: "similarity", label: "Similaridade & Plágio", icon: FileSearch, desc: "Análise Estática & Comparação Forense" },
+        { id: "avaliacoes", label: "Histórico de Avaliações", icon: FileText, desc: "Submissões, Notas & Pareceres" },
+        { id: "diagram_assessment", label: "Diagramas & Modelagem", icon: Network, desc: "Auditoria DER, DDL & UML" }
+      ]
+    },
+    {
+      id: "aprendizagem",
+      title: "4. Aprendizagem & Evolução",
+      icon: Brain,
+      color: "text-indigo-400",
+      items: [
+        { id: "guided_refactoring", label: "Ciclo de Refação Orientada", icon: RefreshCw, desc: "Scaffolding, Dicas & Justificativa", isNew: true },
+        { id: "student_portal", label: "Portal do Aluno", icon: GraduationCap, desc: "Ambiente do Estudante & Submissões" },
+        { id: "pedagogical_tracks", label: "Trilhas de Aprendizagem", icon: ClipboardList, desc: "Planos de Estudos & Nivelamento" },
+        { id: "competencies", label: "Competências & Habilidades", icon: Award, desc: "Matriz Curricular SENAI" },
+        { id: "skill_tree", label: "Skill Tree & Portfólio", icon: Network, desc: "Grafo Curricular & Portfólio Tech" },
+        { id: "socratic_tutor", label: "Tutor Socrático Adaptativo", icon: Lightbulb, desc: "Mentoria Guiada em 4 Degraus" }
+      ]
+    },
+    {
+      id: "gestao",
+      title: "5. Gestão & Diagnóstico",
+      icon: BarChart3,
+      color: "text-fuchsia-400",
+      items: [
+        { id: "pedagogical_config_hierarchy", label: "Configurações em Cascata", icon: Sliders, desc: "Instituição ➔ Turma ➔ Atividade", isNew: true },
+        { id: "unified_notification_center", label: "Centro de Notificações", icon: Bell, desc: "Avisos Multi-Canal & Privacidade", isNew: true },
+        { id: "grade_rule_simulator", label: "Simulador de Regras de Notas", icon: Sliders, desc: "What-If de Pesos, Recuperação & Descarte", isNew: true },
+        { id: "cohort_comparison", label: "Comparação entre Ofertas", icon: GitCompare, desc: "Análise Longitudinal & Discrepâncias de Rubricas", isNew: true },
+        { id: "teacher_handover", label: "Passagem de Turma (Dossiê)", icon: ArrowRightLeft, desc: "Transição Pedagógica Segura com Selo SHA-256", isNew: true },
+        { id: "diagnostic_intervention", label: "Diagnóstico & Intervenção", icon: Activity, desc: "Clusters de Erros & Reforço 1-Clique", isNew: true },
+        { id: "educational_analytics", label: "Analytics Educacional", icon: TrendingUp, desc: "Indicadores de Aprendizagem & Risco" },
+        { id: "reports", label: "Pareceres & Relatórios", icon: FileCheck, desc: "Documentos Oficiais & Exportação PDF/XLSX" },
+        { id: "saep_readiness", label: "Simulador SAEP / ENADE", icon: GraduationCap, desc: "Matriz CHA, TRI & Plano de Ação" }
+      ]
+    },
+    {
+      id: "administracao",
+      title: "6. Administração & Infraestrutura",
+      icon: Settings,
+      color: "text-rose-400",
+      items: [
+        { id: "sql_dialect_lab", label: "Laboratório SQL Multi-Dialeto", icon: Database, desc: "PostgreSQL, MySQL & SQLite Isolados", isNew: true },
+        { id: "peer_review", label: "Revisão por Pares (Peer Review)", icon: Users, desc: "Avaliação Duplo-Cega & Moderação", isNew: true },
+        { id: "system_health", label: "Saúde do Sistema & Observabilidade", icon: Activity, desc: "Telemetria Real de BD, IA & Sandbox" },
+        { id: "git_autograde", label: "GitHub & GitLab CI/CD", icon: GitBranch, desc: "Webhooks & Auto-Grading Remoto" },
+        { id: "settings", label: "Configurações de Segurança", icon: Settings, desc: "Chaves de Criptografia & Cofre AES-GCM" }
+      ]
+    }
+  ];
+
+  // Flat all items helper for search and favorites
+  const allNavItems = pillars.flatMap(p => p.items);
+  const favoriteItems = allNavItems.filter(item => favorites.includes(item.id));
+
   return (
-    <motion.aside 
-      animate={{ width: isCollapsed ? 80 : 320 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="border-r border-slate-800 bg-[#070b19] p-4 flex flex-col h-full justify-between relative select-none"
-    >
-      <div className="flex flex-col gap-6">
-        {/* Brand Header */}
-        <div className="flex items-center justify-between gap-2 mt-2">
-          {!isCollapsed && (
-            <motion.div 
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-3"
-            >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <Zap className="w-4.5 h-4.5 text-[#030712] stroke-[2.5]" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-tight text-white leading-none">CodeCheck</h1>
-                <span className="text-[9px] text-[#10b981] font-mono uppercase tracking-widest font-semibold">ECOSISTEMA CORE</span>
-              </div>
-            </motion.div>
-          )}
-
-          {isCollapsed && (
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
-              <Zap className="w-5 h-5 text-[#030712] stroke-[2.5]" />
-            </div>
-          )}
-
-          {/* Collapse toggle */}
-          <button 
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1.5 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 transition-all absolute -right-3 top-6 z-10 shadow-md"
-          >
-            {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-
-        {/* Quick Search */}
+    <aside className={`${isCollapsed ? "w-20" : "w-72"} transition-all duration-300 bg-[#040815] border-r border-slate-800/80 flex flex-col h-full select-none z-50 shrink-0 shadow-2xl`}>
+      {/* Brand Header */}
+      <div className="h-20 border-b border-slate-800/80 px-4 flex items-center justify-between">
         {!isCollapsed && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="relative"
-          >
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-            <input 
-              type="text"
-              placeholder="Buscar ferramenta..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-2 pl-9 pr-14 text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all"
-            />
-            <button
-              onClick={onOpenCommandPalette}
-              title="Abrir Command Palette (Ctrl+K)"
-              className="absolute right-2 top-2 px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[9px] font-mono text-slate-400 border border-slate-700/60 transition-colors cursor-pointer"
-            >
-              ⌘K
-            </button>
-          </motion.div>
-        )}
-
-        {/* Navigation */}
-        <nav className="flex flex-col gap-3 overflow-y-auto max-h-[60vh] scrollbar-none pr-1">
-          {!isCollapsed && (
-            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1 font-bold px-2">
-              Menu Principal
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 ring-1 ring-white/20">
+              <Zap className="w-5 h-5 text-slate-950 fill-slate-950" />
             </div>
-          )}
-
-          {filteredItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentTab === item.id;
-            const isFav = favorites.includes(item.id);
-
-            return (
-              <div
-                key={item.id}
-                onClick={() => setTab(item.id)}
-                title={isCollapsed ? item.label : item.desc}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    setTab(item.id);
-                  }
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all duration-200 text-left relative group cursor-pointer ${
-                  isActive 
-                    ? "bg-slate-800/90 text-white shadow-sm border border-slate-700/60 font-semibold" 
-                    : "text-slate-300 hover:text-white hover:bg-slate-900/80 font-medium"
-                }`}
-              >
-                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  <Icon className={`w-5 h-5 shrink-0 transition-transform duration-200 group-hover:scale-110 ${isActive ? "text-emerald-400" : "text-slate-400 group-hover:text-slate-200"}`} />
-                  {!isCollapsed && (
-                    <span className={`text-sm tracking-tight truncate ${isActive ? "text-white font-bold" : "text-slate-200 group-hover:text-white"}`}>
-                      {item.label}
-                    </span>
-                  )}
-                </div>
-
-                {!isCollapsed && (
-                  <button 
-                    onClick={(e) => toggleFavorite(item.id, e)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-800 transition-all text-slate-500 hover:text-yellow-400 shrink-0 ml-2"
-                  >
-                    <Star className={`w-3.5 h-3.5 ${isFav ? "fill-yellow-400 text-yellow-400" : ""}`} />
-                  </button>
-                )}
-
-                {isActive && (
-                  <div className="absolute left-0 top-2 bottom-2 w-1 bg-emerald-400 rounded-r-md shadow-lg shadow-emerald-400/50" />
-                )}
-              </div>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Cloud SQL connection widget */}
-      <div className={`p-3.5 rounded-2xl bg-slate-900/30 border border-slate-800/60 mt-auto ${isCollapsed ? "items-center flex justify-center" : ""}`}>
-        {!isCollapsed ? (
-          <>
-            <div className="flex items-center gap-2 mb-1.5">
-              <Database className="w-3.5 h-3.5 text-slate-500" />
-              <h3 className="text-xs font-semibold text-slate-300">Banco de Dados</h3>
-            </div>
-            <p className="text-[10px] text-slate-500 leading-normal mb-3 font-medium">
-              Armazenamento persistente e logs analíticos ativos.
-            </p>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="relative flex h-2 w-2">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${dbConnected ? "bg-emerald-400" : "bg-sky-400"}`} />
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${dbConnected ? "bg-emerald-500" : "bg-sky-500"}`} />
-              </span>
-              <span className="text-[9px] font-mono font-medium text-slate-400">
-                {dbConnected ? "PostgreSQL Ativo" : "Modo Cache Iniciado"}
+            <div className="flex flex-col">
+              <span className="font-bold text-sm text-white font-display tracking-wide">CodeCheck 2026</span>
+              <span className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Zero Trust • ASVS 5.0
               </span>
             </div>
-            <button
-              onClick={onOpenExportModal}
-              className="w-full py-2 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-mono text-xs font-bold border border-emerald-500/20 transition-all flex items-center justify-center gap-1.5 shadow-sm"
-              title="Exportar Histórico de Submissões para PowerBI ou Excel"
-            >
-              📥 Exportar Submissões (BI)
-            </button>
-          </>
-        ) : (
-          <div className="relative">
-            <span className={`absolute -top-1 -right-1 flex h-2 w-2`}>
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${dbConnected ? "bg-emerald-400" : "bg-sky-400"}`} />
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${dbConnected ? "bg-emerald-500" : "bg-sky-500"}`} />
-            </span>
-            <Database className="w-5 h-5 text-slate-400" />
           </div>
         )}
+
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white transition-all mx-auto cursor-pointer"
+          title={isCollapsed ? "Expandir Menu" : "Recolher Menu"}
+        >
+          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
       </div>
-    </motion.aside>
+
+      {/* Global Quick Search / Shortcut Palette Button */}
+      {!isCollapsed && (
+        <div className="p-3 border-b border-slate-800/60 flex flex-col gap-2">
+          <button
+            onClick={onOpenCommandPalette}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition-all"
+          >
+            <span className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Buscar módulo...</span>
+            </span>
+            <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-400 font-mono">Ctrl+K</kbd>
+          </button>
+
+          {/* Quick Filter inside Sidebar */}
+          <input
+            type="text"
+            placeholder="Filtrar menus..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500/50"
+          />
+        </div>
+      )}
+
+      {/* Navigation Body */}
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-4 scrollbar-thin">
+        {/* FAVORITES SECTION (Pinned Quick Access) */}
+        {!isCollapsed && favoriteItems.length > 0 && !searchQuery && (
+          <div className="flex flex-col gap-1 pb-3 border-b border-slate-800/60">
+            <span className="text-[10px] uppercase font-mono font-bold text-amber-400 flex items-center gap-1.5 px-2 mb-1">
+              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+              Favoritos Fixados
+            </span>
+            <div className="flex flex-col gap-1">
+              {favoriteItems.map(item => {
+                const Icon = item.icon;
+                const isSelected = currentTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setTab(item.id)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-mono transition-all text-left group ${
+                      isSelected
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                        : "text-slate-300 hover:bg-slate-900/60 hover:text-white"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5 truncate">
+                      <Icon className={`w-4 h-4 ${isSelected ? "text-amber-400" : "text-slate-400 group-hover:text-amber-300"}`} />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    <Star
+                      onClick={(e) => toggleFavorite(item.id, e)}
+                      className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0 hover:scale-125 transition-transform"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 6 PILLARS ACCORDION */}
+        {pillars.map(pillar => {
+          const PillarIcon = pillar.icon;
+          const isOpen = openPillars[pillar.id] ?? true;
+
+          const filteredItems = pillar.items.filter(item => {
+            if (!searchQuery) return true;
+            return item.label.toLowerCase().includes(searchQuery.toLowerCase()) || item.desc.toLowerCase().includes(searchQuery.toLowerCase());
+          });
+
+          if (filteredItems.length === 0) return null;
+
+          return (
+            <div key={pillar.id} className="flex flex-col gap-1">
+              {!isCollapsed && (
+                <button
+                  onClick={() => togglePillar(pillar.id)}
+                  className="flex items-center justify-between px-2 py-1.5 text-slate-400 hover:text-slate-200 text-xs font-bold font-mono uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <PillarIcon className={`w-3.5 h-3.5 ${pillar.color}`} />
+                    <span className="text-[11px] font-bold text-slate-300">{pillar.title}</span>
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+                </button>
+              )}
+
+              {(isOpen || isCollapsed || searchQuery) && (
+                <div className="flex flex-col gap-1 pl-1">
+                  {filteredItems.map(item => {
+                    const ItemIcon = item.icon;
+                    const isSelected = currentTab === item.id;
+                    const isFav = favorites.includes(item.id);
+
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setTab(item.id)}
+                        title={item.desc}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all text-left group cursor-pointer ${
+                          isSelected
+                            ? "bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 shadow-sm font-semibold"
+                            : "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2.5 truncate">
+                          <ItemIcon className={`w-4 h-4 shrink-0 ${isSelected ? "text-cyan-400" : "text-slate-500 group-hover:text-slate-300"}`} />
+                          {!isCollapsed && (
+                            <span className="truncate font-sans text-xs flex items-center gap-1.5">
+                              <span>{item.label}</span>
+                              {item.isNew && (
+                                <span className="px-1.5 py-0.2 rounded text-[8px] font-mono font-bold bg-cyan-500/30 text-cyan-300 border border-cyan-500/40">
+                                  NOVO
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </span>
+
+                        {!isCollapsed && (
+                          <Star
+                            onClick={(e) => toggleFavorite(item.id, e)}
+                            className={`w-3.5 h-3.5 shrink-0 transition-all ${
+                              isFav
+                                ? "text-amber-400 fill-amber-400"
+                                : "text-transparent group-hover:text-slate-600 hover:text-amber-400"
+                            }`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer System Status */}
+      <div className="p-4 border-t border-slate-800/80 bg-[#030612] flex flex-col gap-2 text-xs font-mono">
+        {!isCollapsed ? (
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[10px] text-slate-500">PostgreSQL + Sandbox</span>
+            <span className="flex items-center gap-1.5 text-emerald-400 text-[10px] font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              ONLINE
+            </span>
+          </div>
+        ) : (
+          <span className="w-2 h-2 rounded-full bg-emerald-400 mx-auto animate-pulse" title="Host Online" />
+        )}
+      </div>
+    </aside>
   );
 }
-

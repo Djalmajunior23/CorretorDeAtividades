@@ -18,10 +18,17 @@ export const apiUrl = (path: string) => {
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   try {
+    const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+    const authHeaders: Record<string, string> = {};
+    if (token) {
+      authHeaders["Authorization"] = `Bearer ${token}`;
+    }
+
     const response = await fetch(apiUrl(path), {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...authHeaders,
         ...(options.headers || {})
       },
       credentials: options.credentials || "same-origin"

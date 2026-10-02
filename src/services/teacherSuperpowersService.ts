@@ -1,4 +1,5 @@
 import { ProviderFactory, CustomAIRequestOptions } from "../ai/factory/ProviderFactory";
+import { ConfidentialFileVault, EncryptedFilePackage } from "../security/ConfidentialFileVault";
 
 export interface OmnikitLessonPlan {
   id: string;
@@ -225,8 +226,8 @@ export class TeacherSuperpowersService {
     language?: string;
     customAI?: CustomAIRequestOptions;
   }): Promise<OmnikitLessonPlan> {
-    const topic = params.topic || "Manipulação de Estruturas de Dados e Algoritmos de Busca";
-    const targetAudience = params.targetAudience || "Curso Técnico em Desenvolvimento de Sistemas - SENAI";
+    const topic = ConfidentialFileVault.sanitizeInputAgainstInjection(params.topic || "Manipulação de Estruturas de Dados e Algoritmos de Busca").sanitizedText;
+    const targetAudience = ConfidentialFileVault.sanitizeInputAgainstInjection(params.targetAudience || "Curso Técnico em Desenvolvimento de Sistemas - SENAI").sanitizedText;
     const durationMinutes = params.durationMinutes || 90;
     const language = params.language || "javascript";
 
@@ -513,11 +514,16 @@ Formato estrito JSON:
       }
     ];
 
+    const sanitizedSubmissions = submissions.map((s) => ({
+      ...s,
+      submittedCode: ConfidentialFileVault.sanitizeInputAgainstInjection(s.submittedCode).sanitizedText
+    }));
+
     const prompt = `Você é o Corretor Pedagógico IA do SENAI.
 Realize a avaliação em lote (Batch Auto-Grading) das submissões de código dos estudantes na atividade: "${activityTitle}".
 
 SUBMISSÕES:
-${JSON.stringify(submissions, null, 2)}
+${JSON.stringify(sanitizedSubmissions, null, 2)}
 
 Para cada estudante avalie:
 - evaluatedScore (0 a 100)
@@ -994,5 +1000,75 @@ Gere JSON estrito:
         generatedAt: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * =========================================================================
+   * DEFENSE-IN-DEPTH: PEDAGOGICAL VAULT ENCRYPTED EXPORT & IMPORT
+   * =========================================================================
+   */
+
+  /**
+   * Exporta um registro oficial do diário de classe criptografado com AES-256-GCM e HMAC
+   */
+  public static exportEncryptedClassDiary(
+    diaryRecord: SmartDiaryRecord,
+    ownerId?: string
+  ): EncryptedFilePackage {
+    return ConfidentialFileVault.encryptConfidentialFile({
+      fileName: `class-diary-${diaryRecord.recordId}.json`,
+      category: "PEDAGOGICAL_RECORDS",
+      content: JSON.stringify(diaryRecord),
+      ownerId: ownerId || "docente-senai",
+      metadata: {
+        recordId: diaryRecord.recordId,
+        className: diaryRecord.className,
+        date: diaryRecord.date,
+        curricularUnit: diaryRecord.curricularUnit
+      }
+    });
+  }
+
+  /**
+   * Decodifica um registro do diário de classe a partir de seu pacote criptografado
+   */
+  public static importEncryptedClassDiary(
+    pkg: EncryptedFilePackage,
+    actorId: string = "system"
+  ): SmartDiaryRecord {
+    const decrypted = ConfidentialFileVault.decryptConfidentialFile(pkg, actorId);
+    return JSON.parse(decrypted.plainContent) as SmartDiaryRecord;
+  }
+
+  /**
+   * Exporta um plano de intervenção preventiva pedagógica criptografado
+   */
+  public static exportEncryptedInterventionPlan(
+    plan: PreventiveInterventionPlan,
+    ownerId?: string
+  ): EncryptedFilePackage {
+    return ConfidentialFileVault.encryptConfidentialFile({
+      fileName: `intervention-plan-${plan.planId}.json`,
+      category: "STUDENT_DOSSIERS",
+      content: JSON.stringify(plan),
+      ownerId: ownerId || "docente-senai",
+      metadata: {
+        planId: plan.planId,
+        studentId: plan.studentId,
+        studentName: plan.studentName,
+        riskScore: plan.riskScore
+      }
+    });
+  }
+
+  /**
+   * Decodifica um plano de intervenção a partir de seu pacote criptografado
+   */
+  public static importEncryptedInterventionPlan(
+    pkg: EncryptedFilePackage,
+    actorId: string = "system"
+  ): PreventiveInterventionPlan {
+    const decrypted = ConfidentialFileVault.decryptConfidentialFile(pkg, actorId);
+    return JSON.parse(decrypted.plainContent) as PreventiveInterventionPlan;
   }
 }

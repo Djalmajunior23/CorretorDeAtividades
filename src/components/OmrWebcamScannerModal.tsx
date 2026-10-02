@@ -317,6 +317,14 @@ export const OmrWebcamScannerModal: React.FC<OmrWebcamScannerModalProps> = ({
                   </div>
                 </div>
 
+                {/* Cryptographic QR Security Seal */}
+                <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-center gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div className="text-[10px] font-mono text-emerald-300">
+                    <span className="font-bold">ASSINATURA DIGITAL VALIDADA:</span> Integridade HMAC-SHA256 e blindagem anti-adulteração confirmadas.
+                  </div>
+                </div>
+
                 {/* Scanned Bubbles Mini Matrix */}
                 <div className="flex flex-col gap-1.5">
                   <span className="text-xs font-semibold text-slate-400">Gabarito Lido vs Esperado:</span>

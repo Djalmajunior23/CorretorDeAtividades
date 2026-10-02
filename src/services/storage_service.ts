@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { ConfidentialFileVault, ConfidentialCategory, EncryptedFilePackage } from "../security/ConfidentialFileVault";
 
 // Categorias e seus caminhos mapeados pelas variáveis de ambiente ou fallbacks
 export const CATEGORY_DIRS = {
@@ -9,6 +10,7 @@ export const CATEGORY_DIRS = {
   materials: process.env.MATERIALS_DIR || path.join(process.env.PERSISTENT_VOLUME_PATH || "/data", "materials"),
   tmp: process.env.TEMP_DIR || path.join(process.env.PERSISTENT_VOLUME_PATH || "/data", "tmp"),
   backups: process.env.BACKUPS_DIR || path.join(process.env.PERSISTENT_VOLUME_PATH || "/data", "backups"),
+  vault: process.env.VAULT_DIR || path.join(process.env.PERSISTENT_VOLUME_PATH || "/data", "vault"),
 };
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -289,5 +291,112 @@ export class StorageService {
     } catch (err) {
       console.error("[STORAGE] Erro ao limpar arquivos temporários antigos:", err);
     }
+  }
+
+  /**
+   * =========================================================================
+   * DEFENSE-IN-DEPTH: CONFIDENTIAL VAULT ENCRYPTED STORAGE (AES-256-GCM + HMAC)
+   * =========================================================================
+   */
+
+  /**
+   * Criptografa e armazena um arquivo confidencial no cofre de segurança.
+   * Utiliza envelope criptográfico AES-256-GCM com hash SHA-256 e assinatura HMAC.
+   */
+  public saveConfidentialFile(
+    fileContent: Buffer | string,
+    filename: string,
+    category: ConfidentialCategory = "PEDAGOGICAL_RECORDS",
+    ownerId?: string,
+    metadata?: Record<string, unknown>
+  ): { success: boolean; package?: EncryptedFilePackage; filepath?: string; error?: string } {
+    this.ensureDirectories();
+
+    const sanitized = this.sanitizeFilename(filename);
+    const vaultFilename = `${sanitized}.vault.json`;
+    const targetPath = path.resolve(CATEGORY_DIRS.vault, vaultFilename);
+
+    if (!targetPath.startsWith(path.resolve(CATEGORY_DIRS.vault))) {
+      return { success: false, error: "Path traversal detectado e impedido no Vault." };
+    }
+
+    try {
+      const encryptedPackage = ConfidentialFileVault.encryptConfidentialFile({
+        fileName: sanitized,
+        category,
+        content: fileContent,
+        ownerId,
+        metadata
+      });
+
+      fs.writeFileSync(targetPath, JSON.stringify(encryptedPackage, null, 2), "utf8");
+
+      return {
+        success: true,
+        package: encryptedPackage,
+        filepath: targetPath
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: `Falha ao criptografar e salvar arquivo confidencial: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * Recupera e decodifica um arquivo confidencial do cofre com verificação estrita
+   * de HMAC, AuthTag do GCM e Checksum SHA-256.
+   */
+  public getConfidentialFile(
+    filename: string,
+    actorId: string = "system"
+  ): { success: boolean; content?: string; buffer?: Buffer; package?: EncryptedFilePackage; error?: string } {
+    const sanitized = this.sanitizeFilename(filename);
+    const vaultFilename = sanitized.endsWith(".vault.json") ? sanitized : `${sanitized}.vault.json`;
+    const targetPath = path.resolve(CATEGORY_DIRS.vault, vaultFilename);
+
+    if (!targetPath.startsWith(path.resolve(CATEGORY_DIRS.vault))) {
+      return { success: false, error: "Path traversal detectado e impedido no Vault." };
+    }
+
+    if (!fs.existsSync(targetPath)) {
+      return { success: false, error: "Arquivo confidencial não encontrado no cofre." };
+    }
+
+    try {
+      const rawJson = fs.readFileSync(targetPath, "utf8");
+      const pkg: EncryptedFilePackage = JSON.parse(rawJson);
+
+      const decrypted = ConfidentialFileVault.decryptConfidentialFile(pkg, actorId);
+
+      return {
+        success: true,
+        content: decrypted.plainContent,
+        buffer: decrypted.buffer,
+        package: pkg
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: `Falha na integridade ou decodificação do cofre: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * Calcula o hash criptográfico SHA-256 de um conteúdo ou buffer
+   */
+  public calculateSha256(content: Buffer | string): string {
+    const buf = Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8");
+    return crypto.createHash("sha256").update(buf).digest("hex");
+  }
+
+  /**
+   * Verifica se o hash SHA-256 fornecido coincide exatamente com o conteúdo
+   */
+  public verifySha256(content: Buffer | string, expectedHash: string): boolean {
+    const actual = this.calculateSha256(content);
+    return actual.toLowerCase() === expectedHash.toLowerCase();
   }
 }
