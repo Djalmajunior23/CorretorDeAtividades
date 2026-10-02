@@ -12,7 +12,7 @@
  * ============================================================================
  */
 
-import crypto from "crypto";
+import { IsomorphicCrypto as crypto } from "../utils/isomorphicCrypto";
 
 export interface RubricCriterionSnapshot {
   id: string;

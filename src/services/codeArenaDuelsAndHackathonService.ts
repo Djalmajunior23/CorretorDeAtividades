@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import { IsomorphicCrypto as crypto } from "../utils/isomorphicCrypto";
 
 export interface DuelistPlayer {
   id: string;

@@ -17,7 +17,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import { RefactoringCycleService, RefactoringSession, ProgressiveHint } from "../services/refactoringCycleService";
-import { executeInSandbox } from "../../sandbox";
+import { executeInSandbox } from "../services/sandboxClientService";
 
 export default function GuidedRefactoringCycleView() {
   const [session, setSession] = useState<RefactoringSession>(() => {

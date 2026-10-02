@@ -12,7 +12,7 @@
  * ============================================================================
  */
 
-import { executeInSandbox } from "../../sandbox";
+import { executeInSandbox } from "./sandboxClientService";
 
 export interface ActivityTestCaseDefinition {
   id: string;

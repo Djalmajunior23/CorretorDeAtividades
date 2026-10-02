@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { safeAutoTable, getAutoTableFinalY } from "../utils/pdfExport";
-import crypto from "crypto";
+import { IsomorphicCrypto as crypto } from "../utils/isomorphicCrypto";
 
 export interface DigitalMicroCredential {
   credentialId: string;

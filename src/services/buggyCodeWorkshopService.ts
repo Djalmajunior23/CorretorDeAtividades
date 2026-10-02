@@ -9,7 +9,7 @@
  * ============================================================================
  */
 
-import { executeInSandbox } from "../../sandbox";
+import { executeInSandbox } from "./sandboxClientService";
 
 export type BugCategory = 
   | "SINTAXE" 

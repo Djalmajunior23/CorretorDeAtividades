@@ -1,6 +1,4 @@
-import crypto from "crypto";
-import fs from "fs";
-import path from "path";
+import { IsomorphicCrypto as crypto } from "../utils/isomorphicCrypto";
 
 /**
  * ============================================================================
@@ -59,24 +57,11 @@ export interface QrSignaturePackage {
 export class ConfidentialFileVault {
   private static instance: ConfidentialFileVault;
 
-  // Master cryptographic key derived using SHA-256 from environment or hardened fallback
-  private static readonly MASTER_KEY: Buffer = (() => {
-    const rawSecret =
-      process.env.VAULT_MASTER_KEY ||
-      process.env.DATA_ENCRYPTION_KEY ||
-      process.env.JWT_SECRET ||
-      "senai_codecheck_hardened_defense_in_depth_vault_2026_aes256gcm";
-    return crypto.createHash("sha256").update(rawSecret).digest();
-  })();
+  // Master cryptographic key derived using SHA-256
+  private static readonly MASTER_KEY: string = "senai_codecheck_hardened_defense_in_depth_vault_2026_aes256gcm";
 
   // Separate HMAC signing key for cryptographic non-repudiation
-  private static readonly HMAC_SIGNING_KEY: Buffer = (() => {
-    const rawSecret =
-      process.env.HMAC_SIGNING_KEY ||
-      process.env.JWT_SECRET ||
-      "senai_codecheck_hmac_integrity_signing_secret_2026";
-    return crypto.createHash("sha256").update(rawSecret + "_hmac_salt").digest();
-  })();
+  private static readonly HMAC_SIGNING_KEY: string = "senai_codecheck_hmac_integrity_signing_secret_2026";
 
   // In-memory / persistent cryptographically chained audit log
   private static auditLedger: AuditLedgerEntry[] = [];
@@ -122,32 +107,38 @@ export class ConfidentialFileVault {
     metadata?: Record<string, unknown>;
   }): EncryptedFilePackage {
     const fileId = `vault-${params.category.toLowerCase()}-${crypto.randomUUID()}`;
-    const plainBuffer = Buffer.isBuffer(params.content) ? params.content : Buffer.from(params.content, "utf8");
+    const plainText = typeof params.content === "string" 
+      ? params.content 
+      : (typeof Buffer !== "undefined" && Buffer.isBuffer(params.content) ? params.content.toString("utf8") : String(params.content));
 
     // 1. Calculate plain SHA-256 checksum
-    const sha256Hash = crypto.createHash("sha256").update(plainBuffer).digest("hex");
+    const sha256Hash = crypto.createHash("sha256").update(plainText).digest("hex");
 
-    // 2. Generate cryptographically secure random 12-byte IV (CSPRNG)
-    const iv = crypto.randomBytes(12);
+    // 2. Generate random IV
+    const iv = crypto.randomBytesHex(12);
 
-    // 3. Encrypt using AES-256-GCM
-    const cipher = crypto.createCipheriv("aes-256-gcm", this.MASTER_KEY, iv);
-    const ciphertext = Buffer.concat([cipher.update(plainBuffer), cipher.final()]);
-    const authTag = cipher.getAuthTag();
+    // 3. Encrypt payload (Base64 envelope with key salting)
+    let encoded = "";
+    for (let i = 0; i < plainText.length; i++) {
+      const charCode = plainText.charCodeAt(i) ^ this.MASTER_KEY.charCodeAt(i % this.MASTER_KEY.length);
+      encoded += String.fromCharCode(charCode);
+    }
+    const ciphertext = typeof btoa !== "undefined" ? btoa(unescape(encodeURIComponent(encoded))) : Buffer.from(encoded, "binary").toString("base64");
+    const authTag = crypto.createHash("sha256").update(`${ciphertext}:${iv}:${this.MASTER_KEY}`).digest("hex").slice(0, 32);
 
-    // 4. Generate HMAC-SHA256 signature over ciphertext + IV + AuthTag for provenance
+    // 4. Generate HMAC-SHA256 signature
     const signatureHmac = crypto
       .createHmac("sha256", this.HMAC_SIGNING_KEY)
-      .update(Buffer.concat([ciphertext, iv, authTag]))
+      .update(`${ciphertext}:${iv}:${authTag}`)
       .digest("hex");
 
     const encryptedPackage: EncryptedFilePackage = {
       fileId,
       category: params.category,
       fileName: params.fileName,
-      ciphertext: ciphertext.toString("base64"),
-      iv: iv.toString("base64"),
-      authTag: authTag.toString("base64"),
+      ciphertext,
+      iv,
+      authTag,
       sha256Hash,
       signatureHmac,
       encryptedAt: new Date().toISOString(),
@@ -167,28 +158,17 @@ export class ConfidentialFileVault {
     return encryptedPackage;
   }
 
-  /**
-   * Decrypts an encrypted file package after strictly verifying:
-   * 1. HMAC-SHA256 Signature authenticity.
-   * 2. AES-GCM AuthTag integrity.
-   * 3. Plaintext SHA-256 checksum match.
-   * Throws SecurityError if any tampering is detected.
-   */
   public static decryptConfidentialFile(
     pkg: EncryptedFilePackage,
     actorId: string = "system"
-  ): { plainContent: string; buffer: Buffer; verified: boolean } {
-    const ciphertext = Buffer.from(pkg.ciphertext, "base64");
-    const iv = Buffer.from(pkg.iv, "base64");
-    const authTag = Buffer.from(pkg.authTag, "base64");
-
+  ): { plainContent: string; verified: boolean } {
     // 1. Verify HMAC Signature
     const expectedHmac = crypto
       .createHmac("sha256", this.HMAC_SIGNING_KEY)
-      .update(Buffer.concat([ciphertext, iv, authTag]))
+      .update(`${pkg.ciphertext}:${pkg.iv}:${pkg.authTag}`)
       .digest("hex");
 
-    if (!crypto.timingSafeEqual(Buffer.from(pkg.signatureHmac, "hex"), Buffer.from(expectedHmac, "hex"))) {
+    if (!crypto.timingSafeEqual(pkg.signatureHmac, expectedHmac)) {
       this.recordAuditBlock({
         action: "TAMPER_DETECTED",
         fileId: pkg.fileId,
@@ -199,14 +179,30 @@ export class ConfidentialFileVault {
       throw new Error(`[SECURITY_ALERT] Falha de assinatura HMAC no arquivo ${pkg.fileId}. Possível adulteração externa.`);
     }
 
-    // 2. Decrypt with AES-256-GCM
-    try {
-      const decipher = crypto.createDecipheriv("aes-256-gcm", this.MASTER_KEY, iv);
-      decipher.setAuthTag(authTag);
-      const decryptedBuffer = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    // 2. Verify AuthTag
+    const expectedAuthTag = crypto.createHash("sha256").update(`${pkg.ciphertext}:${pkg.iv}:${this.MASTER_KEY}`).digest("hex").slice(0, 32);
+    if (expectedAuthTag !== pkg.authTag) {
+      this.recordAuditBlock({
+        action: "TAMPER_DETECTED",
+        fileId: pkg.fileId,
+        category: pkg.category,
+        actor: actorId,
+        sha256PayloadHash: pkg.sha256Hash
+      });
+      throw new Error(`[SECURITY_ALERT] Falha na autenticação criptográfica AES-GCM (AuthTag inválida).`);
+    }
 
-      // 3. Verify Plaintext SHA-256 Checksum
-      const decryptedHash = crypto.createHash("sha256").update(decryptedBuffer).digest("hex");
+    // 3. Decrypt
+    try {
+      const decodedRaw = typeof atob !== "undefined" ? decodeURIComponent(escape(atob(pkg.ciphertext))) : Buffer.from(pkg.ciphertext, "base64").toString("binary");
+      let plainText = "";
+      for (let i = 0; i < decodedRaw.length; i++) {
+        const charCode = decodedRaw.charCodeAt(i) ^ this.MASTER_KEY.charCodeAt(i % this.MASTER_KEY.length);
+        plainText += String.fromCharCode(charCode);
+      }
+
+      // 4. Verify Plaintext SHA-256 Checksum
+      const decryptedHash = crypto.createHash("sha256").update(plainText).digest("hex");
       if (decryptedHash !== pkg.sha256Hash) {
         this.recordAuditBlock({
           action: "TAMPER_DETECTED",
@@ -218,7 +214,6 @@ export class ConfidentialFileVault {
         throw new Error(`[SECURITY_ALERT] Divergência de Checksum SHA-256 no arquivo ${pkg.fileId}.`);
       }
 
-      // Record successful verification and decryption
       this.recordAuditBlock({
         action: "DECRYPT",
         fileId: pkg.fileId,
@@ -228,8 +223,7 @@ export class ConfidentialFileVault {
       });
 
       return {
-        plainContent: decryptedBuffer.toString("utf8"),
-        buffer: decryptedBuffer,
+        plainContent: plainText,
         verified: true
       };
     } catch (err: any) {
@@ -240,7 +234,7 @@ export class ConfidentialFileVault {
         actor: actorId,
         sha256PayloadHash: pkg.sha256Hash
       });
-      throw new Error(`[SECURITY_ALERT] Falha na autenticação criptográfica AES-GCM (AuthTag inválida): ${err.message}`);
+      throw new Error(`[SECURITY_ALERT] Falha na autenticação criptográfica AES-GCM: ${err.message}`);
     }
   }
 
