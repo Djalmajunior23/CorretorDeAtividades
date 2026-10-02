@@ -99,10 +99,7 @@ export default function CognitiveTelemetryRadarView() {
       if (data.success && data.metrics) {
         setSelectedStudent(data.metrics);
         toast.success(`Telemetria registrada! Estado detectado: ${data.metrics.stateLabel}`);
-        fetchRadar();
-      }
-    } catch (e: any) {
-      toast.error(`Erro ao registrar telemetria: ${e.message}`);
+        fetchRadar(.message} `);
     }
   };
 
@@ -168,7 +165,7 @@ export default function CognitiveTelemetryRadarView() {
             disabled={isLoadingRadar}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 transition-all text-xs font-semibold border border-slate-700"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRadar ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w - 3.5 h - 3.5 ${ isLoadingRadar ? "animate-spin" : "" } `} />
             Atualizar Radar
           </button>
         </div>
@@ -254,16 +251,16 @@ export default function CognitiveTelemetryRadarView() {
                   return (
                     <tr
                       key={st.studentId}
-                      className={`hover:bg-slate-800/40 transition-colors ${
-                        selectedStudent?.studentId === st.studentId ? "bg-violet-950/20" : ""
-                      }`}
+                      className={`hover: bg - slate - 800 / 40 transition - colors ${
+        selectedStudent?.studentId === st.studentId ? "bg-violet-950/20" : ""
+      } `}
                     >
                       <td className="p-3 font-sans font-semibold text-white">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`w-2 h-2 rounded-full ${
-                              isFlow ? "bg-emerald-400" : isOverloaded ? "bg-rose-400 animate-pulse" : isHesitant ? "bg-amber-400" : "bg-slate-500"
-                            }`}
+                            className={`w - 2 h - 2 rounded - full ${
+        isFlow ? "bg-emerald-400" : isOverloaded ? "bg-rose-400 animate-pulse" : isHesitant ? "bg-amber-400" : "bg-slate-500"
+      } `}
                           />
                           {st.studentName}
                         </div>
@@ -273,15 +270,15 @@ export default function CognitiveTelemetryRadarView() {
                       <td className="p-3">{st.consecutiveExecutionErrors} err</td>
                       <td className="p-3">
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-sans font-bold ${
-                            isFlow
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                              : isOverloaded
-                              ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                              : isHesitant
-                              ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                              : "bg-slate-800 text-slate-400 border border-slate-700"
-                          }`}
+                          className={`px - 2 py - 0.5 rounded - md text - [10px] font - sans font - bold ${
+        isFlow
+          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+          : isOverloaded
+            ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+            : isHesitant
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+              : "bg-slate-800 text-slate-400 border border-slate-700"
+      } `}
                         >
                           {st.stateLabel}
                         </span>
@@ -349,11 +346,11 @@ export default function CognitiveTelemetryRadarView() {
                     key={l.level}
                     onClick={() => handleRequestMicroHint(l.level)}
                     disabled={isGeneratingHint}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      hintLevel === l.level && activeHint
-                        ? "bg-violet-950/40 border-violet-500 text-white"
-                        : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
-                    }`}
+                    className={`p - 2.5 rounded - xl border text - left transition - all ${
+        hintLevel === l.level && activeHint
+          ? "bg-violet-950/40 border-violet-500 text-white"
+          : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+      } `}
                   >
                     <div className="text-xs font-bold">{l.label}</div>
                     <div className="text-[10px] text-slate-400">{l.desc}</div>
@@ -390,7 +387,7 @@ export default function CognitiveTelemetryRadarView() {
               )}
 
               <button
-                onClick={() => toast.success(`Dica enviada diretamente para o editor de ${simStudentName}!`)}
+                onClick={() => toast.success(`Dica enviada diretamente para o editor de ${ simStudentName } !`)}
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all shadow-md"
               >
                 <Send className="w-3.5 h-3.5" />
