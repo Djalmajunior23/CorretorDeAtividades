@@ -17,103 +17,105 @@ import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import { LogOut, ShieldAlert } from "lucide-react";
 
-// Dynamic Code Splitting (React.lazy) for high performance & minimal initial bundle size
-const GeneratorView = React.lazy(() => import("./components/GeneratorView"));
-const ActivityBankView = React.lazy(() => import("./components/ActivityBankView"));
-const CompetencyHeatmap = React.lazy(() => import("./components/CompetencyHeatmap"));
-const ReportsInterventionsView = React.lazy(() => import("./components/ReportsInterventionsView"));
-const AIAssistantView = React.lazy(() => import("./components/AIAssistantView"));
-const PedagogicalExecutiveDashboardView = React.lazy(() => import("./components/PedagogicalExecutiveDashboardView"));
-const AutomationActionCenterView = React.lazy(() => import("./components/AutomationActionCenterView"));
-const TeacherCommandCenterView = React.lazy(() => import("./components/TeacherCommandCenterView"));
-const SmartClassDiaryView = React.lazy(() => import("./components/SmartClassDiaryView"));
-const CompetenciesManagerView = React.lazy(() => import("./components/CompetenciesManagerView"));
-const DashboardView = React.lazy(() => import("./components/DashboardView"));
-const GradesManagerView = React.lazy(() => import("./components/GradesManagerView"));
-const PlanejamentoView = React.lazy(() => import("./components/PlanejamentoView"));
-const LessonLoggerView = React.lazy(() => import("./components/LessonLoggerView").then(m => ({ default: m.LessonLoggerView })));
-const TurmasView = React.lazy(() => import("./components/TurmasView"));
-const ClassManagerView = React.lazy(() => import("./components/ClassManagerView").then(m => ({ default: m.ClassManagerView })));
-const StudentsManagerView = React.lazy(() => import("./components/StudentsManagerView").then(m => ({ default: m.StudentsManagerView })));
-const EvidencesManagerView = React.lazy(() => import("./components/EvidencesManagerView"));
-const AvaliacoesView = React.lazy(() => import("./components/AvaliacoesView"));
-const RecuperacaoView = React.lazy(() => import("./components/RecuperacaoView"));
-const MateriaisView = React.lazy(() => import("./components/MateriaisView"));
-const PedagogicalDashboard = React.lazy(() => import("./components/dashboard/PedagogicalDashboard"));
-const BatchCorrectionView = React.lazy(() => import("./components/BatchCorrectionView"));
-const SimilarityView = React.lazy(() => import("./components/SimilarityView"));
-const EducationalAnalyticsView = React.lazy(() => import("./components/EducationalAnalyticsView"));
-const QuestionBankView = React.lazy(() => import("./components/QuestionBankView"));
-const SmartLabsView = React.lazy(() => import("./components/SmartLabsView"));
-const PedagogicalTracksView = React.lazy(() => import("./components/PedagogicalTracksView"));
-const ResourceLibraryView = React.lazy(() => import("./components/ResourceLibraryView"));
-const ReportsView = React.lazy(() => import("./components/ReportsView"));
-const HelpCenterView = React.lazy(() => import("./components/HelpCenterView"));
-const SystemHealthView = React.lazy(() => import("./components/SystemHealthView"));
-const MultiAgentReviewView = React.lazy(() => import("./components/MultiAgentReviewView"));
-const AIPedagogicalExecutiveDashboard = React.lazy(() => import("./components/AIPedagogicalExecutiveDashboard"));
-const PredictiveAnalyticsView = React.lazy(() => import("./components/PredictiveAnalyticsView"));
-const AIPredictiveInsightsView = React.lazy(() => import("./components/AIPredictiveInsightsView"));
-const PredictivePerformanceView = React.lazy(() => import("./components/PredictivePerformanceView"));
-const AiVisionaryTeacherView = React.lazy(() => import("./components/AiVisionaryTeacherView"));
-const AiVisionModelAssessmentView = React.lazy(() => import("./components/AiVisionModelAssessmentView"));
-const AiCurriculumArchitectView = React.lazy(() => import("./components/AiCurriculumArchitectView"));
-const CollaborativeSandboxView = React.lazy(() => import("./components/CollaborativeSandboxView"));
-const LmsIntegrationView = React.lazy(() => import("./components/LmsIntegrationView"));
-const AdvancedAiHubView = React.lazy(() => import("./components/AdvancedAiHubView"));
-const SlaRemindersSchedulerCard = React.lazy(() => import("./components/SlaRemindersSchedulerCard"));
-const DiagramAssessmentView = React.lazy(() => import("./components/DiagramAssessmentView"));
-const ActivitiesControlHubView = React.lazy(() => import("./components/ActivitiesControlHubView"));
-const StudentPortalView = React.lazy(() => import("./components/StudentPortalView"));
-const SkillTreePortfolioView = React.lazy(() => import("./components/SkillTreePortfolioView"));
-const TeacherAiPowerhouseView = React.lazy(() => import("./components/TeacherAiPowerhouseView"));
-const ComplexActivityGeneratorView = React.lazy(() => import("./components/ComplexActivityGeneratorView"));
-const AdvancedItemBankStudioView = React.lazy(() => import("./components/AdvancedItemBankStudioView"));
-const TechInterviewSimulatorView = React.lazy(() => import("./components/TechInterviewSimulatorView"));
-const CognitiveTelemetryRadarView = React.lazy(() => import("./components/CognitiveTelemetryRadarView"));
-const CapstoneProjectArchitectView = React.lazy(() => import("./components/CapstoneProjectArchitectView"));
-const CodeArenaView = React.lazy(() => import("./components/CodeArenaView"));
-const PullRequestReviewStudioView = React.lazy(() => import("./components/PullRequestReviewStudioView"));
-const MutationTestingLabView = React.lazy(() => import("./components/MutationTestingLabView"));
-const AccessibilityInspectorView = React.lazy(() => import("./components/AccessibilityInspectorView"));
-const ArchitecturalBoardView = React.lazy(() => import("./components/ArchitecturalBoardView"));
-const DevSecOpsThreatLabView = React.lazy(() => import("./components/DevSecOpsThreatLabView"));
-const ChaosEngineeringSimulatorView = React.lazy(() => import("./components/ChaosEngineeringSimulatorView"));
-const PairProgrammingCopilotView = React.lazy(() => import("./components/PairProgrammingCopilotView"));
-const SaepReadinessDashboardView = React.lazy(() => import("./components/SaepReadinessDashboardView"));
-const WasmSandboxRuntimeView = React.lazy(() => import("./components/WasmSandboxRuntimeView"));
-const VivaVoceExamView = React.lazy(() => import("./components/VivaVoceExamView"));
-const AgileSquadSimulatorView = React.lazy(() => import("./components/AgileSquadSimulatorView"));
-const IotIndustrySimulatorView = React.lazy(() => import("./components/IotIndustrySimulatorView"));
-const ParametricExamGeneratorView = React.lazy(() => import("./components/ParametricExamGeneratorView"));
-const PedagogicalAuthoringStudioView = React.lazy(() => import("./components/PedagogicalAuthoringStudioView"));
-const GitAutoGradingStudioView = React.lazy(() => import("./components/GitAutoGradingStudioView"));
-const SocraticTutorScaffoldingView = React.lazy(() => import("./components/SocraticTutorScaffoldingView"));
-const StudentAcademyMasteryView = React.lazy(() => import("./components/StudentAcademyMasteryView"));
-const TeacherClassroomSuiteView = React.lazy(() => import("./components/TeacherClassroomSuiteView").then(m => ({ default: m.TeacherClassroomSuiteView })));
-const TeacherGlobalSuperAuthoringView = React.lazy(() => import("./components/TeacherGlobalSuperAuthoringView"));
-const TeacherSuperpowersCockpitView = React.lazy(() => import("./components/TeacherSuperpowersCockpitView"));
-const TeacherLiveLabCompanionView = React.lazy(() => import("./components/TeacherLiveLabCompanionView"));
-const TeacherReviewCentralView = React.lazy(() => import("./components/TeacherReviewCentralView"));
-const GuidedRefactoringCycleView = React.lazy(() => import("./components/GuidedRefactoringCycleView"));
-const ActivityPreflightValidatorView = React.lazy(() => import("./components/ActivityPreflightValidatorView"));
-const SqlMultiDialectLabView = React.lazy(() => import("./components/SqlMultiDialectLabView"));
-const DiagnosticInterventionHubView = React.lazy(() => import("./components/DiagnosticInterventionHubView"));
-const PeerReviewStudioView = React.lazy(() => import("./components/PeerReviewStudioView"));
-const TeacherMyDayView = React.lazy(() => import("./components/TeacherMyDayView"));
-const TeacherActionQueueView = React.lazy(() => import("./components/TeacherActionQueueView"));
-const ReusableFeedbackBankView = React.lazy(() => import("./components/ReusableFeedbackBankView"));
-const SmartLessonPlannerView = React.lazy(() => import("./components/SmartLessonPlannerView"));
-const QuickUnderstandingCheckView = React.lazy(() => import("./components/QuickUnderstandingCheckView"));
-const AssistedClassDiaryView = React.lazy(() => import("./components/AssistedClassDiaryView"));
-const BlindGradingStudioView = React.lazy(() => import("./components/BlindGradingStudioView"));
-const GradeRuleSimulatorView = React.lazy(() => import("./components/GradeRuleSimulatorView"));
-const CohortComparisonStudioView = React.lazy(() => import("./components/CohortComparisonStudioView"));
-const TeacherHandoverDossierView = React.lazy(() => import("./components/TeacherHandoverDossierView"));
-const ClassOperationsCentralView = React.lazy(() => import("./components/ClassOperationsCentralView"));
-const StudentExperiencePreviewView = React.lazy(() => import("./components/StudentExperiencePreviewView"));
-const PedagogicalConfigHierarchyView = React.lazy(() => import("./components/PedagogicalConfigHierarchyView"));
-const UnifiedNotificationCenterView = React.lazy(() => import("./components/UnifiedNotificationCenterView"));
+import { lazyRetry } from "./utils/lazyRetry";
+
+// Dynamic Code Splitting (lazyRetry) for high performance & minimal initial bundle size with chunk auto-recovery
+const GeneratorView = lazyRetry(() => import("./components/GeneratorView"));
+const ActivityBankView = lazyRetry(() => import("./components/ActivityBankView"));
+const CompetencyHeatmap = lazyRetry(() => import("./components/CompetencyHeatmap"));
+const ReportsInterventionsView = lazyRetry(() => import("./components/ReportsInterventionsView"));
+const AIAssistantView = lazyRetry(() => import("./components/AIAssistantView"));
+const PedagogicalExecutiveDashboardView = lazyRetry(() => import("./components/PedagogicalExecutiveDashboardView"));
+const AutomationActionCenterView = lazyRetry(() => import("./components/AutomationActionCenterView"));
+const TeacherCommandCenterView = lazyRetry(() => import("./components/TeacherCommandCenterView"));
+const SmartClassDiaryView = lazyRetry(() => import("./components/SmartClassDiaryView"));
+const CompetenciesManagerView = lazyRetry(() => import("./components/CompetenciesManagerView"));
+const DashboardView = lazyRetry(() => import("./components/DashboardView"));
+const GradesManagerView = lazyRetry(() => import("./components/GradesManagerView"));
+const PlanejamentoView = lazyRetry(() => import("./components/PlanejamentoView"));
+const LessonLoggerView = lazyRetry(() => import("./components/LessonLoggerView").then(m => ({ default: m.LessonLoggerView })));
+const TurmasView = lazyRetry(() => import("./components/TurmasView"));
+const ClassManagerView = lazyRetry(() => import("./components/ClassManagerView").then(m => ({ default: m.ClassManagerView })));
+const StudentsManagerView = lazyRetry(() => import("./components/StudentsManagerView").then(m => ({ default: m.StudentsManagerView })));
+const EvidencesManagerView = lazyRetry(() => import("./components/EvidencesManagerView"));
+const AvaliacoesView = lazyRetry(() => import("./components/AvaliacoesView"));
+const RecuperacaoView = lazyRetry(() => import("./components/RecuperacaoView"));
+const MateriaisView = lazyRetry(() => import("./components/MateriaisView"));
+const PedagogicalDashboard = lazyRetry(() => import("./components/dashboard/PedagogicalDashboard"));
+const BatchCorrectionView = lazyRetry(() => import("./components/BatchCorrectionView"));
+const SimilarityView = lazyRetry(() => import("./components/SimilarityView"));
+const EducationalAnalyticsView = lazyRetry(() => import("./components/EducationalAnalyticsView"));
+const QuestionBankView = lazyRetry(() => import("./components/QuestionBankView"));
+const SmartLabsView = lazyRetry(() => import("./components/SmartLabsView"));
+const PedagogicalTracksView = lazyRetry(() => import("./components/PedagogicalTracksView"));
+const ResourceLibraryView = lazyRetry(() => import("./components/ResourceLibraryView"));
+const ReportsView = lazyRetry(() => import("./components/ReportsView"));
+const HelpCenterView = lazyRetry(() => import("./components/HelpCenterView"));
+const SystemHealthView = lazyRetry(() => import("./components/SystemHealthView"));
+const MultiAgentReviewView = lazyRetry(() => import("./components/MultiAgentReviewView"));
+const AIPedagogicalExecutiveDashboard = lazyRetry(() => import("./components/AIPedagogicalExecutiveDashboard"));
+const PredictiveAnalyticsView = lazyRetry(() => import("./components/PredictiveAnalyticsView"));
+const AIPredictiveInsightsView = lazyRetry(() => import("./components/AIPredictiveInsightsView"));
+const PredictivePerformanceView = lazyRetry(() => import("./components/PredictivePerformanceView"));
+const AiVisionaryTeacherView = lazyRetry(() => import("./components/AiVisionaryTeacherView"));
+const AiVisionModelAssessmentView = lazyRetry(() => import("./components/AiVisionModelAssessmentView"));
+const AiCurriculumArchitectView = lazyRetry(() => import("./components/AiCurriculumArchitectView"));
+const CollaborativeSandboxView = lazyRetry(() => import("./components/CollaborativeSandboxView"));
+const LmsIntegrationView = lazyRetry(() => import("./components/LmsIntegrationView"));
+const AdvancedAiHubView = lazyRetry(() => import("./components/AdvancedAiHubView"));
+const SlaRemindersSchedulerCard = lazyRetry(() => import("./components/SlaRemindersSchedulerCard"));
+const DiagramAssessmentView = lazyRetry(() => import("./components/DiagramAssessmentView"));
+const ActivitiesControlHubView = lazyRetry(() => import("./components/ActivitiesControlHubView"));
+const StudentPortalView = lazyRetry(() => import("./components/StudentPortalView"));
+const SkillTreePortfolioView = lazyRetry(() => import("./components/SkillTreePortfolioView"));
+const TeacherAiPowerhouseView = lazyRetry(() => import("./components/TeacherAiPowerhouseView"));
+const ComplexActivityGeneratorView = lazyRetry(() => import("./components/ComplexActivityGeneratorView"));
+const AdvancedItemBankStudioView = lazyRetry(() => import("./components/AdvancedItemBankStudioView"));
+const TechInterviewSimulatorView = lazyRetry(() => import("./components/TechInterviewSimulatorView"));
+const CognitiveTelemetryRadarView = lazyRetry(() => import("./components/CognitiveTelemetryRadarView"));
+const CapstoneProjectArchitectView = lazyRetry(() => import("./components/CapstoneProjectArchitectView"));
+const CodeArenaView = lazyRetry(() => import("./components/CodeArenaView"));
+const PullRequestReviewStudioView = lazyRetry(() => import("./components/PullRequestReviewStudioView"));
+const MutationTestingLabView = lazyRetry(() => import("./components/MutationTestingLabView"));
+const AccessibilityInspectorView = lazyRetry(() => import("./components/AccessibilityInspectorView"));
+const ArchitecturalBoardView = lazyRetry(() => import("./components/ArchitecturalBoardView"));
+const DevSecOpsThreatLabView = lazyRetry(() => import("./components/DevSecOpsThreatLabView"));
+const ChaosEngineeringSimulatorView = lazyRetry(() => import("./components/ChaosEngineeringSimulatorView"));
+const PairProgrammingCopilotView = lazyRetry(() => import("./components/PairProgrammingCopilotView"));
+const SaepReadinessDashboardView = lazyRetry(() => import("./components/SaepReadinessDashboardView"));
+const WasmSandboxRuntimeView = lazyRetry(() => import("./components/WasmSandboxRuntimeView"));
+const VivaVoceExamView = lazyRetry(() => import("./components/VivaVoceExamView"));
+const AgileSquadSimulatorView = lazyRetry(() => import("./components/AgileSquadSimulatorView"));
+const IotIndustrySimulatorView = lazyRetry(() => import("./components/IotIndustrySimulatorView"));
+const ParametricExamGeneratorView = lazyRetry(() => import("./components/ParametricExamGeneratorView"));
+const PedagogicalAuthoringStudioView = lazyRetry(() => import("./components/PedagogicalAuthoringStudioView"));
+const GitAutoGradingStudioView = lazyRetry(() => import("./components/GitAutoGradingStudioView"));
+const SocraticTutorScaffoldingView = lazyRetry(() => import("./components/SocraticTutorScaffoldingView"));
+const StudentAcademyMasteryView = lazyRetry(() => import("./components/StudentAcademyMasteryView"));
+const TeacherClassroomSuiteView = lazyRetry(() => import("./components/TeacherClassroomSuiteView").then(m => ({ default: m.TeacherClassroomSuiteView })));
+const TeacherGlobalSuperAuthoringView = lazyRetry(() => import("./components/TeacherGlobalSuperAuthoringView"));
+const TeacherSuperpowersCockpitView = lazyRetry(() => import("./components/TeacherSuperpowersCockpitView"));
+const TeacherLiveLabCompanionView = lazyRetry(() => import("./components/TeacherLiveLabCompanionView"));
+const TeacherReviewCentralView = lazyRetry(() => import("./components/TeacherReviewCentralView"));
+const GuidedRefactoringCycleView = lazyRetry(() => import("./components/GuidedRefactoringCycleView"));
+const ActivityPreflightValidatorView = lazyRetry(() => import("./components/ActivityPreflightValidatorView"));
+const SqlMultiDialectLabView = lazyRetry(() => import("./components/SqlMultiDialectLabView"));
+const DiagnosticInterventionHubView = lazyRetry(() => import("./components/DiagnosticInterventionHubView"));
+const PeerReviewStudioView = lazyRetry(() => import("./components/PeerReviewStudioView"));
+const TeacherMyDayView = lazyRetry(() => import("./components/TeacherMyDayView"));
+const TeacherActionQueueView = lazyRetry(() => import("./components/TeacherActionQueueView"));
+const ReusableFeedbackBankView = lazyRetry(() => import("./components/ReusableFeedbackBankView"));
+const SmartLessonPlannerView = lazyRetry(() => import("./components/SmartLessonPlannerView"));
+const QuickUnderstandingCheckView = lazyRetry(() => import("./components/QuickUnderstandingCheckView"));
+const AssistedClassDiaryView = lazyRetry(() => import("./components/AssistedClassDiaryView"));
+const BlindGradingStudioView = lazyRetry(() => import("./components/BlindGradingStudioView"));
+const GradeRuleSimulatorView = lazyRetry(() => import("./components/GradeRuleSimulatorView"));
+const CohortComparisonStudioView = lazyRetry(() => import("./components/CohortComparisonStudioView"));
+const TeacherHandoverDossierView = lazyRetry(() => import("./components/TeacherHandoverDossierView"));
+const ClassOperationsCentralView = lazyRetry(() => import("./components/ClassOperationsCentralView"));
+const StudentExperiencePreviewView = lazyRetry(() => import("./components/StudentExperiencePreviewView"));
+const PedagogicalConfigHierarchyView = lazyRetry(() => import("./components/PedagogicalConfigHierarchyView"));
+const UnifiedNotificationCenterView = lazyRetry(() => import("./components/UnifiedNotificationCenterView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -1838,15 +1840,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!submissionsPollActive) return;
     fetchSubmissions();
     const interval = setInterval(() => {
       fetchSubmissions();
-    }, 10000);
+    }, 20000);
     return () => clearInterval(interval);
   }, [submissionsPollActive, featureFlags?.ENABLE_RUBRIC_CORRECTION]);
 
-  // Fetch classes on mount and when user enters the corrector tab
+  // Fetch classes on mount and when entering class/grade management tabs
   useEffect(() => {
+    if (correctorClasses.length > 0 && !["turmas", "notas", "corrector", "dashboard"].includes(currentTab)) {
+      return;
+    }
     fetch(apiUrl("/api/classes"))
       .then(res => safeJsonResponse(res))
       .then(data => {
@@ -1866,9 +1872,15 @@ export default function App() {
             classList = data.data.items;
           }
         }
-        setCorrectorClasses(classList);
+        if (classList.length > 0) {
+          setCorrectorClasses(classList);
+        }
       })
-      .catch(err => console.error("Error loading corrector classes:", err));
+      .catch(err => {
+        if (import.meta.env.DEV) {
+          console.warn("Using offline classes fallback:", err?.message || "Unknown error");
+        }
+      });
   }, [currentTab]);
 
   // Synchronously fetch students and activities for the selected corrector class
