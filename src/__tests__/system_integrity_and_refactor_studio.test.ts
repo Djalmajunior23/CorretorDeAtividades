@@ -3,6 +3,7 @@ import express from "express";
 import { setupTeacherAPIs } from "../../server-apis-addon";
 import { SystemIntegrityDiagnosticsService } from "../services/systemIntegrityDiagnosticsService";
 import { SmartCodeRefactorService } from "../services/smartCodeRefactorService";
+import { generateJwtToken } from "../utils/security";
 
 // Mock pg Pool
 const mockPool = {
@@ -103,8 +104,18 @@ def buscar_usuario(req):
     });
 
     it("POST /api/system/diagnostics/self-heal - Deve acionar rotina de auto-cura", async () => {
+      const adminToken = generateJwtToken({
+        id: "admin-1",
+        name: "Admin SENAI",
+        email: "admin@senai.br",
+        role: "ADMIN"
+      });
+
       const res = await fetch(`${baseUrl}/api/system/diagnostics/self-heal`, {
-        method: "POST"
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${adminToken}`
+        }
       });
       expect(res.status).toBe(200);
 

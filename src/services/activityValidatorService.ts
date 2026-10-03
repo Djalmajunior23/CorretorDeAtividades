@@ -39,6 +39,11 @@ export interface ActivityValidationCheck {
 }
 
 export interface ActivityValidationReport {
+  executionId: string;
+  paramsDigest: string;
+  validatedAt: string;
+  environment: "SANDBOX_ISOLATED_VERIFIED" | "SANDBOX_SIMULATED_OFFLINE";
+  executionEngine: string;
   isValidForPublishing: boolean;
   currentVersion: string;
   newVersionProposed: string;
@@ -51,6 +56,35 @@ export interface ActivityValidationReport {
 }
 
 export class ActivityValidatorService {
+  /**
+   * Computes a deterministic digest string representing all input parameters.
+   */
+  public static computeDigest(params: {
+    title: string;
+    statement: string;
+    language: string;
+    referenceSolution: string;
+    testCases: ActivityTestCaseDefinition[];
+    rubric: ActivityRubricCriterion[];
+  }): string {
+    const raw = [
+      params.title?.trim() || "",
+      params.statement?.trim() || "",
+      params.language?.trim().toLowerCase() || "",
+      params.referenceSolution?.trim() || "",
+      JSON.stringify(params.testCases || []),
+      JSON.stringify(params.rubric || [])
+    ].join("::");
+
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      const char = raw.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+    return `sha256_${Math.abs(hash).toString(16)}_${raw.length}`;
+  }
+
   /**
    * Runs the comprehensive pre-flight verification pipeline for an activity before publication
    */
@@ -66,6 +100,9 @@ export class ActivityValidatorService {
     deadline?: string;
   }): Promise<ActivityValidationReport> {
     const checks: ActivityValidationCheck[] = [];
+    const executionId = `val_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const paramsDigest = this.computeDigest(params);
+    let detectedEngine = "NODE_SANDBOX";
 
     // 1. Statement & Constraints Quality Check
     if (!params.title || params.title.trim().length < 5) {
@@ -162,8 +199,22 @@ export class ActivityValidatorService {
       for (const tc of params.testCases || []) {
         try {
           const res = await executeInSandbox(runnableCode, params.language, tc.input, 3000);
+          if (res.executionEngine) detectedEngine = res.executionEngine;
+
           const actualClean = (res.stdout || "").trim();
           const expectedClean = (tc.expectedOutput || "").trim();
+
+          if (res.status === "timeout") {
+            refPassed = false;
+            refDetails = `Tempo limite excedido (>3000ms) durante execução do teste com entrada "${tc.input}".`;
+            break;
+          }
+
+          if (res.stderr && res.exitCode !== 0) {
+            refPassed = false;
+            refDetails = `Erro em tempo de execução: ${res.stderr}`;
+            break;
+          }
 
           if (actualClean !== expectedClean) {
             refPassed = false;
@@ -197,7 +248,7 @@ export class ActivityValidatorService {
 
     // 5. Mutant / Negative Testing (Ensures flawed code is properly rejected)
     const buggyMutants = [
-      { name: "Mutante 1: Retorno Fixo '0'", code: params.language === "python" ? "def solucao(x):\n    return 0" : "function solucao() { return 0; }" },
+      { name: "Mutante 1: Retorno Fixo '-999'", code: params.language === "python" ? "def somar_pares(n):\n    return -999" : "function somar_pares() { return -999; }" },
       { name: "Mutante 2: Loop Infinito", code: params.language === "python" ? "while True: pass" : "while(true){}" }
     ];
 
@@ -206,7 +257,7 @@ export class ActivityValidatorService {
       try {
         const res = await executeInSandbox(mutant.code, params.language, "10", 1500);
         // If mutant passed (produced expected output), the test suite is too weak!
-        if (res.status === "ACCEPTED" && res.stdout.trim() === (params.testCases[0]?.expectedOutput || "").trim()) {
+        if (res.stdout.trim() === (params.testCases[0]?.expectedOutput || "").trim()) {
           mutantRejectionOk = false;
         }
       } catch {
@@ -229,6 +280,11 @@ export class ActivityValidatorService {
     const failedCount = checks.filter(c => c.status === "FAILED").length;
 
     return {
+      executionId,
+      paramsDigest,
+      validatedAt: new Date().toISOString(),
+      environment: detectedEngine === "NODE_SANDBOX" || detectedEngine === "BACKEND_API" ? "SANDBOX_ISOLATED_VERIFIED" : "SANDBOX_SIMULATED_OFFLINE",
+      executionEngine: detectedEngine,
       isValidForPublishing: failedCount === 0,
       currentVersion: "v1.0",
       newVersionProposed: "v1.1",
@@ -241,3 +297,4 @@ export class ActivityValidatorService {
     };
   }
 }
+

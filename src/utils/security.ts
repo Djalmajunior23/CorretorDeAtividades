@@ -152,6 +152,17 @@ export function authenticateToken(req: any, res: any, next: any) {
     ? authHeader.substring(7)
     : String(authHeader).split(" ")[1] || String(authHeader);
 
+  // Check for demo guest session token
+  if (token.startsWith("demo_guest_session_")) {
+    req.user = {
+      id: "guest-demo-visitor",
+      name: "Visitante Convidado (Modo Demonstração)",
+      email: "visitante.demo@codecheck.senai.br",
+      role: "DEMO"
+    };
+    return next();
+  }
+
   const verification = verifyJwtToken(token);
   if (!verification.valid || !verification.payload) {
     return res.status(401).json({ success: false, error: verification.error || "Sessão inválida ou expirada." });
@@ -160,3 +171,45 @@ export function authenticateToken(req: any, res: any, next: any) {
   req.user = verification.payload;
   next();
 }
+
+/**
+ * Express Middleware to enforce required roles (RBAC).
+ */
+export function requireRole(allowedRoles: string[]) {
+  return (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "Autenticação requerida." });
+    }
+
+    const userRole = (req.user.role || "").toUpperCase();
+    const upperAllowed = allowedRoles.map(r => r.toUpperCase());
+
+    if (!upperAllowed.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        error: `Acesso negado: Perfil '${userRole}' não possui permissão para este recurso. Perfis autorizados: ${allowedRoles.join(", ")}.`
+      });
+    }
+
+    next();
+  };
+}
+
+/**
+ * Express Middleware to block Demo/Visitor users from modifying system state or executing infrastructure actions.
+ */
+export function blockDemoMutation(req: any, res: any, next: any) {
+  const authHeader = req.headers["authorization"] || req.headers["Authorization"] || "";
+  const isDemoToken = typeof authHeader === "string" && authHeader.includes("demo_guest_session");
+  const isDemoUser = req.user?.role === "DEMO" || isDemoToken;
+
+  if (isDemoUser) {
+    return res.status(403).json({
+      success: false,
+      error: "Ação bloqueada: O Modo Demonstração (Visitante) opera em sandbox somente leitura de dados sintéticos. Operações de mutação, infraestrutura e backups reais estão estritamente bloqueadas."
+    });
+  }
+
+  next();
+}
+

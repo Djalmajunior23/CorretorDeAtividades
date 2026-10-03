@@ -60,6 +60,8 @@ import { KeystrokeForensicsAndXaiService } from "./src/services/keystrokeForensi
 import { TeacherGlobalSuperAuthoringService } from "./src/services/teacherGlobalSuperAuthoringService";
 import { SystemIntegrityDiagnosticsService } from "./src/services/systemIntegrityDiagnosticsService";
 import { SmartCodeRefactorService } from "./src/services/smartCodeRefactorService";
+import { ActivityValidatorService } from "./src/services/activityValidatorService";
+import { authenticateToken, requireRole, blockDemoMutation } from "./src/utils/security";
 
 function uuidv4() {
   return crypto.randomUUID();
@@ -461,18 +463,18 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
   });
 
 
-  // --- CLASSES & STUDENTS IN-MEMORY STORE (Fallback if pool is null) ---
+  // --- CLASSES & STUDENTS IN-MEMORY STORE (Isolated Synthetic Demonstration Fixtures) ---
   const inMemoryClasses: any[] = [
     {
       id: "class-senai-dev-2026",
       teacher_id: "teacher_1",
-      name: "TDS-2026/1 - Desenvolvimento de Sistemas",
-      course: "Técnico em Desenvolvimento de Sistemas",
+      name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
+      course: "Técnico em Desenvolvimento de Sistemas (Sintético)",
       module: "Módulo 2 - Back-end & Banco de Dados",
       semester: "1º Semestre",
       shift: "Noturno",
       year: "2026",
-      description: "Turma Oficial SENAI de Formação Profissional em TI",
+      description: "[Ambiente Sintético Isolado de Demonstração]",
       status: "active",
       students_count: 5,
       average_score: 78.5,
@@ -481,13 +483,13 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "class-senai-iot-2026",
       teacher_id: "teacher_1",
-      name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
-      course: "Técnico em Automação Industrial e IoT",
+      name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
+      course: "Técnico em Automação Industrial e IoT (Sintético)",
       module: "Módulo 3 - Redes Industriais & Telemetria",
       semester: "1º Semestre",
       shift: "Vespertino",
       year: "2026",
-      description: "Turma de Especialização em Automação e Redes de Sensores",
+      description: "[Ambiente Sintético Isolado de Demonstração]",
       status: "active",
       students_count: 4,
       average_score: 82.0,
@@ -499,11 +501,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-001",
       class_id: "class-senai-dev-2026",
-      name: "Carlos Eduardo Silva",
+      name: "[Sintético] Estudante Alpha",
       enrollment_code: "2026TDS001",
-      email: "carlos.silva@aluno.senai.br",
-      notes: "Destaque em Algoritmos e Lógica",
-      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      email: "estudante.alpha.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Destaque em Algoritmos e Lógica",
+      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
       course_name: "Técnico em Desenvolvimento de Sistemas",
       status: "active",
       average_score: 85.0
@@ -511,11 +513,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-002",
       class_id: "class-senai-dev-2026",
-      name: "Ana Clara Souza",
+      name: "[Sintético] Estudante Beta",
       enrollment_code: "2026TDS002",
-      email: "ana.souza@aluno.senai.br",
-      notes: "Foco em Banco de Dados e Modelagem",
-      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      email: "estudante.beta.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Foco em Banco de Dados e Modelagem",
+      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
       course_name: "Técnico em Desenvolvimento de Sistemas",
       status: "active",
       average_score: 92.0
@@ -523,11 +525,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-003",
       class_id: "class-senai-dev-2026",
-      name: "Bruno Henrique Costa",
+      name: "[Sintético] Estudante Gamma",
       enrollment_code: "2026TDS003",
-      email: "bruno.costa@aluno.senai.br",
-      notes: "Acompanhamento em Clean Code",
-      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      email: "estudante.gamma.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Acompanhamento em Clean Code",
+      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
       course_name: "Técnico em Desenvolvimento de Sistemas",
       status: "active",
       average_score: 74.0
@@ -535,11 +537,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-004",
       class_id: "class-senai-dev-2026",
-      name: "Camila Rodrigues Lima",
+      name: "[Sintético] Estudante Delta",
       enrollment_code: "2026TDS004",
-      email: "camila.lima@aluno.senai.br",
-      notes: "Interesse em Segurança e DevSecOps",
-      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      email: "estudante.delta.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Interesse em Segurança e DevSecOps",
+      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
       course_name: "Técnico em Desenvolvimento de Sistemas",
       status: "active",
       average_score: 88.0
@@ -547,11 +549,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-005",
       class_id: "class-senai-dev-2026",
-      name: "Diego Fernandes",
+      name: "[Sintético] Estudante Epsilon",
       enrollment_code: "2026TDS005",
-      email: "diego.fernandes@aluno.senai.br",
-      notes: "Desenvolvedor Front-end e APIs",
-      class_name: "TDS-2026/1 - Desenvolvimento de Sistemas",
+      email: "estudante.epsilon.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Desenvolvedor Front-end e APIs",
+      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
       course_name: "Técnico em Desenvolvimento de Sistemas",
       status: "active",
       average_score: 79.5
@@ -559,11 +561,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-006",
       class_id: "class-senai-iot-2026",
-      name: "Elena Vasconcelos",
+      name: "[Sintético] Estudante Zeta",
       enrollment_code: "2026IOT001",
-      email: "elena.vasconcelos@aluno.senai.br",
-      notes: "Projetos em MQTT e CLP",
-      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      email: "estudante.zeta.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Projetos em MQTT e CLP",
+      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
       course_name: "Técnico em Automação Industrial e IoT",
       status: "active",
       average_score: 89.0
@@ -571,11 +573,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-007",
       class_id: "class-senai-iot-2026",
-      name: "Fabio Gabriel Mendes",
+      name: "[Sintético] Estudante Eta",
       enrollment_code: "2026IOT002",
-      email: "fabio.mendes@aluno.senai.br",
-      notes: "Sistemas Embarcados e Edge",
-      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      email: "estudante.eta.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Sistemas Embarcados e Edge",
+      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
       course_name: "Técnico em Automação Industrial e IoT",
       status: "active",
       average_score: 81.0
@@ -583,11 +585,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-008",
       class_id: "class-senai-iot-2026",
-      name: "Gabriela Prado",
+      name: "[Sintético] Estudante Theta",
       enrollment_code: "2026IOT003",
-      email: "gabriela.prado@aluno.senai.br",
-      notes: "Telemetria Industrial",
-      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      email: "estudante.theta.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Telemetria Industrial",
+      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
       course_name: "Técnico em Automação Industrial e IoT",
       status: "active",
       average_score: 86.5
@@ -595,11 +597,11 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
     {
       id: "stu-009",
       class_id: "class-senai-iot-2026",
-      name: "Heitor Guimarães",
+      name: "[Sintético] Estudante Iota",
       enrollment_code: "2026IOT004",
-      email: "heitor.guimaraes@aluno.senai.br",
-      notes: "Hardware-in-the-Loop",
-      class_name: "IOT-2026/1 - Indústria 4.0 & Internet das Coisas",
+      email: "estudante.iota.demo@codecheck.sintetico.local",
+      notes: "[Dado Sintético] Hardware-in-the-Loop",
+      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
       course_name: "Técnico em Automação Industrial e IoT",
       status: "active",
       average_score: 72.0
@@ -1675,7 +1677,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
   });
 
   // --- BACKUP & EXPORT ---
-  app.post("/api/backup/export", async (req, res) => {
+  app.post("/api/backup/export", authenticateToken, blockDemoMutation, async (req: any, res) => {
     try {
       if (!pool)
         return res
@@ -9651,10 +9653,73 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
-  app.post("/api/system/diagnostics/self-heal", async (_req, res) => {
+  app.post("/api/system/diagnostics/self-heal", authenticateToken, blockDemoMutation, async (req: any, res) => {
     try {
       const result = await SystemIntegrityDiagnosticsService.triggerSelfHealingRoutine();
       res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ==========================================
+  // Pre-Flight Activity Validation & Publication Enforcement
+  // ==========================================
+  app.post("/api/activities/preflight-validate", async (req, res) => {
+    try {
+      const { title, statement, language, starterCode, referenceSolution, testCases, rubric, maxAttempts, deadline } = req.body;
+      const report = await ActivityValidatorService.validateActivity({
+        title,
+        statement,
+        language: language || "python",
+        starterCode: starterCode || "",
+        referenceSolution: referenceSolution || "",
+        testCases: Array.isArray(testCases) ? testCases : [],
+        rubric: Array.isArray(rubric) ? rubric : [],
+        maxAttempts: maxAttempts || 3,
+        deadline
+      });
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/activities/publish", authenticateToken, blockDemoMutation, async (req: any, res) => {
+    try {
+      const { title, statement, language, referenceSolution, testCases, rubric, report } = req.body;
+      
+      if (!report || !report.isValidForPublishing) {
+        return res.status(400).json({
+          success: false,
+          error: "Publicação bloqueada: A atividade possui pendências críticas no laudo de validação."
+        });
+      }
+
+      // Check params digest integrity
+      const currentDigest = ActivityValidatorService.computeDigest({
+        title,
+        statement,
+        language,
+        referenceSolution,
+        testCases,
+        rubric
+      });
+
+      if (report.paramsDigest !== currentDigest) {
+        return res.status(400).json({
+          success: false,
+          error: "Publicação bloqueada: Os parâmetros da atividade foram alterados após a emissão do laudo de validação. Execute a validação novamente."
+        });
+      }
+
+      res.json({
+        success: true,
+        publishedVersion: "v1.1",
+        executionId: report.executionId,
+        paramsDigest: currentDigest,
+        publishedAt: new Date().toISOString()
+      });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

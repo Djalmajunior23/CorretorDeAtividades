@@ -28,7 +28,10 @@ import {
   FileText,
 } from "lucide-react";
 
+import { useAuth } from "../context/AuthContext";
+
 export default function SystemHealthView() {
+  const { isDemoMode } = useAuth();
   const [activeTab, setActiveTab] = useState<"general" | "audit_logs" | "ai_management">("general");
   const [status, setStatus] = useState<any>(null);
   const [logs, setLogs] = useState<any[]>([]);
@@ -199,10 +202,19 @@ export default function SystemHealthView() {
   };
 
   const handleRunBackup = async () => {
+    if (isDemoMode) {
+      setBackupMessage("Ação bloqueada: O Modo Demonstração (Visitante) opera em sandbox e não executa backups reais do banco de dados.");
+      return;
+    }
     setBackupRunning(true);
     setBackupMessage("Preparando snapshot e varrendo tabelas no PostgreSQL...");
     try {
-      const response = await fetch(apiUrl("/api/backup/export"), { method: "POST" });
+      const response = await fetch(apiUrl("/api/backup/export"), { 
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`
+        }
+      });
       const data = await response.json();
       if (response.ok && data.success) {
         setBackupMessage(`Backup gerado com sucesso! Arquivo: ${data.filename}. Tabelas empacotadas.`);
@@ -607,11 +619,17 @@ export default function SystemHealthView() {
                   </p>
                 </div>
               </div>
-              <div>
+              <div className="flex items-center gap-2">
+                {isDemoMode && (
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold">
+                    Modo Demonstração (Somente Leitura)
+                  </span>
+                )}
                 <button
                   onClick={handleRunBackup}
-                  disabled={backupRunning}
-                  className="px-4 py-2 bg-emerald-600 text-xs font-bold hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg flex items-center gap-2 transition-all cursor-pointer"
+                  disabled={backupRunning || isDemoMode}
+                  title={isDemoMode ? "Bloqueado no Modo Demonstração: Backups reais estão desativados para visitantes." : "Disparar exportação e salvaguarda imediata"}
+                  className="px-4 py-2 bg-emerald-600 text-xs font-bold hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-lg flex items-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
                 >
                   {backupRunning ? (
                     <>

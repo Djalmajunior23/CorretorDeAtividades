@@ -243,7 +243,7 @@ export default function Sidebar({
               <span className="font-bold text-sm text-white font-display tracking-wide">CodeCheck 2026</span>
               <span className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Zero Trust • ASVS 5.0
+                Zero Trust • ASVS 4.0.3 L2
               </span>
             </div>
           </div>

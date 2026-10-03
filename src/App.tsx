@@ -328,7 +328,41 @@ function normalizeCorrectionVault(response: any) {
 
 export default function App() {
   const { user, logout, isLoading, isDemoMode } = useAuth();
-  const [currentTab, setTab] = useState<string>("dashboard");
+  const [currentTab, setCurrentTabState] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      return tabParam || "dashboard";
+    } catch {
+      return "dashboard";
+    }
+  });
+
+  const setTab = (newTab: string) => {
+    setCurrentTabState(newTab);
+    try {
+      const url = new URL(window.location.href);
+      if (newTab === "dashboard") {
+        url.searchParams.delete("tab");
+      } else {
+        url.searchParams.set("tab", newTab);
+      }
+      window.history.pushState({ tab: newTab }, "", url.toString());
+    } catch {}
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get("tab") || "dashboard";
+        setCurrentTabState(tabParam);
+      } catch {}
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
   const [selectedCorrectorStudent, setSelectedCorrectorStudent] = useState<string>('');
   const [showCorrectorStudentWarning, setShowCorrectorStudentWarning] = useState<boolean>(false);
