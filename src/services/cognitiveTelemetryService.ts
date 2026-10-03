@@ -271,6 +271,26 @@ FORMATO OBRIGATÓRIO (Apenas JSON puro):
     }
   }
 
+  // Active dispatched hints store
+  private static dispatchedHintsStore: Map<string, Array<{ hint: MicroHintResponse; dispatchedAt: string }>> = new Map();
+
+  static dispatchMicroHint(studentId: string, hint: MicroHintResponse): { success: boolean; dispatchedAt: string; totalDispatched: number } {
+    const history = this.dispatchedHintsStore.get(studentId) || [];
+    const entry = { hint, dispatchedAt: new Date().toISOString() };
+    history.unshift(entry);
+    this.dispatchedHintsStore.set(studentId, history.slice(0, 10)); // keep last 10 hints
+
+    return {
+      success: true,
+      dispatchedAt: entry.dispatchedAt,
+      totalDispatched: history.length
+    };
+  }
+
+  static getDispatchedHints(studentId: string): Array<{ hint: MicroHintResponse; dispatchedAt: string }> {
+    return this.dispatchedHintsStore.get(studentId) || [];
+  }
+
   private static populateInitialCohort(classId: string) {
     const studentsSeed = [
       { id: "stu_101", name: "Lucas Silveira", errors: 0, cpm: 120, churn: 0.12, state: "flow_state" as const },

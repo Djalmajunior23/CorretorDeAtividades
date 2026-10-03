@@ -6923,6 +6923,19 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
+  app.post("/api/telemetry/dispatch-hint", (req, res) => {
+    try {
+      const { studentId, hint } = req.body;
+      if (!studentId || !hint) {
+        return res.status(400).json({ success: false, error: "studentId e hint são obrigatórios." });
+      }
+      const result = CognitiveTelemetryService.dispatchMicroHint(studentId, hint);
+      res.json({ success: true, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // ==========================================
   // MODULE 3: CAPSTONE PROJECT ARCHITECT & PBL DISPATCHER
   // ==========================================

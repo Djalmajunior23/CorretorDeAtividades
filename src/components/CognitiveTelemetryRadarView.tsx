@@ -49,6 +49,8 @@ export default function CognitiveTelemetryRadarView() {
   const [hintLevel, setHintLevel] = useState<1 | 2 | 3>(1);
   const [isGeneratingHint, setIsGeneratingHint] = useState(false);
   const [activeHint, setActiveHint] = useState<MicroHintResponse | null>(null);
+  const [isDispatching, setIsDispatching] = useState(false);
+  const [lastDispatchedAt, setLastDispatchedAt] = useState<string | null>(null);
 
   const fetchRadar = async () => {
     setIsLoadingRadar(true);
@@ -138,6 +140,40 @@ export default function CognitiveTelemetryRadarView() {
       toast.info("Micro-Dica gerada com sucesso via motor socrático.");
     } finally {
       setIsGeneratingHint(false);
+    }
+  };
+
+  const handleDispatchHint = async () => {
+    if (!activeHint) return;
+    setIsDispatching(true);
+    const targetStudentName = selectedStudent?.studentName || simStudentName;
+    const targetStudentId = selectedStudent?.studentId || "stu_104";
+
+    try {
+      const res = await fetch("/api/telemetry/dispatch-hint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: targetStudentId,
+          hint: activeHint
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLastDispatchedAt(new Date().toLocaleTimeString("pt-BR"));
+        toast.success(`Micro-Dica Socrática despachada para o editor de ${targetStudentName}!`, {
+          description: "O aluno receberá o nudge reflexivo em tempo real no seu console."
+        });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch {
+      // Local fallback
+      CognitiveTelemetryService.dispatchMicroHint(targetStudentId, activeHint);
+      setLastDispatchedAt(new Date().toLocaleTimeString("pt-BR"));
+      toast.success(`Dica enviada diretamente para o editor de ${targetStudentName}!`);
+    } finally {
+      setIsDispatching(false);
     }
   };
 
@@ -386,13 +422,23 @@ export default function CognitiveTelemetryRadarView() {
                 </div>
               )}
 
-              <button
-                onClick={() => toast.success(`Dica enviada diretamente para o editor de ${ simStudentName } !`)}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all shadow-md"
-              >
-                <Send className="w-3.5 h-3.5" />
-                Despachar Dica para o Estudante
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={handleDispatchHint}
+                  disabled={isDispatching}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-emerald-950/40 disabled:opacity-50 cursor-pointer"
+                >
+                  <Send className={`w-3.5 h-3.5 ${isDispatching ? "animate-bounce" : ""}`} />
+                  {isDispatching ? "Despachando para o Estudante..." : `Despachar Dica para ${selectedStudent?.studentName || simStudentName}`}
+                </button>
+
+                {lastDispatchedAt && (
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] text-emerald-400 font-mono">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span>Último disparo realizado às {lastDispatchedAt}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
