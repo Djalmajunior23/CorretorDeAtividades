@@ -373,7 +373,7 @@ export class StorageService {
       return {
         success: true,
         content: decrypted.plainContent,
-        buffer: decrypted.buffer,
+        buffer: Buffer.from(decrypted.plainContent, "utf8"),
         package: pkg
       };
     } catch (err: any) {

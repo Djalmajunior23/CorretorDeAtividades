@@ -73,7 +73,7 @@ export class ReliableSubmissionService {
   }): CryptographicSubmissionReceipt {
     const submittedAtIso = new Date().toISOString();
     const receiptId = `rcpt-${crypto.randomUUID()}`;
-    const codeSha256Checksum = crypto.createHash("sha256").update(params.codeContent, "utf8").digest("hex");
+    const codeSha256Checksum = crypto.createHash("sha256").update(params.codeContent).digest("hex");
     const fileSizeBytes = Buffer.byteLength(params.codeContent, "utf8");
 
     const payloadToSign = `${receiptId}:${params.activityId}:${params.studentId}:${submittedAtIso}:${codeSha256Checksum}`;

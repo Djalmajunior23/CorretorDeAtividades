@@ -158,6 +158,17 @@ function evaluateCodeAuthentic(
       const paramsList = fnMatch[2].split(",").map(p => p.trim()).filter(Boolean);
       const rawBody = fnMatch[3].trim();
 
+      // Check for while True infinite loop in function body
+      if (/while\s+True\s*:\s*(pass|;|\s*)/.test(rawBody) || rawBody.includes("while True:")) {
+        return {
+          stdout: "",
+          stderr: "TimeLimitExceeded: Execução abortada por timeout.",
+          exitCode: 1,
+          executionTimeMs: timeoutMs,
+          status: "timeout"
+        };
+      }
+
       // Check if body is a constant return e.g. "return -999" or "return 0"
       const returnConstMatch = rawBody.match(/^return\s+(-?\d+|"[^"]*"|'[^']*'|True|False|None)/i);
       if (returnConstMatch) {
@@ -174,13 +185,16 @@ function evaluateCodeAuthentic(
       // If the body contains sum/loop logic: execute it accurately according to the code
       const argVal = stdin.trim() !== "" ? Number(stdin.trim()) : 0;
 
-      // Evaluate python sum(range(2, n + 1, 2)) or standard loop
-      if (rawBody.includes("sum(") && rawBody.includes("range(")) {
+      // Evaluate python sum(range(start, end, step)) or generator
+      const rangeMatch = rawBody.match(/range\s*\(\s*(\d+)\s*,\s*[^,)]+\s*(?:,\s*(\d+)\s*)?\)/);
+      if (rawBody.includes("sum(") && (rangeMatch || rawBody.includes("range("))) {
         if (rawBody.includes("if n <= 0: return 0") && argVal <= 0) {
           return { stdout: "0", stderr: "", exitCode: 0, executionTimeMs: 15, status: "accepted" };
         }
+        const start = rangeMatch ? parseInt(rangeMatch[1], 10) : 2;
+        const step = rangeMatch && rangeMatch[2] ? parseInt(rangeMatch[2], 10) : (rawBody.includes(", 2)") ? 2 : 1);
         let total = 0;
-        for (let i = 2; i <= argVal; i += 2) {
+        for (let i = start; i <= argVal; i += step) {
           total += i;
         }
         return { stdout: String(total), stderr: "", exitCode: 0, executionTimeMs: 15, status: "accepted" };

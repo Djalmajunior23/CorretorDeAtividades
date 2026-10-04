@@ -298,7 +298,7 @@ export default function ActivityPreflightValidatorView() {
                 </div>
 
                 {/* Detailed Checklist */}
-                <div className="flex flex-col gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                <div className="flex flex-col gap-2.5 max-h-[340px] overflow-y-auto pr-1">
                   {report.checks.map((check) => (
                     <div
                       key={check.id}
@@ -323,11 +323,51 @@ export default function ActivityPreflightValidatorView() {
                       </div>
                       <p className="text-[11px] text-slate-300 pl-6">{check.message}</p>
                       {check.details && (
-                        <p className="text-[10px] text-slate-400 pl-6 italic font-mono">{check.details}</p>
+                        <p className="text-[10px] text-slate-400 pl-6 whitespace-pre-line font-mono">{check.details}</p>
                       )}
                     </div>
                   ))}
                 </div>
+
+                {/* Granular Mutant Test Variants Breakdown */}
+                {report.mutantVariants && report.mutantVariants.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col gap-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                      <span className="flex items-center gap-1.5 font-mono">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        Detalhamento das Variantes Mutantes:
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {report.mutantVariants.filter(m => m.status === "KILLED").length}/{report.mutantVariants.length} Eliminados
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {report.mutantVariants.map((m) => (
+                        <div
+                          key={m.id}
+                          className={`p-2.5 rounded-lg border text-[11px] flex flex-col gap-1 ${
+                            m.status === "KILLED"
+                              ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
+                              : "bg-amber-950/20 border-amber-500/30 text-amber-300"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between font-bold font-mono text-[10px]">
+                            <span>{m.name}</span>
+                            <span className={`px-1.5 py-0.5 rounded ${
+                              m.status === "KILLED" ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+                            }`}>
+                              {m.status === "KILLED" ? "ELIMINADO" : "SOBREVIVEU"}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400">{m.description}</p>
+                          {m.killedByTest && (
+                            <span className="text-[9px] text-slate-400 font-mono">Rejeitado por: {m.killedByTest}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Publication CTA */}
                 <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
@@ -335,7 +375,7 @@ export default function ActivityPreflightValidatorView() {
                     Versão Atual: {report.currentVersion} ➔ Nova: {report.newVersionProposed}
                   </span>
                   <button
-                    disabled={!report.isValidForPublishing || isReportStale}
+                    disabled={!report.isValidForPublishing || Boolean(isReportStale)}
                     onClick={handlePublish}
                     className={`px-6 py-2.5 rounded-xl font-bold text-xs font-mono tracking-wider uppercase transition-all flex items-center gap-2 ${
                       report.isValidForPublishing && !isReportStale

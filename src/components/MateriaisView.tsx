@@ -101,24 +101,21 @@ export default function MateriaisDidaticosView() {
       setTemplates([
         {
           id: "tpl-1",
-          name: "Lista de Exercícios Práticos - Lógica de Programação",
+          title: "Lista de Exercícios Práticos - Lógica de Programação",
           type: "exercise_list",
-          description: "10 exercícios com foco em estruturas condicionais e de repetição.",
-          created_at: new Date().toISOString()
+          is_system_template: true
         },
         {
           id: "tpl-2",
-          name: "Roteiro de Laboratório - POO & TypeScript",
+          title: "Roteiro de Laboratório - POO & TypeScript",
           type: "lab_script",
-          description: "Prática guiada de modelagem orientada a objetos com testes unitários.",
-          created_at: new Date().toISOString()
+          is_system_template: true
         },
         {
           id: "tpl-3",
-          name: "Simulado Preparatório - SAEP / Banco de Dados",
+          title: "Simulado Preparatório - SAEP / Banco de Dados",
           type: "mock_exam",
-          description: "Questões contextualizadas de SQL, DDL e normalização de dados.",
-          created_at: new Date().toISOString()
+          is_system_template: true
         }
       ]);
     } finally {

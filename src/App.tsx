@@ -2590,63 +2590,63 @@ export default function App() {
               <React.Suspense fallback={<ViewLoadingFallback />}>
 
             {currentTab === "dashboard" && (
-            <DashboardView onNavigate={(tab) => setTab(tab)} />
+            <DashboardView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "teacher_my_day" && (
-            <TeacherMyDayView onNavigate={(tab) => setTab(tab)} />
+            <TeacherMyDayView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "teacher_action_queue" && (
-            <TeacherActionQueueView onNavigate={(tab) => setTab(tab)} />
+            <TeacherActionQueueView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "reusable_feedback_bank" && (
-            <ReusableFeedbackBankView onNavigate={(tab) => setTab(tab)} />
+            <ReusableFeedbackBankView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "smart_lesson_planner" && (
-            <SmartLessonPlannerView onNavigate={(tab) => setTab(tab)} />
+            <SmartLessonPlannerView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "quick_understanding_check" && (
-            <QuickUnderstandingCheckView onNavigate={(tab) => setTab(tab)} />
+            <QuickUnderstandingCheckView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "assisted_class_diary" && (
-            <AssistedClassDiaryView onNavigate={(tab) => setTab(tab)} />
+            <AssistedClassDiaryView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "blind_grading_studio" && (
-            <BlindGradingStudioView onNavigate={(tab) => setTab(tab)} />
+            <BlindGradingStudioView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "grade_rule_simulator" && (
-            <GradeRuleSimulatorView onNavigate={(tab) => setTab(tab)} />
+            <GradeRuleSimulatorView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "cohort_comparison" && (
-            <CohortComparisonStudioView onNavigate={(tab) => setTab(tab)} />
+            <CohortComparisonStudioView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "teacher_handover" && (
-            <TeacherHandoverDossierView onNavigate={(tab) => setTab(tab)} />
+            <TeacherHandoverDossierView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "class_operations_central" && (
-            <ClassOperationsCentralView onNavigate={(tab) => setTab(tab)} />
+            <ClassOperationsCentralView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "student_experience_preview" && (
-            <StudentExperiencePreviewView onNavigate={(tab) => setTab(tab)} />
+            <StudentExperiencePreviewView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "pedagogical_config_hierarchy" && (
-            <PedagogicalConfigHierarchyView onNavigate={(tab) => setTab(tab)} />
+            <PedagogicalConfigHierarchyView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "unified_notification_center" && (
-            <UnifiedNotificationCenterView onNavigate={(tab) => setTab(tab)} />
+            <UnifiedNotificationCenterView onNavigate={(tab: any) => setTab(tab)} />
           )}
 
           {currentTab === "teacher_review_queue" && (

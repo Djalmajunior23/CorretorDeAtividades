@@ -114,11 +114,15 @@ Retorne ESTRITAMENTE em formato JSON (sem markdown externo):
 
     try {
       const provider = ProviderFactory.createCustomProvider(params.customAI);
-      const aiResponse = await provider.generateContent(
-        prompt,
-        { temperature: 0.1, max_tokens: 4000 },
-        { mimeType, base64: cleanBase64 }
-      );
+      const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000));
+      const aiResponse = await Promise.race([
+        provider.generateContent(
+          prompt,
+          { temperature: 0.1, max_tokens: 4000 },
+          { mimeType, base64: cleanBase64 }
+        ),
+        timeoutPromise
+      ]);
 
       const cleanJson = aiResponse.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);

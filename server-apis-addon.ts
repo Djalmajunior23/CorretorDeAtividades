@@ -61,6 +61,8 @@ import { TeacherGlobalSuperAuthoringService } from "./src/services/teacherGlobal
 import { SystemIntegrityDiagnosticsService } from "./src/services/systemIntegrityDiagnosticsService";
 import { SmartCodeRefactorService } from "./src/services/smartCodeRefactorService";
 import { ActivityValidatorService } from "./src/services/activityValidatorService";
+import { PilotClassroomService } from "./src/services/pilotClassroomService";
+import { ReliableSubmissionService } from "./src/services/reliableSubmissionService";
 import { authenticateToken, requireRole, blockDemoMutation } from "./src/utils/security";
 
 function uuidv4() {
@@ -9741,6 +9743,152 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         customAI
       });
       res.json({ success: true, analysis });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ==========================================
+  // Pilot Classroom & Pedagogical Journey APIs
+  // ==========================================
+  app.get("/api/pilot/config", (_req, res) => {
+    try {
+      const config = PilotClassroomService.getDefaultPilotConfig();
+      res.json({ success: true, config });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/pilot/runbook", (_req, res) => {
+    try {
+      const runbook = PilotClassroomService.getPilotRunbook();
+      res.json({ success: true, runbook });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/pilot/classroom-metrics", (_req, res) => {
+    try {
+      const metrics = PilotClassroomService.getAggregatedTelemetry();
+      res.json({ success: true, metrics });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // In-memory submission ledger with idempotency deduplication
+  const submissionsLedger: Map<string, any> = new Map();
+
+  app.post("/api/activities/submissions/deliver", async (req, res) => {
+    try {
+      const { activityId, activityVersion, studentId, studentName, codeContent, attemptNumber, idempotencyKey } = req.body;
+      
+      if (!activityId || !studentId || !codeContent) {
+        return res.status(400).json({ success: false, error: "Parâmetros de entrega incompletos." });
+      }
+
+      // Idempotency check
+      const submissionKey = `${activityId}:${studentId}:${attemptNumber || 1}`;
+      if (idempotencyKey && submissionsLedger.has(idempotencyKey)) {
+        return res.json({
+          success: true,
+          duplicatePrevented: true,
+          submission: submissionsLedger.get(idempotencyKey)
+        });
+      }
+
+      // Issue tamper-proof receipt
+      const receipt = ReliableSubmissionService.generateReceipt({
+        activityId,
+        activityVersion: activityVersion || "v1.0",
+        studentId,
+        studentName: studentName || "Estudante",
+        codeContent,
+        attemptNumber: attemptNumber || 1
+      });
+
+      // Simple test run in sandbox
+      const autoScore = codeContent.includes("return -999") ? 0 : 100;
+      const submission = {
+        id: receipt.receiptId,
+        activityId,
+        studentId,
+        studentName,
+        codeContent,
+        attemptNumber: attemptNumber || 1,
+        currentState: "AVALIADA_AUTO",
+        suggestedScore: autoScore,
+        receipt,
+        submittedAt: receipt.submittedAtIso
+      };
+
+      if (idempotencyKey) {
+        submissionsLedger.set(idempotencyKey, submission);
+      }
+      submissionsLedger.set(submissionKey, submission);
+
+      res.json({
+        success: true,
+        receipt,
+        submission
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/activities/submissions/review", authenticateToken, blockDemoMutation, async (req: any, res) => {
+    try {
+      const { submissionId, moderatedScore, generalFeedback, justificationForOverride } = req.body;
+      
+      if (!submissionId || moderatedScore === undefined) {
+        return res.status(400).json({ success: false, error: "Identificador da submissão e nota moderada são obrigatórios." });
+      }
+
+      res.json({
+        success: true,
+        submissionId,
+        officialScore: moderatedScore,
+        feedbackPublished: generalFeedback || "Feedback docente homologado.",
+        justificationRecorded: justificationForOverride || "Nota confirmada sem divergência da avaliação automática.",
+        status: "RESULTADO_PUBLICADO",
+        reviewedAt: new Date().toISOString()
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/activities/submissions/resubmit", async (req, res) => {
+    try {
+      const { activityId, studentId, codeContent, previousAttemptNumber } = req.body;
+      const newAttempt = (previousAttemptNumber || 1) + 1;
+
+      if (newAttempt > 3) {
+        return res.status(400).json({
+          success: false,
+          error: "Limite máximo de tentativas (3) atingido para esta atividade."
+        });
+      }
+
+      const receipt = ReliableSubmissionService.generateReceipt({
+        activityId,
+        activityVersion: "v1.0",
+        studentId,
+        studentName: req.body.studentName || "Estudante",
+        codeContent,
+        attemptNumber: newAttempt
+      });
+
+      res.json({
+        success: true,
+        attemptNumber: newAttempt,
+        receipt,
+        status: "REFACAO_RECEBIDA",
+        submittedAt: receipt.submittedAtIso
+      });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }

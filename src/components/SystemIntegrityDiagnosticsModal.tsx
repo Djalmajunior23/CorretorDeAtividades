@@ -224,6 +224,11 @@ export default function SystemIntegrityDiagnosticsModal({
                         </span>
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">{chk.message}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-slate-500 font-mono">
+                        <span className="text-slate-400">Origem: {chk.provenance || "PROBE_SISTEMA"}</span>
+                        <span>•</span>
+                        <span>Ambiente: {chk.measuredEnvironment || "Vercel Serverless / Node.js"}</span>
+                      </div>
                       {chk.remediation && (
                         <p className="text-[11px] text-amber-300/90 mt-1 flex items-center gap-1 font-medium">
                           <AlertTriangle className="w-3 h-3 shrink-0" />
@@ -233,8 +238,18 @@ export default function SystemIntegrityDiagnosticsModal({
                     </div>
                   </div>
 
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                    ATIVO
+                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold border shrink-0 uppercase ${
+                    chk.operationalState === "Verificado"
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      : chk.operationalState === "Configurado"
+                        ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+                        : chk.operationalState === "Simulado"
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                          : chk.operationalState === "Indisponível"
+                            ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                            : "bg-slate-800 text-slate-400 border-slate-700"
+                  }`}>
+                    {chk.operationalState || (chk.status === "healthy" ? "Verificado" : "Alerta")}
                   </span>
                 </div>
               ))}

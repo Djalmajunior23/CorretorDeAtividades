@@ -38,6 +38,16 @@ export interface ActivityValidationCheck {
   details?: string;
 }
 
+export interface MutantVariantResult {
+  id: string;
+  name: string;
+  description: string;
+  codeSnippet: string;
+  status: "KILLED" | "SURVIVED" | "NOT_EXECUTED";
+  killedByTest?: string;
+  explanation: string;
+}
+
 export interface ActivityValidationReport {
   executionId: string;
   paramsDigest: string;
@@ -48,6 +58,7 @@ export interface ActivityValidationReport {
   currentVersion: string;
   newVersionProposed: string;
   checks: ActivityValidationCheck[];
+  mutantVariants?: MutantVariantResult[];
   summary: {
     passedCount: number;
     warningCount: number;
@@ -246,32 +257,88 @@ export class ActivityValidatorService {
       }
     }
 
-    // 5. Mutant / Negative Testing (Ensures flawed code is properly rejected)
-    const buggyMutants = [
-      { name: "Mutante 1: Retorno Fixo '-999'", code: params.language === "python" ? "def somar_pares(n):\n    return -999" : "function somar_pares() { return -999; }" },
-      { name: "Mutante 2: Loop Infinito", code: params.language === "python" ? "while True: pass" : "while(true){}" }
+    // 5. Mutant / Negative Testing with Concrete Variants Execution
+    const mutantDefs = [
+      {
+        id: "mut_const_999",
+        name: "Mutante 1: Retorno Constante -999",
+        description: "Substitui corpo da função por retorno fixo -999",
+        code: params.language === "python" ? "def somar_pares(n):\n    return -999" : "function somar_pares() { return -999; }"
+      },
+      {
+        id: "mut_infinite_loop",
+        name: "Mutante 2: Loop Infinito / Travamento",
+        description: "Substitui lógica por loop infinito sem encerramento",
+        code: params.language === "python" ? "def somar_pares(n):\n    while True: pass" : "function somar_pares() { while(true){} }"
+      },
+      {
+        id: "mut_all_numbers",
+        name: "Mutante 3: Somar Todos (Ignorar Paridade)",
+        description: "Soma números ímpares e pares (passo 1 em vez de 2)",
+        code: params.language === "python" ? "def somar_pares(n):\n    if n <= 0: return 0\n    return sum(i for i in range(1, n + 1))" : "function somar_pares(n) { let s=0; for(let i=1;i<=n;i++) s+=i; return s; }"
+      },
+      {
+        id: "mut_always_zero",
+        name: "Mutante 4: Retorno Fixo Zero",
+        description: "Retorna incondicionalmente 0 para qualquer entrada",
+        code: params.language === "python" ? "def somar_pares(n):\n    return 0" : "function somar_pares() { return 0; }"
+      }
     ];
 
-    let mutantRejectionOk = true;
-    for (const mutant of buggyMutants) {
-      try {
-        const res = await executeInSandbox(mutant.code, params.language, "10", 1500);
-        // If mutant passed (produced expected output), the test suite is too weak!
-        if (res.stdout.trim() === (params.testCases[0]?.expectedOutput || "").trim()) {
-          mutantRejectionOk = false;
+    const mutantVariants: MutantVariantResult[] = [];
+    let allMutantsKilled = true;
+
+    for (const mDef of mutantDefs) {
+      let killed = false;
+      let killedBy = "";
+      let explanation = "";
+
+      for (const tc of params.testCases || []) {
+        try {
+          const res = await executeInSandbox(mDef.code, params.language, tc.input, 1500);
+          const actualClean = (res.stdout || "").trim();
+          const expectedClean = (tc.expectedOutput || "").trim();
+
+          // If execution timed out, errored, or produced wrong answer -> MUTANT IS KILLED (DESIRED)
+          if (res.status === "timeout" || res.exitCode !== 0 || actualClean !== expectedClean) {
+            killed = true;
+            killedBy = `Caso de teste "${tc.input}" (Esperado: ${expectedClean}, Mutante: ${actualClean || "Erro/Timeout"})`;
+            explanation = `Rejeitado com sucesso: comportamento incorreto detectado.`;
+            break;
+          }
+        } catch {
+          killed = true;
+          killedBy = `Exceção interceptada no caso de teste "${tc.input}"`;
+          explanation = `Rejeitado por exceção de execução.`;
+          break;
         }
-      } catch {
-        // Exception or timeout is expected and desired for buggy mutants
       }
+
+      if (!killed) {
+        allMutantsKilled = false;
+        explanation = "ALERTA: O mutante sobreviveu! A suíte de testes não foi capaz de detectar esta falha intencional.";
+      }
+
+      mutantVariants.push({
+        id: mDef.id,
+        name: mDef.name,
+        description: mDef.description,
+        codeSnippet: mDef.code,
+        status: killed ? "KILLED" : "SURVIVED",
+        killedByTest: killedBy || undefined,
+        explanation
+      });
     }
 
+    const killedCount = mutantVariants.filter(m => m.status === "KILLED").length;
     checks.push({
       id: "check-mutants",
       category: "TESTES_MUTANTES",
-      status: mutantRejectionOk ? "PASSED" : "WARNING",
-      message: mutantRejectionOk
-        ? "Bateria de testes mutantes aprovada: códigos intencionalmente errados foram rejeitados."
-        : "Alerta de mutação: Casos de teste podem não estar filtrando soluções triviais com respostas fixas."
+      status: allMutantsKilled ? "PASSED" : "WARNING",
+      message: allMutantsKilled
+        ? `Bateria de testes mutantes aprovada: ${killedCount}/${mutantVariants.length} variantes com bugs intencionais foram eliminadas.`
+        : `Alerta de mutação: ${mutantVariants.length - killedCount} mutante(s) sobreviveram. Reforce os casos de teste.`,
+      details: mutantVariants.map(m => `• ${m.name}: [${m.status}] ${m.explanation}`).join("\n")
     });
 
     // Summary calculation
@@ -289,6 +356,7 @@ export class ActivityValidatorService {
       currentVersion: "v1.0",
       newVersionProposed: "v1.1",
       checks,
+      mutantVariants,
       summary: {
         passedCount,
         warningCount,
