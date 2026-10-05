@@ -78,77 +78,81 @@ function isValidUuid(value: unknown): value is string {
   );
 }
 
-export async function initializeDatabase(pool: Pool | null): Promise<void> {
-  if (!pool) {
+export async function initializeDatabase(pool: Pool | null, vaultPool?: Pool | null): Promise<void> {
+  const activeVaultPool = vaultPool || pool;
+  if (!pool && !activeVaultPool) {
     console.log("[DEBUG] No PostgreSQL pool available for database initialization.");
     return;
   }
-  console.log("[DEBUG] initializeDatabase started...");
+  console.log("[DEBUG] initializeDatabase started (Hybrid Core + Vault)...");
   try {
+    if (pool) {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS d_student_grades (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id TEXT NOT NULL,
+          class_id TEXT NOT NULL,
+          activity_name TEXT NOT NULL,
+          grade NUMERIC,
+          feedback TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS d_student_grades (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        student_id TEXT NOT NULL,
-        class_id TEXT NOT NULL,
-        activity_name TEXT NOT NULL,
-        grade NUMERIC,
-        feedback TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_student_grades_key 
+        ON d_student_grades (student_id, class_id, activity_name);
+      `);
+    }
 
-    await pool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_student_grades_key 
-      ON d_student_grades (student_id, class_id, activity_name);
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS correction_vault (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        student_key TEXT NOT NULL,
-        student_id TEXT NULL,
-        student_registration TEXT NULL,
-        student_name TEXT NULL,
-        class_id TEXT NULL,
-        class_name TEXT NULL,
-        activity_id TEXT NULL,
-        activity_title TEXT NULL,
-        question_id TEXT NULL,
-        question_title TEXT NULL,
-        language TEXT NOT NULL,
-        submitted_code TEXT NOT NULL,
-        score NUMERIC(5,2) DEFAULT 0,
-        max_score NUMERIC(5,2) DEFAULT 100,
-        percentage NUMERIC(5,2) DEFAULT 0,
-        status TEXT DEFAULT 'saved',
-        feedback TEXT NULL,
-        ai_feedback TEXT NULL,
-        teacher_feedback TEXT NULL,
-        execution_output TEXT NULL,
-        execution_error TEXT NULL,
-        test_results JSONB DEFAULT '[]'::jsonb,
-        rubric_result JSONB DEFAULT '{}'::jsonb,
-        strengths JSONB DEFAULT '[]'::jsonb,
-        improvements JSONB DEFAULT '[]'::jsonb,
-        raw_correction JSONB DEFAULT '{}'::jsonb,
-        metadata JSONB DEFAULT '{}'::jsonb,
-        source TEXT DEFAULT 'correction_vault',
-        saved_by TEXT NULL,
-        saved_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_key ON correction_vault(student_key);
-      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_id ON correction_vault(student_id);
-      CREATE INDEX IF NOT EXISTS idx_correction_vault_student_registration ON correction_vault(student_registration);
-      CREATE INDEX IF NOT EXISTS idx_correction_vault_class_id ON correction_vault(class_id);
-      CREATE INDEX IF NOT EXISTS idx_correction_vault_activity_id ON correction_vault(activity_id);
-      CREATE INDEX IF NOT EXISTS idx_correction_vault_question_id ON correction_vault(question_id);
-      CREATE INDEX IF NOT EXISTS idx_correction_vault_created_at ON correction_vault(created_at DESC);
-    `);
+    if (activeVaultPool) {
+      await activeVaultPool.query(`
+        CREATE TABLE IF NOT EXISTS correction_vault (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_key TEXT NOT NULL,
+          student_id TEXT NULL,
+          student_registration TEXT NULL,
+          student_name TEXT NULL,
+          class_id TEXT NULL,
+          class_name TEXT NULL,
+          activity_id TEXT NULL,
+          activity_title TEXT NULL,
+          question_id TEXT NULL,
+          question_title TEXT NULL,
+          language TEXT NOT NULL,
+          submitted_code TEXT NOT NULL,
+          score NUMERIC(5,2) DEFAULT 0,
+          max_score NUMERIC(5,2) DEFAULT 100,
+          percentage NUMERIC(5,2) DEFAULT 0,
+          status TEXT DEFAULT 'saved',
+          feedback TEXT NULL,
+          ai_feedback TEXT NULL,
+          teacher_feedback TEXT NULL,
+          execution_output TEXT NULL,
+          execution_error TEXT NULL,
+          test_results JSONB DEFAULT '[]'::jsonb,
+          rubric_result JSONB DEFAULT '{}'::jsonb,
+          strengths JSONB DEFAULT '[]'::jsonb,
+          improvements JSONB DEFAULT '[]'::jsonb,
+          raw_correction JSONB DEFAULT '{}'::jsonb,
+          metadata JSONB DEFAULT '{}'::jsonb,
+          source TEXT DEFAULT 'correction_vault',
+          saved_by TEXT NULL,
+          saved_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_correction_vault_student_key ON correction_vault(student_key);
+        CREATE INDEX IF NOT EXISTS idx_correction_vault_student_id ON correction_vault(student_id);
+        CREATE INDEX IF NOT EXISTS idx_correction_vault_student_registration ON correction_vault(student_registration);
+        CREATE INDEX IF NOT EXISTS idx_correction_vault_class_id ON correction_vault(class_id);
+        CREATE INDEX IF NOT EXISTS idx_correction_vault_activity_id ON correction_vault(activity_id);
+        CREATE INDEX IF NOT EXISTS idx_correction_vault_question_id ON correction_vault(question_id);
+        CREATE INDEX IF NOT EXISTS idx_correction_vault_created_at ON correction_vault(created_at DESC);
+      `);
+    }
     console.log("[DEBUG] correction_vault table and indices verified/created successfully.");
   } catch (err) {
     console.error("Error in initializeDatabase:", err);
@@ -156,68 +160,95 @@ export async function initializeDatabase(pool: Pool | null): Promise<void> {
   }
 }
 
-export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
-  console.log("[DEBUG] setupTeacherAPIs called");
+export function setupTeacherAPIs(app: express.Application, pool: Pool | null, vaultPool?: Pool | null) {
+  const activeVaultPool = vaultPool || pool;
+  console.log("[DEBUG] setupTeacherAPIs called (Hybrid Mode: Neon Core + VPS Vault)");
   
   app.get("/api/health/corrections", (req, res) => res.json({ status: "ok" }));
   app.get("/api/health/database", async (req, res) => {
     try {
-      if (!pool) return res.status(503).json({ status: "error", message: "Database not available" });
-      await pool.query("SELECT 1");
-      res.json({ status: "ok" });
+      if (!pool && !activeVaultPool) return res.status(503).json({ status: "error", message: "Database not available" });
+      const start = Date.now();
+      if (pool) await pool.query("SELECT 1");
+      const coreLatency = Date.now() - start;
+
+      let vaultStatus = "shared_with_core";
+      let vaultLatency = coreLatency;
+      if (vaultPool && vaultPool !== pool) {
+        try {
+          const vStart = Date.now();
+          await vaultPool.query("SELECT 1");
+          vaultStatus = "vps_vault_connected";
+          vaultLatency = Date.now() - vStart;
+        } catch {
+          vaultStatus = "vps_vault_fallback_to_core";
+        }
+      }
+
+      res.json({ 
+        status: "ok", 
+        database: "connected",
+        core_database: pool ? "neon_connected" : "none",
+        vault_database: vaultStatus,
+        latencyMs: coreLatency,
+        vaultLatencyMs: vaultLatency
+      });
     } catch (e) {
       res.status(500).json({ status: "error" });
     }
   });
 
   // --- DATABASE MIGRATIONS FOR THE NEW COLUMNS ---
-  if (pool) {
-    initializeDatabase(pool).catch((err) => {
+  if (pool || activeVaultPool) {
+    initializeDatabase(pool, activeVaultPool).catch((err) => {
       console.error("[DEBUG] Failed to initializeDatabase correction_vault:", err);
     });
 
-    // 1. Migrate activities
-    pool
-      .query(
-        `
-      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS class_id UUID;
-      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS deadline VARCHAR(100);
-      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255);
-      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS description TEXT;
-      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 100;
-      ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS sla_tolerance_hours INTEGER DEFAULT 12;
-    `,
-      )
-      .catch((err) =>
-        console.error("Error migrating d_activities columns:", err),
-      );
+    // 1. Migrate activities (Core Pool)
+    if (pool) {
+      pool
+        .query(
+          `
+        ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS class_id UUID;
+        ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS deadline VARCHAR(100);
+        ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255);
+        ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS description TEXT;
+        ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 100;
+        ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS sla_tolerance_hours INTEGER DEFAULT 12;
+      `,
+        )
+        .catch((err) =>
+          console.error("Error migrating d_activities columns:", err),
+        );
+    }
 
-    // 3. Migrate correction_vault
-    pool
-      .query(
-        `
-      ALTER TABLE correction_vault ADD COLUMN IF NOT EXISTS pedagogical_notes TEXT;
-    `,
-      )
-      .catch((err) =>
-        console.error("Error migrating correction_vault columns:", err),
-      );
+    // 3. Migrate correction_vault (Vault Pool)
+    if (activeVaultPool) {
+      activeVaultPool
+        .query(
+          `
+        ALTER TABLE correction_vault ADD COLUMN IF NOT EXISTS pedagogical_notes TEXT;
+      `,
+        )
+        .catch((err) =>
+          console.error("Error migrating correction_vault columns:", err),
+        );
 
-    // 2. Create correction_results table
-    pool
-      .query(
-        `
-      CREATE TABLE IF NOT EXISTS correction_results (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        student_id TEXT NOT NULL,
-        class_id TEXT NULL,
-        question_id TEXT NULL,
-        activity_id TEXT NULL,
-        student_name TEXT NULL,
-        class_name TEXT NULL,
-        question_title TEXT NULL,
-        language TEXT NOT NULL,
-        submitted_code TEXT NOT NULL,
+      // 2. Create correction_results table
+      activeVaultPool
+        .query(
+          `
+        CREATE TABLE IF NOT EXISTS correction_results (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id TEXT NOT NULL,
+          class_id TEXT NULL,
+          question_id TEXT NULL,
+          activity_id TEXT NULL,
+          student_name TEXT NULL,
+          class_name TEXT NULL,
+          question_title TEXT NULL,
+          language TEXT NOT NULL,
+          submitted_code TEXT NOT NULL,
         score NUMERIC(5,2) DEFAULT 0,
         max_score NUMERIC(5,2) DEFAULT 100,
         status TEXT DEFAULT 'corrected',
@@ -311,48 +342,51 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null) {
       .catch((err) =>
         console.error("Error creating tables:", err),
       );
+    }
 
-    // 3. Migrate d_pedagogical_evidence
-    pool
-      .query(
-        `
-      ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS activity_id UUID REFERENCES d_activities(id);
-      ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS correction_id UUID;
-      ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS evidence_type VARCHAR(100);
-    `,
-      )
-      .catch((err) =>
-        console.error("Error migrating d_pedagogical_evidence table:", err),
-      );
+    // 3. Migrate d_pedagogical_evidence (Core Pool)
+    if (pool) {
+      pool
+        .query(
+          `
+        ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS activity_id UUID REFERENCES d_activities(id);
+        ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS correction_id UUID;
+        ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS evidence_type VARCHAR(100);
+      `,
+        )
+        .catch((err) =>
+          console.error("Error migrating d_pedagogical_evidence table:", err),
+        );
 
-    // 4. Create d_teacher_library_item table
-    pool
-      .query(
-        `
-      CREATE TABLE IF NOT EXISTS d_teacher_library_item (
-        id UUID PRIMARY KEY,
-        teacher_id VARCHAR(100) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        description TEXT,
-        type VARCHAR(100) NOT NULL,
-        topic VARCHAR(100),
-        language VARCHAR(50),
-        tags TEXT[],
-        content TEXT,
-        file_url TEXT,
-        is_favorite BOOLEAN DEFAULT FALSE,
-        status VARCHAR(50) DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `,
-      )
-      .catch((err) =>
-        console.error("Error creating d_teacher_library_item table:", err),
-      );
+      // 4. Create d_teacher_library_item table (Core Pool)
+      pool
+        .query(
+          `
+        CREATE TABLE IF NOT EXISTS d_teacher_library_item (
+          id UUID PRIMARY KEY,
+          teacher_id VARCHAR(100) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          type VARCHAR(100) NOT NULL,
+          topic VARCHAR(100),
+          language VARCHAR(50),
+          tags TEXT[],
+          content TEXT,
+          file_url TEXT,
+          is_favorite BOOLEAN DEFAULT FALSE,
+          status VARCHAR(50) DEFAULT 'active',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `,
+        )
+        .catch((err) =>
+          console.error("Error creating d_teacher_library_item table:", err),
+        );
 
-    // Register automatic background backup schedules every 12 hours
-    startPeriodicBackupSchedule(pool, 12 * 60 * 60 * 1000);
+      // Register automatic background backup schedules every 12 hours
+      startPeriodicBackupSchedule(pool, 12 * 60 * 60 * 1000);
+    }
   }
 
   
@@ -2057,7 +2091,12 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
         RETURNING *;
       `;
 
-      const result = await pool.query(query, [
+      const targetPool = activeVaultPool || pool;
+      if (!targetPool) {
+        return res.status(503).json({ success: false, message: "Banco indisponível para salvar correção." });
+      }
+
+      const result = await targetPool.query(query, [
         studentKey,
         studentId,
         studentRegistration,
@@ -2103,7 +2142,8 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
   async function getCorrectionVaultByStudent(req: express.Request, res: express.Response) {
     try {
       const studentKey = req.params.studentKey ?? req.params.student_id;
-      if (!pool) return res.json({ success: true, data: [] });
+      const targetPool = activeVaultPool || pool;
+      if (!targetPool) return res.json({ success: true, data: [] });
 
       const query = `
         SELECT *
@@ -2114,7 +2154,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
            OR student_name = $1
         ORDER BY created_at DESC
       `;
-      const result = await pool.query(query, [studentKey]);
+      const result = await targetPool.query(query, [studentKey]);
       res.json({ success: true, data: result.rows });
     } catch (e: any) {
       console.error("Error fetching from correction-vault by studentKey:", e);
@@ -2135,7 +2175,8 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
   app.get("/api/correction-vault", async (req, res) => {
     try {
       const { student_key, student_id, student_registration, class_id } = req.query;
-      if (!pool) return res.json({ success: true, data: [] });
+      const targetPool = activeVaultPool || pool;
+      if (!targetPool) return res.json({ success: true, data: [] });
 
       let query = "SELECT * FROM correction_vault";
       let params: string[] = [];
@@ -2164,7 +2205,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
 
       query += " ORDER BY created_at DESC LIMIT 100";
 
-      const result = await pool.query(query, params);
+      const result = await targetPool.query(query, params);
       res.json({ success: true, data: result.rows });
     } catch (e: any) {
       console.error("Error listing correction-vault results:", e);
@@ -2175,7 +2216,8 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
   app.get("/api/student-correction-results", async (req, res) => {
     try {
       const { student_key, student_id, student_registration, class_id } = req.query;
-      if (!pool) return res.json({ success: true, data: [] });
+      const targetPool = activeVaultPool || pool;
+      if (!targetPool) return res.json({ success: true, data: [] });
 
       let query = "SELECT * FROM correction_vault";
       let params: string[] = [];
@@ -2204,7 +2246,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
 
       query += " ORDER BY created_at DESC LIMIT 100";
 
-      const result = await pool.query(query, params);
+      const result = await targetPool.query(query, params);
       res.json({ success: true, data: result.rows });
     } catch (e: any) {
       console.error("Error listing student correction results:", e);
@@ -2217,7 +2259,8 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
   app.get("/api/submissions", async (req, res) => {
     try {
       const { student_id, class_id } = req.query;
-      if (!pool) return res.json({ success: true, data: [] });
+      const targetPool = activeVaultPool || pool;
+      if (!targetPool) return res.json({ success: true, data: [] });
 
       let query = "SELECT * FROM correction_vault";
       let params: string[] = [];

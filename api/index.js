@@ -9,7 +9,7 @@ export default async function handler(req, res) {
         await server.initDatabase();
       }
       if (typeof server.initializeDatabase === "function") {
-        await server.initializeDatabase(server.pool);
+        await server.initializeDatabase(server.pool, server.vaultPool);
       }
       isDbInitialized = true;
     } catch (e) {

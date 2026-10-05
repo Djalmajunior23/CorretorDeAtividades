@@ -340,31 +340,106 @@ function requireAdminMfa(req: express.Request, res: express.Response, next: expr
   next();
 }
 
-// Database Pool (with safe fallback supporting Vercel, Neon, Supabase, Cloud SQL)
-const databaseUrl = process.env.DATABASE_URL || 
+// -------------------------------------------------------------
+// HYBRID DUAL-POOL ARCHITECTURE (Neon Core + VPS Vault)
+// -------------------------------------------------------------
+const coreDatabaseUrl = process.env.DATABASE_URL || 
   process.env.POSTGRES_URL || 
   process.env.POSTGRES_PRISMA_URL || 
   process.env.POSTGRES_URL_NON_POOLING || 
   process.env.SUPABASE_DB_URL || 
   process.env.NEON_DATABASE_URL;
 
-let pool: pg.Pool | null = null;
-if (databaseUrl) {
-  try {
-    pool = new Pool({
-      connectionString: databaseUrl,
-      ssl: { rejectUnauthorized: false },
-      max: process.env.VERCEL ? 5 : 20, // conservative pool size for serverless
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-    pool.on('error', (err) => {
-      console.error('Unexpected error on idle client', err);
-    });
-    console.log("Connected to PostgreSQL (Cloud/Vercel/Neon) DB URL successfully.");
-  } catch (error) {
-    console.error("Failed to construct DB pool:", error);
+// Optional Dedicated Vault Database (VPS PostgreSQL, e.g., on db.edstudenthub.com:5433)
+const vaultDatabaseUrl = process.env.VAULT_DATABASE_URL ||
+  process.env.VPS_DATABASE_URL ||
+  process.env.STORAGE_DATABASE_URL;
+
+function createPgPool(rawUrl: string, poolLabel: string = "Core"): pg.Pool {
+  const urlLower = rawUrl.toLowerCase();
+  const isLocalhost = urlLower.includes("localhost") || urlLower.includes("127.0.0.1");
+  const isSslDisabled = urlLower.includes("sslmode=disable") || urlLower.includes("ssl=false");
+
+  let sslConfig: boolean | { rejectUnauthorized: boolean; ca?: string } | undefined = undefined;
+
+  if (!isLocalhost && !isSslDisabled) {
+    const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+    let caCertificate: string | undefined = undefined;
+
+    if (process.env.DATABASE_SSL_CA) {
+      caCertificate = process.env.DATABASE_SSL_CA.replace(/\\n/g, "\n");
+    } else if (process.env.DATABASE_SSL_CA_PATH && fs.existsSync(process.env.DATABASE_SSL_CA_PATH)) {
+      try {
+        caCertificate = fs.readFileSync(process.env.DATABASE_SSL_CA_PATH, "utf8");
+      } catch (err: any) {
+        console.warn(`[DB TLS ${poolLabel}] Falha ao ler certificado CA:`, err.message);
+      }
+    }
+
+    sslConfig = {
+      rejectUnauthorized,
+      ...(caCertificate ? { ca: caCertificate } : {})
+    };
+  } else if (isSslDisabled) {
+    sslConfig = false;
   }
+
+  const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+  const max = process.env.DB_POOL_MAX 
+    ? parseInt(process.env.DB_POOL_MAX, 10) 
+    : (isServerless ? 4 : 20);
+
+  const idleTimeoutMillis = process.env.DB_IDLE_TIMEOUT 
+    ? parseInt(process.env.DB_IDLE_TIMEOUT, 10) 
+    : (isServerless ? 10000 : 30000);
+
+  const connectionTimeoutMillis = process.env.DB_CONN_TIMEOUT 
+    ? parseInt(process.env.DB_CONN_TIMEOUT, 10) 
+    : 5000;
+
+  const instance = new Pool({
+    connectionString: rawUrl,
+    ssl: sslConfig,
+    max,
+    idleTimeoutMillis,
+    connectionTimeoutMillis,
+    allowExitOnIdle: isServerless,
+  });
+
+  instance.on("error", (err: any) => {
+    console.error(`[PostgreSQL Pool ${poolLabel}] Erro no cliente ocioso:`, err.message || err);
+  });
+
+  return instance;
+}
+
+let pool: pg.Pool | null = null;
+let vaultPool: pg.Pool | null = null;
+
+if (coreDatabaseUrl) {
+  try {
+    pool = createPgPool(coreDatabaseUrl, "Neon-Core");
+    console.log("[DB] Pool Core (Neon / OLTP) configurado com sucesso.");
+  } catch (error: any) {
+    console.error("[DB] Falha ao inicializar Pool Core:", error.message || error);
+  }
+}
+
+if (vaultDatabaseUrl) {
+  try {
+    vaultPool = createPgPool(vaultDatabaseUrl, "VPS-Vault");
+    console.log("[DB] Pool Vault (VPS / Heavy Data & Logs) configurado com sucesso.");
+  } catch (error: any) {
+    console.error("[DB] Falha ao inicializar Pool Vault na VPS:", error.message || error);
+  }
+}
+
+function getVaultPool(): pg.Pool | null {
+  return vaultPool || pool;
+}
+
+function getCorePool(): pg.Pool | null {
+  return pool;
 }
 
 // In-Memory fallback cache
@@ -398,7 +473,7 @@ const questionsMemoryDb: any[] = [
   }
 ];
 
-setupTeacherAPIs(app, pool);
+setupTeacherAPIs(app, pool, vaultPool);
 
 
 // Initialize database schema (with advanced support for 5 relational models, CASCADE constraints, and indices)
@@ -12745,7 +12820,7 @@ async function main() {
   }
 }
 
-export { app, pool, initDatabase, initializeDatabase };
+export { app, pool, vaultPool, initDatabase, initializeDatabase, getVaultPool, getCorePool };
 export default app;
 
 if (!process.env.VERCEL) {
