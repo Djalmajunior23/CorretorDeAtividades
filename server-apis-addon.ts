@@ -2281,7 +2281,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
 
       query += " ORDER BY created_at DESC";
 
-      const result = await pool.query(query, params);
+      const result = pool ? await pool.query(query, params) : { rows: [] };
       res.json({ success: true, data: result.rows });
     } catch (e: any) {
       res.json({ success: true, data: [] });

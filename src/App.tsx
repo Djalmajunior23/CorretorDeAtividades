@@ -118,6 +118,9 @@ const PedagogicalConfigHierarchyView = lazyRetry(() => import("./components/Peda
 const UnifiedNotificationCenterView = lazyRetry(() => import("./components/UnifiedNotificationCenterView"));
 const SystemIntegrityDiagnosticsModal = lazyRetry(() => import("./components/SystemIntegrityDiagnosticsModal"));
 const SmartCodeRefactorStudioModal = lazyRetry(() => import("./components/SmartCodeRefactorStudioModal"));
+const HumanAiSynergyView = lazyRetry(() => import("./components/HumanAiSynergyView"));
+const SreWarRoomSimulatorView = lazyRetry(() => import("./components/SreWarRoomSimulatorView"));
+const CareerAndIndustryBridgeView = lazyRetry(() => import("./components/CareerAndIndustryBridgeView"));
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-12 text-slate-400 animate-fade-in">
@@ -2863,6 +2866,18 @@ export default function App() {
 
            {currentTab === "viva_voce" && (
              <VivaVoceExamView />
+           )}
+
+           {currentTab === "human_ai_synergy" && (
+             <HumanAiSynergyView />
+           )}
+
+           {currentTab === "sre_war_room" && (
+             <SreWarRoomSimulatorView />
+           )}
+
+           {currentTab === "career_bridge" && (
+             <CareerAndIndustryBridgeView />
            )}
 
            {currentTab === "agile_squad" && (

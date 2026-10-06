@@ -169,6 +169,8 @@ export default function Sidebar({
       icon: Terminal,
       color: "text-amber-400",
       items: [
+        { id: "human_ai_synergy", label: "Sinergia Humano-IA & Telemetria", icon: Sparkles, desc: "Auditoria Forense de Prompts & Co-pilot", isNew: true },
+        { id: "viva_voce", label: "Defesa Oral por Voz (Viva-Voce)", icon: Volume2, desc: "Arguição Técnica Multimodal com IA", isNew: true },
         { id: "blind_grading_studio", label: "Correção sem Identificação", icon: EyeOff, desc: "Avaliação Duplo-Cega por Pseudônimos", isNew: true },
         { id: "reusable_feedback_bank", label: "Banco de Feedback @Tags", icon: MessageSquare, desc: "Biblioteca de Snippets por Competência", isNew: true },
         { id: "teacher_review_queue", label: "Central de Revisão Docente", icon: ShieldCheck, desc: "Fila de Triagem, Recursos & Homologação", isNew: true },
@@ -184,6 +186,7 @@ export default function Sidebar({
       icon: Brain,
       color: "text-indigo-400",
       items: [
+        { id: "career_bridge", label: "Passaporte de Empregabilidade & Vagas", icon: Award, desc: "Credenciais W3C & Radar de Empregos", isNew: true },
         { id: "guided_refactoring", label: "Ciclo de Refação Orientada", icon: RefreshCw, desc: "Scaffolding, Dicas & Justificativa", isNew: true },
         { id: "smart_code_refactor", label: "Estúdio de Refatoração & Clean Code", icon: Code2, desc: "Complexidade Ciclomática, AST & AppSec", isNew: true },
         { id: "student_portal", label: "Portal do Aluno", icon: GraduationCap, desc: "Ambiente do Estudante & Submissões" },
@@ -216,6 +219,7 @@ export default function Sidebar({
       icon: Settings,
       color: "text-rose-400",
       items: [
+        { id: "sre_war_room", label: "Sala de Guerra SRE & Incidentes", icon: Flame, desc: "Troubleshooting de Outages em Produção", isNew: true },
         { id: "system_diagnostics", label: "Diagnóstico de Infraestrutura & Self-Healing", icon: HeartPulse, desc: "Auditoria Contínua ASVS L2 & Auto-Cura", isNew: true },
         { id: "sql_dialect_lab", label: "Laboratório SQL Multi-Dialeto", icon: Database, desc: "PostgreSQL, MySQL & SQLite Isolados", isNew: true },
         { id: "peer_review", label: "Revisão por Pares (Peer Review)", icon: Users, desc: "Avaliação Duplo-Cega & Moderação", isNew: true },
