@@ -118,7 +118,7 @@ describe("Integrated Pedagogical Pilot, Backend Evaluation & Demo Isolation Suit
   // =========================================================================
   describe("Frente 2: Demo Isolation & System Diagnostics", () => {
     it("should block mutations from demo session with HTTP 403", async () => {
-      const demoToken = "demo_guest_session_xyz789";
+      const demoToken = generateJwtToken({ id: "guest_demo_user", name: "Visitante Convidado", email: "visitante@demo.com", role: "DEMO" });
 
       const res = await fetch(`${baseUrl}/api/system/diagnostics/self-heal`, {
         method: "POST",

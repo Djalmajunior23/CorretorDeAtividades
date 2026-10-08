@@ -4,6 +4,7 @@ import http from "http";
 import { ActivityValidatorService } from "../services/activityValidatorService";
 import { SystemIntegrityDiagnosticsService } from "../services/systemIntegrityDiagnosticsService";
 import { setupTeacherAPIs } from "../../server-apis-addon";
+import { generateJwtToken } from "../utils/security";
 
 describe("Pre-Flight Validator & Demo Isolation Regression Suite", () => {
   let app: express.Express;
@@ -139,7 +140,7 @@ describe("Pre-Flight Validator & Demo Isolation Regression Suite", () => {
 
   describe("2. Isolamento de Demonstração & Controle de Acesso nas APIs", () => {
     it("deve BLOQUEAR com HTTP 403 tentativas de executar backup no Modo Demonstração (Visitante)", async () => {
-      const demoToken = `demo_guest_session_${Date.now()}`;
+      const demoToken = generateJwtToken({ id: "demo_visitor", name: "Visitante Demo", email: "demo@senai.br", role: "DEMO" });
 
       const res = await fetch(`${baseUrl}/api/backup/export`, {
         method: "POST",
@@ -154,7 +155,7 @@ describe("Pre-Flight Validator & Demo Isolation Regression Suite", () => {
     });
 
     it("deve BLOQUEAR com HTTP 403 tentativas de acionar auto-cura no Modo Demonstração", async () => {
-      const demoToken = `demo_guest_session_${Date.now()}`;
+      const demoToken = generateJwtToken({ id: "demo_visitor", name: "Visitante Demo", email: "demo@senai.br", role: "DEMO" });
 
       const res = await fetch(`${baseUrl}/api/system/diagnostics/self-heal`, {
         method: "POST",

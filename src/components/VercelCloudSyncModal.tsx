@@ -55,10 +55,17 @@ export const VercelCloudSyncModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"status" | "backup" | "guide">("status");
 
+  const getAuthHeader = (): Record<string, string> => {
+    const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const fetchStatus = async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("/api/cloud-sync/status"));
+      const res = await fetch(apiUrl("/api/cloud-sync/status"), {
+        headers: getAuthHeader()
+      });
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
@@ -81,7 +88,9 @@ export const VercelCloudSyncModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setActionLoading("export");
     setFeedbackMsg(null);
     try {
-      const res = await fetch(apiUrl("/api/cloud-sync/export-dump"));
+      const res = await fetch(apiUrl("/api/cloud-sync/export-dump"), {
+        headers: getAuthHeader()
+      });
       if (res.ok) {
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
@@ -121,7 +130,7 @@ export const VercelCloudSyncModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
       const res = await fetch(apiUrl("/api/cloud-sync/import-dump"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload)
       });
 
@@ -152,7 +161,7 @@ export const VercelCloudSyncModal: React.FC<Props> = ({ isOpen, onClose }) => {
     try {
       const res = await fetch(apiUrl("/api/cloud-sync/seed-cloud"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json", ...getAuthHeader() }
       });
       const data = await res.json();
       if (res.ok && data.success) {

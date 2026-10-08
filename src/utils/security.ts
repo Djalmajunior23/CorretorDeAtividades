@@ -149,19 +149,8 @@ export function authenticateToken(req: any, res: any, next: any) {
   }
 
   const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
-    ? authHeader.substring(7)
-    : String(authHeader).split(" ")[1] || String(authHeader);
-
-  // Check for demo guest session token
-  if (token.startsWith("demo_guest_session_")) {
-    req.user = {
-      id: "guest-demo-visitor",
-      name: "Visitante Convidado (Modo Demonstração)",
-      email: "visitante.demo@codecheck.senai.br",
-      role: "DEMO"
-    };
-    return next();
-  }
+    ? authHeader.substring(7).trim()
+    : String(authHeader).split(" ")[1]?.trim() || String(authHeader).trim();
 
   const verification = verifyJwtToken(token);
   if (!verification.valid || !verification.payload) {
@@ -181,7 +170,9 @@ export function requireRole(allowedRoles: string[]) {
       return res.status(401).json({ success: false, error: "Autenticação requerida." });
     }
 
-    const userRole = (req.user.role || "").toUpperCase();
+    let userRole = (req.user.role || "").toUpperCase();
+    if (userRole === "TEACHER") userRole = "PROFESSOR";
+    if (userRole === "STUDENT") userRole = "ALUNO";
     const upperAllowed = allowedRoles.map(r => r.toUpperCase());
 
     if (!upperAllowed.includes(userRole)) {
@@ -199,9 +190,7 @@ export function requireRole(allowedRoles: string[]) {
  * Express Middleware to block Demo/Visitor users from modifying system state or executing infrastructure actions.
  */
 export function blockDemoMutation(req: any, res: any, next: any) {
-  const authHeader = req.headers["authorization"] || req.headers["Authorization"] || "";
-  const isDemoToken = typeof authHeader === "string" && authHeader.includes("demo_guest_session");
-  const isDemoUser = req.user?.role === "DEMO" || isDemoToken;
+  const isDemoUser = req.user?.role === "DEMO";
 
   if (isDemoUser) {
     return res.status(403).json({

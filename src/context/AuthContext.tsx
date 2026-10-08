@@ -107,14 +107,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (storedToken && storedUser) {
         try {
-          const parsedUser = JSON.parse(storedUser);
-          if (parsedUser.role === "DEMO" || parsedUser.isGuest) {
-            setUser(parsedUser);
-            setToken(storedToken);
-            setIsLoading(false);
-            return;
-          }
-
           const url = apiUrl("/api/auth/me");
 
           const response = await fetch(url, {
@@ -155,19 +147,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser(authUser);
   };
 
-  const guestLogin = () => {
-    const guestUser: User = {
+  const guestLogin = async () => {
+    try {
+      const url = apiUrl("/api/auth/demo-session");
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const demoUser: User = {
+          id: data.user?.id || "guest-demo-visitor",
+          name: data.user?.name || "Visitante Convidado (Modo Demonstração)",
+          email: data.user?.email || "visitante.demo@codecheck.senai.br",
+          role: "DEMO",
+          isGuest: true
+        };
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(demoUser));
+        setToken(data.token);
+        setUser(demoUser);
+        return;
+      }
+    } catch (err) {
+      console.warn("Could not obtain server demo token:", err);
+    }
+
+    // Fallback if backend is completely offline
+    const fallbackDemoUser: User = {
       id: "guest-demo-visitor",
       name: "Visitante Convidado (Modo Demonstração)",
       email: "visitante.demo@codecheck.senai.br",
       role: "DEMO",
       isGuest: true
     };
-    const guestToken = `demo_guest_session_${Date.now()}`;
-    localStorage.setItem("token", guestToken);
-    localStorage.setItem("user", JSON.stringify(guestUser));
-    setToken(guestToken);
-    setUser(guestUser);
+    setUser(fallbackDemoUser);
   };
 
   const logout = () => {

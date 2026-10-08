@@ -45,6 +45,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { generateJwtToken, verifyJwtToken, hashPassword, verifyPassword, authenticateToken } from "./src/utils/security.ts";
 import { WafSecurityEngine } from "./src/security/WafSecurityEngine.ts";
 import { DataProtectionEngine } from "./src/security/DataProtectionEngine.ts";
+import { AccessControlEngine } from "./src/security/AccessControlEngine.ts";
 
 dns.setDefaultResultOrder("ipv4first");
 dotenv.config();
@@ -124,6 +125,12 @@ app.use(WafSecurityEngine.pathTraversalInspectorMiddleware());
 app.use(WafSecurityEngine.sqlInjectionInspectorMiddleware());
 app.use(WafSecurityEngine.xxeInspectorMiddleware());
 app.use(xssSanitizer);
+
+// ============================================================================
+// ZERO-TRUST AUTHORIZATION & DATA MINIMIZATION (OWASP ASVS 4.0.3 L2)
+// ============================================================================
+app.use(AccessControlEngine.responseMinimizerMiddleware());
+app.use(AccessControlEngine.authGuardMiddleware());
 
 // ============================================
 // WAF & CYBER DEFENSE TELEMETRY APIS
