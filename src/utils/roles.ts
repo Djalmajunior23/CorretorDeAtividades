@@ -4,7 +4,9 @@ export function normalizeRole(role: string | null | undefined): string | null {
 
   if (["TEACHER", "PROFESSOR"].includes(value)) return "PROFESSOR";
   if (["STUDENT", "ALUNO"].includes(value)) return "ALUNO";
-  if (["ADMIN", "SUPER_ADMIN"].includes(value)) return "ADMIN";
+  if (["SUPER_ADMIN", "SUPERADMIN"].includes(value)) return "SUPER_ADMIN";
+  if (["ADMIN", "ADMINISTRATOR", "ADMINISTRADOR"].includes(value)) return "ADMIN";
 
   return value;
 }
+

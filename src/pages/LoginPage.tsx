@@ -2,7 +2,7 @@ import { apiUrl, API_BASE_URL } from "../config/api";
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Code, LogIn, Sparkles, Terminal, ShieldAlert, BadgeCheck, Eye } from "lucide-react";
+import { Code, LogIn, Sparkles, Terminal, ShieldAlert, BadgeCheck, Eye, ShieldCheck, GraduationCap, Shield, UserCog } from "lucide-react";
 import { normalizeRole } from "../utils/roles";
 
 import { motion, AnimatePresence } from "motion/react";
@@ -46,7 +46,7 @@ export default function LoginPage() {
 
   // If already authenticated, redirect immediately
   if (user) {
-    if (user.role === "ADMIN") {
+    if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
       return <Navigate to="/admin/dashboard" replace />;
     }
     return <Navigate to="/teacher/dashboard" replace />;
@@ -75,7 +75,7 @@ export default function LoginPage() {
       if (response.ok) {
         data.user.role = normalizeRole(data.user.role);
         login(data.token || data.access_token, data.user);
-        if (data.user.role === "ADMIN") {
+        if (data.user.role === "ADMIN" || data.user.role === "SUPER_ADMIN") {
           navigate("/admin/dashboard");
         } else {
           navigate("/teacher/dashboard");
@@ -91,6 +91,20 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const setDjalmaPreset = (roleType: "super_admin" | "admin" | "professor") => {
+    if (roleType === "super_admin") {
+      setEmail("djalma.superadmin@codecheck.ai");
+      setPassword("admin123");
+    } else if (roleType === "admin") {
+      setEmail("djalma.admin@codecheck.ai");
+      setPassword("admin123");
+    } else {
+      setEmail("djalma.professor@codecheck.ai");
+      setPassword("senha123");
+    }
+    setError("");
   };
 
   const SlideIcon = INSTITUTIONAL_SLIDES[currentSlide].icon;
@@ -169,30 +183,72 @@ export default function LoginPage() {
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4 }}
-          className="w-full max-w-md bg-[#050819]/40 border border-slate-800/80 rounded-3xl p-10 backdrop-blur-xl shadow-2xl relative"
+          className="w-full max-w-md bg-[#050819]/40 border border-slate-800/80 rounded-3xl p-8 backdrop-blur-xl shadow-2xl relative"
         >
           {/* Logo brand for mobile layout only */}
-          <div className="flex lg:hidden items-center gap-3 justify-center mb-8">
+          <div className="flex lg:hidden items-center gap-3 justify-center mb-6">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <Code className="w-4.5 h-4.5 text-slate-950 stroke-[2.5]" />
             </div>
             <h2 className="text-lg font-bold text-white tracking-tight">CodeCheck</h2>
           </div>
 
-          <div className="text-center lg:text-left mb-8">
+          <div className="text-center lg:text-left mb-6">
             <h1 className="text-2xl font-bold tracking-tight text-white font-display">Acessar Plataforma</h1>
-            <p className="text-xs text-slate-400 mt-1 font-medium">Entre com as credenciais acadêmicas de administrador ou professor</p>
+            <p className="text-xs text-slate-400 mt-1 font-medium">Controle de acesso para Super Admin, Administrador e Docente</p>
           </div>
 
-          <form onSubmit={handleLogin} className="flex flex-col space-y-5">
+          {/* Quick Access Presets for Djalma Junior */}
+          <div className="mb-6 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/90 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> Acessos Rápidos (Djalma Junior)
+              </span>
+              <span className="text-[9px] text-slate-500 font-mono">1-clique para preencher</span>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2 mt-1">
+              <button
+                type="button"
+                onClick={() => setDjalmaPreset("super_admin")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 transition-all text-center group cursor-pointer"
+                title="Super Admin: djalma.superadmin@codecheck.ai"
+              >
+                <ShieldCheck className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold leading-tight">Super Admin</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDjalmaPreset("admin")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 transition-all text-center group cursor-pointer"
+                title="Admin: djalma.admin@codecheck.ai"
+              >
+                <UserCog className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold leading-tight">Admin</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDjalmaPreset("professor")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 transition-all text-center group cursor-pointer"
+                title="Professor: djalma.professor@codecheck.ai"
+              >
+                <GraduationCap className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold leading-tight">Professor</span>
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleLogin} className="flex flex-col space-y-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest pl-1">E-mail Corporativo</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="professor@email.com"
-                className="px-4 py-3 text-xs bg-slate-950/70 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+                placeholder="djalma.professor@codecheck.ai"
+                className="px-4 py-2.5 text-xs bg-slate-950/70 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all"
                 required
               />
             </div>
@@ -203,8 +259,8 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Digite sua senha secreta"
-                className="px-4 py-3 text-xs bg-slate-950/70 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+                placeholder="Digite sua senha de acesso"
+                className="px-4 py-2.5 text-xs bg-slate-950/70 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all"
                 required
               />
             </div>
@@ -222,7 +278,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center space-x-2.5 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/10 disabled:opacity-50"
+              className="w-full flex items-center justify-center space-x-2.5 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/10 disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <span className="text-xs font-bold uppercase tracking-wider">Verificando credenciais...</span>
@@ -246,7 +302,7 @@ export default function LoginPage() {
                 guestLogin();
                 navigate("/teacher/dashboard");
               }}
-              className="w-full flex items-center justify-center space-x-2 py-3 px-4 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500/40 text-slate-200 text-xs font-bold rounded-xl transition-all shadow-sm"
+              className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500/40 text-slate-200 text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
             >
               <Eye className="w-4 h-4 text-emerald-400" />
               <span>Explorar em Modo Demonstração (Visitante Seguro)</span>
@@ -254,7 +310,7 @@ export default function LoginPage() {
           </form>
 
           {/* Institutional Note */}
-          <div className="mt-8 text-center border-t border-slate-900 pt-5">
+          <div className="mt-6 text-center border-t border-slate-900 pt-4">
             <span className="text-[10px] font-mono text-slate-600 tracking-wide font-medium">CONEXÃO SEGURA SANDBOX ATIVA</span>
           </div>
         </motion.div>
@@ -263,4 +319,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
 

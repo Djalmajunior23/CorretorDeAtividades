@@ -195,8 +195,37 @@ function recordAuthSuccess(ip: string) {
 }
 
 // Master password hashes stored securely using salt:scrypt
-const MASTER_TEACHER_HASH = hashPassword(process.env.TEACHER_PASSWORD || "senha123");
+const MASTER_SUPER_ADMIN_HASH = hashPassword(process.env.SUPERADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD || "admin123");
 const MASTER_ADMIN_HASH = hashPassword(process.env.ADMIN_PASSWORD || "admin123");
+const MASTER_TEACHER_HASH = hashPassword(process.env.TEACHER_PASSWORD || process.env.PROFESSOR_PASSWORD || "senha123");
+
+// Predefined account access aliases for Djalma Junior
+const SUPER_ADMIN_EMAILS = new Set([
+  "djalma.superadmin@codecheck.ai",
+  "djalmajunior.superadmin@codecheck.ai",
+  "superadmin.djalma@codecheck.ai",
+  "superadmin@codecheck.ai",
+  "superadmin@email.com",
+  "djalma.superadmin@email.com"
+]);
+
+const ADMIN_EMAILS = new Set([
+  "djalma.admin@codecheck.ai",
+  "djalmajunior.admin@codecheck.ai",
+  "admin.djalma@codecheck.ai",
+  "admin@codecheck.ai",
+  "admin@email.com",
+  "djalma.admin@email.com"
+]);
+
+const TEACHER_EMAILS = new Set([
+  "djalma.professor@codecheck.ai",
+  "djalmajunior.professor@codecheck.ai",
+  "djalma.professor@email.com",
+  "djalma.junior@email.com",
+  "professor@email.com",
+  "professor@codecheck.ai"
+]);
 
 app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "127.0.0.1";
@@ -215,33 +244,69 @@ app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
 
   const cleanEmail = String(email).trim().toLowerCase();
 
-  // 1. Teacher Portal Authentication with constant-time password verification
-  if (cleanEmail === "professor@email.com" && verifyPassword(password, MASTER_TEACHER_HASH)) {
+  // 1. Super Admin Authentication (Djalma Junior / Root Super Admin)
+  if (SUPER_ADMIN_EMAILS.has(cleanEmail) && (verifyPassword(password, MASTER_SUPER_ADMIN_HASH) || verifyPassword(password, MASTER_ADMIN_HASH))) {
     recordAuthSuccess(ip);
     const user = {
-      id: "teacher_portal",
-      name: "Djalma Batista Junior",
-      email: "professor@email.com",
-      role: "PROFESSOR"
+      id: "superadmin_djalma",
+      name: "Djalma Junior",
+      email: cleanEmail,
+      role: "SUPER_ADMIN"
     };
     const token = generateJwtToken(user);
     return res.json({ token, user });
   }
-  
-  // 2. Administrator Portal Authentication
-  if (cleanEmail === "admin@codecheck.ai" && verifyPassword(password, MASTER_ADMIN_HASH)) {
+
+  // 2. Administrator Authentication (Djalma Junior / Admin Portal)
+  if (ADMIN_EMAILS.has(cleanEmail) && verifyPassword(password, MASTER_ADMIN_HASH)) {
     recordAuthSuccess(ip);
     const user = {
-      id: "admin_root",
-      name: "Administrador Geral",
-      email: "admin@codecheck.ai",
+      id: "admin_djalma",
+      name: "Djalma Junior",
+      email: cleanEmail,
       role: "ADMIN"
     };
     const token = generateJwtToken(user);
     return res.json({ token, user });
   }
 
-  // 3. Database Authenticated Users (with password verification)
+  // 3. Teacher / Professor Authentication (Djalma Junior / Teacher Portal)
+  if (TEACHER_EMAILS.has(cleanEmail) && verifyPassword(password, MASTER_TEACHER_HASH)) {
+    recordAuthSuccess(ip);
+    const user = {
+      id: "teacher_djalma",
+      name: "Djalma Junior",
+      email: cleanEmail,
+      role: "PROFESSOR"
+    };
+    const token = generateJwtToken(user);
+    return res.json({ token, user });
+  }
+
+  // 4. Database Authenticated System Users (Admins, Super Admins, Teachers, Staff from PostgreSQL)
+  if (pool) {
+    try {
+      const qUser = await pool.query("SELECT * FROM d_system_user WHERE LOWER(email) = $1 AND (status = 'active' OR status IS NULL)", [cleanEmail]);
+      if (qUser.rows.length > 0) {
+        const sysUser = qUser.rows[0];
+        if (verifyPassword(password, sysUser.password_hash)) {
+          recordAuthSuccess(ip);
+          const user = {
+            id: sysUser.id,
+            name: sysUser.name,
+            email: sysUser.email,
+            role: sysUser.role
+          };
+          const token = generateJwtToken(user);
+          return res.json({ token, user });
+        }
+      }
+    } catch (e) {
+      console.error("[Auth System User DB Error]", e);
+    }
+  }
+
+  // 5. Database Authenticated Students (with password verification)
   if (pool) {
     try {
       const q = await pool.query("SELECT * FROM d_student_record WHERE LOWER(email) = $1", [cleanEmail]);
@@ -490,6 +555,37 @@ async function initDatabase() {
     return;
   }
   try {
+
+    // Módulo de Usuários e Acessos do Sistema
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_system_user (
+        id UUID PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Inserção/Atualização dos acessos oficiais do usuário Djalma Junior
+    try {
+      await pool.query(`
+        INSERT INTO d_system_user (id, name, email, password_hash, role, status)
+        VALUES 
+          ('a0000000-0000-4000-a000-000000000001', 'Djalma Junior', 'djalma.superadmin@codecheck.ai', $1, 'SUPER_ADMIN', 'active'),
+          ('a0000000-0000-4000-a000-000000000002', 'Djalma Junior', 'djalma.admin@codecheck.ai', $2, 'ADMIN', 'active'),
+          ('a0000000-0000-4000-a000-000000000003', 'Djalma Junior', 'djalma.professor@codecheck.ai', $3, 'PROFESSOR', 'active')
+        ON CONFLICT (email) DO UPDATE SET 
+          name = EXCLUDED.name,
+          role = EXCLUDED.role,
+          password_hash = EXCLUDED.password_hash;
+      `, [MASTER_SUPER_ADMIN_HASH, MASTER_ADMIN_HASH, MASTER_TEACHER_HASH]);
+    } catch (userSeedErr) {
+      console.warn("[DB] Aviso ao registrar usuários padrão do sistema:", userSeedErr);
+    }
 
     // Módulo de Gestão de Turmas e Alunos
     await pool.query(`
@@ -12820,7 +12916,7 @@ async function main() {
     });
   }
 
-  if (!process.env.VERCEL) {
+  if (!process.env.VERCEL && !process.env.VITEST && process.env.NODE_ENV !== "test") {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`CodeCheck API running on 0.0.0.0:${PORT}`);
     });
@@ -12830,8 +12926,9 @@ async function main() {
 export { app, pool, vaultPool, initDatabase, initializeDatabase, getVaultPool, getCorePool };
 export default app;
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.VITEST && process.env.NODE_ENV !== "test") {
   main().catch((err) => {
     console.error("Critical server launch crash:", err);
   });
 }
+
