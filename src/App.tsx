@@ -1493,8 +1493,10 @@ export default function App() {
       } catch (e) {}
     }
 
-    fetchQuestions();
-    fetchSandboxStatus();
+    if (user) {
+      fetchQuestions();
+      fetchSandboxStatus();
+    }
     
     // Fetch fresh feature flags and linting settings
     fetch(apiUrl("/api/feature-flags"))
@@ -1506,7 +1508,7 @@ export default function App() {
         }
       })
       .catch(e => {
-        if (import.meta.env.DEV) {
+        if (import.meta.env?.DEV) {
           console.warn("Using offline feature flags fallback:", e?.message || "Unknown error");
         }
       });
@@ -1520,11 +1522,11 @@ export default function App() {
         }
       })
       .catch(e => {
-        if (import.meta.env.DEV) {
+        if (import.meta.env?.DEV) {
           console.warn("Using offline linting settings fallback:", e?.message || "Unknown error");
         }
       });
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (currentTab === "health") {

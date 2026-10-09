@@ -38,7 +38,7 @@ export class AccessControlEngine {
 
   // Explicit Public Whitelist: ONLY these endpoints can be reached anonymously
   private static readonly PUBLIC_ALLOWLIST_PATTERNS: RegExp[] = [
-    // Health and Liveness Probes
+    // Health, Liveness Probes & Public Bootstrap Settings
     /^\/health\/?$/i,
     /^\/live\/?$/i,
     /^\/ready\/?$/i,
@@ -47,6 +47,10 @@ export class AccessControlEngine {
     /^\/api\/ready\/?$/i,
     /^\/api\/health-status\/?$/i,
     /^\/api\/security\/waf-status\/?$/i,
+    /^\/api\/feature-flags\/?$/i,
+    /^\/api\/settings\/linting\/?$/i,
+    /^\/api\/execution\/status\/?$/i,
+    /^\/api\/ai\/status\/?$/i,
 
     // Authentication & Guest Entry Points
     /^\/auth\/login\/?$/i,

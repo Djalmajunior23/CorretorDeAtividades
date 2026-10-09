@@ -16,6 +16,47 @@ export const apiUrl = (path: string) => {
   return finalUrl;
 };
 
+// --- GLOBAL AUTOMATIC BEARER JWT INJECTION ---
+if (typeof window !== "undefined" && typeof window.fetch === "function") {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+    try {
+      let url = "";
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.toString();
+      } else if (input && typeof input === "object" && "url" in input) {
+        url = (input as Request).url;
+      }
+
+      const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+      
+      // If user is authenticated and requesting an API/auth route, ensure Authorization header is present
+      if (token && (url.includes("/api/") || url.includes("/auth/"))) {
+        const headers = new Headers(
+          init?.headers || (typeof input === "object" && "headers" in input ? (input as Request).headers : {})
+        );
+
+        if (!headers.has("Authorization") && !headers.has("authorization")) {
+          headers.set("Authorization", `Bearer ${token}`);
+        }
+
+        init = {
+          ...init,
+          headers
+        };
+      }
+    } catch (e) {
+      if (import.meta.env?.DEV) {
+        console.warn("[Fetch Interceptor Warning]", e);
+      }
+    }
+
+    return nativeFetch(input, init);
+  };
+}
+
 export async function apiFetch(path: string, options: RequestInit = {}) {
   try {
     const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
@@ -48,7 +89,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     return response.json();
   } catch (error: any) {
     const message = String(error?.message || error);
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.warn("[apiFetch error]", error);
     }
     if (

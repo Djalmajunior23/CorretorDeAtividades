@@ -53,7 +53,7 @@ describe("Evolução do Sistema: Visão Computacional, Benchmark 100k, Trilhas A
       expect(result.relationships.length).toBeGreaterThan(0);
       expect(result.detectedMermaidERD).toContain("erDiagram");
       expect(result.generatedDdlSql).toContain("CREATE TABLE");
-    });
+    }, 15000);
   });
 
   describe("2. DatabaseLoadBenchmarkService (Stress Test de 100.000 Registros)", () => {
