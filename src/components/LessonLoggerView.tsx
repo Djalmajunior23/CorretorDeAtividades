@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { apiUrl } from "../config/api";
 import { toast } from "sonner";
+import { DEFAULT_SENAI_CLASSES } from "../data/defaultClasses";
 
 interface LessonLog {
   id: string;
@@ -34,7 +35,7 @@ interface ClassItem {
 
 export function LessonLoggerView() {
   const [logs, setLogs] = useState<LessonLog[]>([]);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>(() => DEFAULT_SENAI_CLASSES);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterClass, setFilterClass] = useState("");
@@ -77,10 +78,14 @@ export function LessonLoggerView() {
       if (classesRes.ok) {
         const classesData = await classesRes.json();
         const rows = Array.isArray(classesData) ? classesData : Array.isArray(classesData?.data) ? classesData.data : [];
-        setClasses(rows);
-        if (rows.length > 0 && !className) {
-          setClassName(rows[0].name);
+        const finalRows = rows.length > 0 ? rows : DEFAULT_SENAI_CLASSES;
+        setClasses(finalRows);
+        if (finalRows.length > 0 && !className) {
+          setClassName(finalRows[0].name);
         }
+      } else {
+        setClasses(DEFAULT_SENAI_CLASSES);
+        if (!className) setClassName(DEFAULT_SENAI_CLASSES[0].name);
       }
     } catch (err: any) {
       console.error("Error fetching lesson logs:", err);

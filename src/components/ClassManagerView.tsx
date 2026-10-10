@@ -3,6 +3,7 @@ import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search
 import { apiUrl, safeJsonResponse } from "../config/api";
 import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
 import { ExportClassConsolidatedXlsxModal } from "./ExportClassConsolidatedXlsxModal";
+import { DEFAULT_SENAI_CLASSES } from "../data/defaultClasses";
 
 const emptyClassForm = () => ({
   name: "",
@@ -25,8 +26,8 @@ const normalizeClassForm = (cls: any) => ({
 });
 
 export function ClassManagerView() {
-  const [classes, setClasses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [classes, setClasses] = useState<any[]>(() => DEFAULT_SENAI_CLASSES);
+  const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showXlsxModal, setShowXlsxModal] = useState(false);
@@ -44,59 +45,13 @@ export function ClassManagerView() {
       if (rows.length > 0) {
         setClasses(rows);
       } else {
-        setClasses([
-          {
-            id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-            name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-            course: "Desenvolvimento de Sistemas",
-            module: "Módulo I (Fundamentos)",
-            semester: "2026/1",
-            shift: "Noturno",
-            year: 2026,
-            status: "active",
-            description: "Turma de formação técnica em programação, lógica e estruturas de dados."
-          },
-          {
-            id: "turma-ds-2a",
-            name: "Técnico em Desenvolvimento de Sistemas - 2º Termo",
-            course: "Desenvolvimento de Sistemas",
-            module: "Módulo II (Avançado)",
-            semester: "2026/1",
-            shift: "Vespertino",
-            year: 2026,
-            status: "active",
-            description: "Programação Web, APIs REST, Banco de Dados e Arquitetura de Software."
-          }
-        ]);
+        setClasses(DEFAULT_SENAI_CLASSES);
       }
     } catch (e) {
       if (import.meta.env.DEV) {
         console.warn("Using offline seed classes fallback:", e);
       }
-      setClasses([
-        {
-          id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-          name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-          course: "Desenvolvimento de Sistemas",
-          module: "Módulo I (Fundamentos)",
-          semester: "2026/1",
-          shift: "Noturno",
-          year: 2026,
-          status: "active",
-          description: "Turma de formação técnica em programação, lógica e estruturas de dados."
-        },
-        {
-          id: "turma-ds-2a",
-          name: "Técnico em Desenvolvimento de Sistemas - 2º Termo",
-          course: "Desenvolvimento de Sistemas",
-          module: "Módulo II (Avançado)",
-          semester: "2026/1",
-          shift: "Vespertino",
-          year: 2026,
-          status: "active",
-          description: "Programação Web, APIs REST, Banco de Dados e Arquitetura de Software."
-        }
-      ]);
+      setClasses(DEFAULT_SENAI_CLASSES);
     }
     setLoading(false);
   };

@@ -618,6 +618,59 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Tabela d_corrections (Unified & Historical Corrections)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS d_corrections (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        teacher_id VARCHAR(100) DEFAULT 'teacher_1',
+        class_id UUID,
+        student_id UUID,
+        activity_id VARCHAR(100),
+        code_content TEXT,
+        language VARCHAR(50),
+        score NUMERIC DEFAULT 0,
+        feedback TEXT,
+        correction_type VARCHAR(50) DEFAULT 'sandbox',
+        status VARCHAR(50) DEFAULT 'completed',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_d_corrections_class_id ON d_corrections(class_id);
+      CREATE INDEX IF NOT EXISTS idx_d_corrections_student_id ON d_corrections(student_id);
+      CREATE INDEX IF NOT EXISTS idx_d_corrections_teacher_id ON d_corrections(teacher_id);
+    `);
+
+    // Inserção automática de turmas e alunos padrão SENAI (não destrutivo)
+    try {
+      await pool.query(`
+        INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status)
+        VALUES 
+          ('930166c4-ee91-4502-8cf4-398d0d598c20', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 1º Termo', 'Desenvolvimento de Sistemas', 'Módulo I (Fundamentos)', '2026/1', 'Noturno', 2026, 'Turma de formação técnica em programação, lógica e estruturas de dados.', 'active'),
+          ('e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 2º Termo', 'Desenvolvimento de Sistemas', 'Módulo II (Avançado)', '2026/1', 'Vespertino', 2026, 'Programação Web, APIs REST, Banco de Dados e Arquitetura de Software.', 'active'),
+          ('b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'teacher_portal', 'Técnico em Redes e Cibersegurança - 3º Termo', 'Redes e Cibersegurança', 'Módulo III (Segurança e Nuvem)', '2026/1', 'Matutino', 2026, 'Infraestrutura de Redes, Firewalls, DevSecOps e Defesa Cibernética.', 'active')
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          course = EXCLUDED.course,
+          status = 'active';
+
+        INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status)
+        VALUES
+          ('b1000000-0000-4000-a000-000000000001', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Lucas Gabriel Santos', '2026-DS-01', 'lucas.santos@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
+          ('b1000000-0000-4000-a000-000000000002', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Mariana Costa Silva', '2026-DS-02', 'mariana.costa@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
+          ('b1000000-0000-4000-a000-000000000003', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Guilherme Oliveira', '2026-DS-03', 'guilherme.oliveira@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
+          ('b1000000-0000-4000-a000-000000000004', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Beatriz Helena Lima', '2026-DS-04', 'beatriz.lima@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
+          ('b1000000-0000-4000-a000-000000000005', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Felipe Rodrigues', '2026-DS-05', 'felipe.rodrigues@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
+          ('b1000000-0000-4000-a000-000000000006', 'teacher_portal', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'Ana Clara Mendes', '2026-DS-06', 'ana.mendes@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
+          ('b1000000-0000-4000-a000-000000000007', 'teacher_portal', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'Rafael Souza Dias', '2026-DS-07', 'rafael.dias@aluno.senai.br', 'Aluno matriculado regularmente', 'active')
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          email = EXCLUDED.email,
+          status = 'active';
+      `);
+    } catch (seedClassErr) {
+      console.warn("[DB] Aviso ao sincronizar turmas padrão:", seedClassErr);
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS d_pedagogical_evidence (
         id UUID PRIMARY KEY,

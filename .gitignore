@@ -16,9 +16,9 @@ replace_*.cjs
 replace_*.js
 .env*
 !.env.example
-data/
-uploads/
-reports/
-backups/
+/data/
+/uploads/
+/reports/
+/backups/
 *.traineddata
 tmp_sandbox/

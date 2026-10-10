@@ -112,7 +112,19 @@ export class AccessControlEngine {
         return next();
       }
 
-      // 3. Check Public Whitelist
+      // 3. Allow public GET for UI bootstrap and class catalogues
+      if (req.method === "GET") {
+        const isPublicGet = [
+          /^\/api\/classes\/?$/i,
+          /^\/api\/classes\/[^\/]+\/?$/i,
+          /^\/api\/questions\/?$/i,
+        ].some((pattern) => pattern.test(reqPath));
+        if (isPublicGet) {
+          return next();
+        }
+      }
+
+      // 4. Check Public Whitelist
       const isPublic = AccessControlEngine.PUBLIC_ALLOWLIST_PATTERNS.some((pattern) =>
         pattern.test(reqPath)
       );

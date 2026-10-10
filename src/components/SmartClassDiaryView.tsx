@@ -36,6 +36,7 @@ import { AttendanceDashboard } from "./dashboard/AttendanceDashboard";
 import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
 import { ExportClassConsolidatedXlsxModal } from "./ExportClassConsolidatedXlsxModal";
 import EarlyWarningRadarModal from "./EarlyWarningRadarModal";
+import { DEFAULT_SENAI_CLASSES } from "../data/defaultClasses";
 
 
 interface SmartClassDiaryViewProps {
@@ -121,13 +122,13 @@ export default function SmartClassDiaryView({
 
   // Filter and search state
   const [searchQuery, setSearchQuery] = useState("");
-  const [classes, setClasses] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>(() => DEFAULT_SENAI_CLASSES);
   const [students, setStudents] = useState<any[]>([]);
   const [showPdfReportModal, setShowPdfReportModal] = useState(false);
   const [showXlsxReportModal, setShowXlsxReportModal] = useState(false);
   const [showRiskRadarModal, setShowRiskRadarModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState(() => {
-    return localStorage.getItem("selectedClass") || "";
+    return localStorage.getItem("selectedClass") || DEFAULT_SENAI_CLASSES[0]?.id || "";
   });
   const [selectedStudent, setSelectedStudent] = useState<string>("");
 
@@ -146,13 +147,24 @@ export default function SmartClassDiaryView({
       .then(r => r.json())
       .then(data => {
         const normalized = normalizeArray(data);
-        setClasses(normalized);
-        const saved = localStorage.getItem("selectedClass");
-        if (saved && normalized.some((c: any) => c.id === saved)) {
-          setSelectedClass(saved);
+        if (normalized.length > 0) {
+          setClasses(normalized);
+          const saved = localStorage.getItem("selectedClass");
+          if (saved && normalized.some((c: any) => c.id === saved)) {
+            setSelectedClass(saved);
+          } else {
+            setSelectedClass(normalized[0].id);
+          }
+        } else {
+          setClasses(DEFAULT_SENAI_CLASSES);
+          setSelectedClass(prev => prev || DEFAULT_SENAI_CLASSES[0]?.id || "");
         }
       })
-      .catch(console.error);
+      .catch(err => {
+        console.error("Classes fetch error in SmartClassDiaryView, using fallback:", err);
+        setClasses(DEFAULT_SENAI_CLASSES);
+        setSelectedClass(prev => prev || DEFAULT_SENAI_CLASSES[0]?.id || "");
+      });
 
     fetch(apiUrl("/api/codecheck/diary/time-slots"))
       .then(r => r.json())

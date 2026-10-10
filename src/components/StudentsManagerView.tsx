@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, Trash, User } from "lucide-react";
 import { StudentProfileModal } from "./StudentProfileModal";
 import { apiUrl, safeJsonResponse } from "../config/api";
+import { DEFAULT_SENAI_CLASSES, DEFAULT_SENAI_STUDENTS } from "../data/defaultClasses";
 
 function normalizeArray<T = any>(value: any): T[] {
   if (!value) return [];
@@ -21,9 +22,9 @@ function normalizeArray<T = any>(value: any): T[] {
 }
 
 export function StudentsManagerView() {
-  const [students, setStudents] = useState<any[]>([]);
-  const [classes, setClasses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState<any[]>(() => DEFAULT_SENAI_STUDENTS);
+  const [classes, setClasses] = useState<any[]>(() => DEFAULT_SENAI_CLASSES);
+  const [loading, setLoading] = useState(false);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -111,7 +112,8 @@ export function StudentsManagerView() {
     try {
       const clsResp = await fetch(apiUrl("/api/classes"));
       const clsData = await clsResp.json().catch(() => null);
-      setClasses(normalizeArray(clsData));
+      const normalizedClasses = normalizeArray(clsData);
+      setClasses(normalizedClasses.length > 0 ? normalizedClasses : DEFAULT_SENAI_CLASSES);
 
       const isInvalidClassId = (cid: string | undefined) => {
         if (!cid) return false;
@@ -124,11 +126,23 @@ export function StudentsManagerView() {
         const url = selectedClass ? `/api/students?class_id=${encodeURIComponent(selectedClass)}` : "/api/students";
         const stdResp = await fetch(apiUrl(url));
         const stdData = await stdResp.json().catch(() => null);
-        setStudents(normalizeArray(stdData));
+        const normalizedStudents = normalizeArray(stdData);
+        if (normalizedStudents.length > 0) {
+          setStudents(normalizedStudents);
+        } else {
+          const fallbackStudents = selectedClass 
+            ? DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === selectedClass)
+            : DEFAULT_SENAI_STUDENTS;
+          setStudents(fallbackStudents);
+        }
       } else {
-        setStudents([]);
+        setStudents(DEFAULT_SENAI_STUDENTS);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setClasses(DEFAULT_SENAI_CLASSES);
+      setStudents(DEFAULT_SENAI_STUDENTS);
+    }
     setLoading(false);
   };
 

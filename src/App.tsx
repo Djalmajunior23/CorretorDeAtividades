@@ -16,6 +16,7 @@ import { VercelCloudSyncModal } from "./components/VercelCloudSyncModal";
 import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import { LogOut, ShieldAlert } from "lucide-react";
+import { DEFAULT_SENAI_CLASSES, DEFAULT_SENAI_STUDENTS } from "./data/defaultClasses";
 
 import { lazyRetry } from "./utils/lazyRetry";
 
@@ -366,11 +367,13 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
+  const [correctorClasses, setCorrectorClasses] = useState<any[]>(() => DEFAULT_SENAI_CLASSES);
+  const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>(() => DEFAULT_SENAI_CLASSES[0]?.id || '');
   const [selectedCorrectorStudent, setSelectedCorrectorStudent] = useState<string>('');
   const [showCorrectorStudentWarning, setShowCorrectorStudentWarning] = useState<boolean>(false);
-  const [correctorClasses, setCorrectorClasses] = useState<any[]>([]);
-  const [correctorStudents, setCorrectorStudents] = useState<any[]>([]);
+  const [correctorStudents, setCorrectorStudents] = useState<any[]>(() => 
+    DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === DEFAULT_SENAI_CLASSES[0]?.id)
+  );
   const [correctorActivities, setCorrectorActivities] = useState<any[]>([]);
   const [selectedCorrectorActivity, setSelectedCorrectorActivity] = useState<string>('');
   const [productivityFocused, setProductivityFocused] = useState<boolean>(() => {
@@ -1915,14 +1918,26 @@ export default function App() {
         }
         if (classList.length > 0) {
           setCorrectorClasses(classList);
+          if (!selectedCorrectorClass || !classList.some(c => c.id === selectedCorrectorClass)) {
+            setSelectedCorrectorClass(classList[0].id);
+          }
+        } else {
+          setCorrectorClasses(DEFAULT_SENAI_CLASSES);
+          if (!selectedCorrectorClass) {
+            setSelectedCorrectorClass(DEFAULT_SENAI_CLASSES[0].id);
+          }
         }
       })
       .catch(err => {
         if (import.meta.env.DEV) {
           console.warn("Using offline classes fallback:", err?.message || "Unknown error");
         }
+        setCorrectorClasses(prev => prev && prev.length > 0 ? prev : DEFAULT_SENAI_CLASSES);
+        if (!selectedCorrectorClass) {
+          setSelectedCorrectorClass(DEFAULT_SENAI_CLASSES[0].id);
+        }
       });
-  }, [currentTab]);
+  }, [currentTab, user]);
 
   // Synchronously fetch students and activities for the selected corrector class
   useEffect(() => {
@@ -1934,15 +1949,10 @@ export default function App() {
     };
 
     if (selectedCorrectorClass && !isInvalidClassId(selectedCorrectorClass)) {
-      console.log("[DEV-DIAGNOSTIC] App.tsx fetching corrector students for class_id:", selectedCorrectorClass);
       // 1. Fetch Students of this class
       fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedCorrectorClass)}`))
-        .then(res => {
-          console.log("[DEV-DIAGNOSTIC] App.tsx response status for corrector students:", res.status);
-          return safeJsonResponse(res);
-        })
+        .then(res => safeJsonResponse(res))
         .then(data => {
-          console.log("[DEV-DIAGNOSTIC] App.tsx loaded corrector students raw data:", data);
           let studentList: any[] = [];
           if (data) {
             if (Array.isArray(data)) {
@@ -1959,10 +1969,18 @@ export default function App() {
               studentList = data.data.items;
             }
           }
-          console.log("[DEV-DIAGNOSTIC] App.tsx corrector students list normalized:", studentList);
-          setCorrectorStudents(studentList);
+          if (studentList.length > 0) {
+            setCorrectorStudents(studentList);
+          } else {
+            const fallbackStudents = DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === selectedCorrectorClass);
+            setCorrectorStudents(fallbackStudents.length > 0 ? fallbackStudents : DEFAULT_SENAI_STUDENTS);
+          }
         })
-        .catch(err => console.error("Error loading corrector students:", err));
+        .catch(err => {
+          console.error("Error loading corrector students:", err);
+          const fallbackStudents = DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === selectedCorrectorClass);
+          setCorrectorStudents(fallbackStudents.length > 0 ? fallbackStudents : DEFAULT_SENAI_STUDENTS);
+        });
 
       // 2. Fetch Activities for this class
       fetch(apiUrl("/api/activities"))
