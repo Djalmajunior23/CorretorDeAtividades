@@ -96,6 +96,7 @@ const StudentAcademyMasteryView = lazyRetry(() => import("./components/StudentAc
 const TeacherClassroomSuiteView = lazyRetry(() => import("./components/TeacherClassroomSuiteView").then(m => ({ default: m.TeacherClassroomSuiteView })));
 const TeacherGlobalSuperAuthoringView = lazyRetry(() => import("./components/TeacherGlobalSuperAuthoringView"));
 const TeacherSuperpowersCockpitView = lazyRetry(() => import("./components/TeacherSuperpowersCockpitView"));
+const TeacherCopilotAndEmpowermentView = lazyRetry(() => import("./components/TeacherCopilotAndEmpowermentView"));
 const TeacherLiveLabCompanionView = lazyRetry(() => import("./components/TeacherLiveLabCompanionView"));
 const TeacherReviewCentralView = lazyRetry(() => import("./components/TeacherReviewCentralView"));
 const GuidedRefactoringCycleView = lazyRetry(() => import("./components/GuidedRefactoringCycleView"));
@@ -2946,6 +2947,10 @@ export default function App() {
 
           {(currentTab === "teacher_superpowers" || currentTab === "teacher_cockpit") && (
             <TeacherSuperpowersCockpitView />
+          )}
+
+          {(currentTab === "teacher_copilot" || currentTab === "copiloto_docente") && (
+            <TeacherCopilotAndEmpowermentView onNavigateTab={setTab} />
           )}
 
           {(currentTab === "live_lab_companion" || currentTab === "lab_companion") && (

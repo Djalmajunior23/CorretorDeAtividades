@@ -13,6 +13,7 @@ import {
   BarChart3,
   BarChart2,
   Sparkles,
+  Bot,
   Briefcase,
   Search,
   ChevronLeft,
@@ -133,6 +134,7 @@ export default function Sidebar({
       icon: BookOpen,
       color: "text-emerald-400",
       items: [
+        { id: "teacher_copilot", label: "Copiloto 'Pergunte à Turma'", icon: Bot, desc: "IA Contextual, Recuperação Paralela & Dossiê", isNew: true },
         { id: "class_operations_central", label: "Central de Operações da Turma", icon: Activity, desc: "Cockpit Operacional, Entregas & Falhas", isNew: true },
         { id: "teacher_my_day", label: "Meu Dia Docente", icon: Briefcase, desc: "Agenda Diária, Materiais & Retomada 1-Clique", isNew: true },
         { id: "teacher_action_queue", label: "Fila Inteligente de Trabalho", icon: ClipboardList, desc: "Triagem de Correções, Dúvidas & Reforços", isNew: true },

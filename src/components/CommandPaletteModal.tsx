@@ -10,6 +10,7 @@ import {
   BookOpen, 
   BarChart3, 
   Sparkles, 
+  Bot,
   Briefcase, 
   Award, 
   Users, 
@@ -82,6 +83,18 @@ export function CommandPaletteModal({
       keywords: ["bancada", "mesas", "laboratorio", "travado", "duvidas", "mentor", "evidencias", "pomodoro"],
       action: () => {
         onNavigate("live_lab_companion");
+        onClose();
+      }
+    },
+    {
+      id: "action-copilot",
+      label: "Abrir Copiloto 'Pergunte à sua Turma' (Superpoderes IA)",
+      category: "Ações Rápidas",
+      desc: "Chat com IA, recuperação paralela automática, ditado por voz e dossiê oficial",
+      icon: Bot,
+      keywords: ["copiloto", "pergunte", "turma", "recuperacao", "voz", "ditado", "dossie", "totvs", "moodle"],
+      action: () => {
+        onNavigate("teacher_copilot");
         onClose();
       }
     },
