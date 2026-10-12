@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, Trash, User } from "lucide-react";
 import { StudentProfileModal } from "./StudentProfileModal";
 import { apiUrl, safeJsonResponse } from "../config/api";
-import { DEFAULT_SENAI_CLASSES, DEFAULT_SENAI_STUDENTS } from "../data/defaultClasses";
 
 function normalizeArray<T = any>(value: any): T[] {
   if (!value) return [];
@@ -22,8 +21,8 @@ function normalizeArray<T = any>(value: any): T[] {
 }
 
 export function StudentsManagerView() {
-  const [students, setStudents] = useState<any[]>(() => DEFAULT_SENAI_STUDENTS);
-  const [classes, setClasses] = useState<any[]>(() => DEFAULT_SENAI_CLASSES);
+  const [students, setStudents] = useState<any[]>(() => []);
+  const [classes, setClasses] = useState<any[]>(() => []);
   const [loading, setLoading] = useState(false);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
@@ -113,7 +112,7 @@ export function StudentsManagerView() {
       const clsResp = await fetch(apiUrl("/api/classes"));
       const clsData = await clsResp.json().catch(() => null);
       const normalizedClasses = normalizeArray(clsData);
-      setClasses(normalizedClasses.length > 0 ? normalizedClasses : DEFAULT_SENAI_CLASSES);
+      setClasses(normalizedClasses);
 
       const isInvalidClassId = (cid: string | undefined) => {
         if (!cid) return false;
@@ -127,21 +126,14 @@ export function StudentsManagerView() {
         const stdResp = await fetch(apiUrl(url));
         const stdData = await stdResp.json().catch(() => null);
         const normalizedStudents = normalizeArray(stdData);
-        if (normalizedStudents.length > 0) {
-          setStudents(normalizedStudents);
-        } else {
-          const fallbackStudents = selectedClass 
-            ? DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === selectedClass)
-            : DEFAULT_SENAI_STUDENTS;
-          setStudents(fallbackStudents);
-        }
+        setStudents(normalizedStudents);
       } else {
-        setStudents(DEFAULT_SENAI_STUDENTS);
+        setStudents([]);
       }
     } catch (e) {
       console.error(e);
-      setClasses(DEFAULT_SENAI_CLASSES);
-      setStudents(DEFAULT_SENAI_STUDENTS);
+      setClasses([]);
+      setStudents([]);
     }
     setLoading(false);
   };
@@ -309,7 +301,7 @@ export function StudentsManagerView() {
                 {students.length === 0 && (
                   <tr>
                     <td colSpan={6} className="text-center py-8 text-slate-500">
-                      {!selectedClass ? "Selecione uma turma para carregar os alunos." : "Nenhum aluno encontrado para este filtro."}
+                      {classes.length === 0 ? "Nenhuma turma cadastrada. Cadastre uma turma para começar." : !selectedClass ? "Nenhum aluno cadastrado. Clique em Novo Aluno para começar." : "Nenhum aluno cadastrado nesta turma."}
                     </td>
                   </tr>
                 )}

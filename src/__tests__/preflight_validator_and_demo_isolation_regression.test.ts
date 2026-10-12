@@ -170,6 +170,17 @@ describe("Pre-Flight Validator & Demo Isolation Regression Suite", () => {
     });
 
     it("deve rotular fixtures sintéticas isoladas e expor cabeçalho X-Data-Origin", async () => {
+      // Registra estudante sintético explicitamente para o teste
+      await fetch(`${baseUrl}/api/students`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "[Sintético] Estudante Alpha",
+          email: "estudante.alpha.demo@codecheck.sintetico.local",
+          enrollment_code: "2026TDS001"
+        })
+      });
+
       const res = await fetch(`${baseUrl}/api/students`);
       expect(res.status).toBe(200);
 

@@ -153,34 +153,15 @@ export async function initializeDatabase(pool: Pool | null, vaultPool?: Pool | n
         ON d_student_grades (student_id, class_id, activity_name);
       `);
 
+      // Limpeza de fixtures sintéticas legadas (garantir sistema limpo sem turmas ou alunos automáticos)
       try {
         await pool.query(`
-          INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status)
-          VALUES 
-            ('930166c4-ee91-4502-8cf4-398d0d598c20', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 1º Termo', 'Desenvolvimento de Sistemas', 'Módulo I (Fundamentos)', '2026/1', 'Noturno', 2026, 'Turma de formação técnica em programação, lógica e estruturas de dados.', 'active'),
-            ('e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 2º Termo', 'Desenvolvimento de Sistemas', 'Módulo II (Avançado)', '2026/1', 'Vespertino', 2026, 'Programação Web, APIs REST, Banco de Dados e Arquitetura de Software.', 'active'),
-            ('b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'teacher_portal', 'Técnico em Redes e Cibersegurança - 3º Termo', 'Redes e Cibersegurança', 'Módulo III (Segurança e Nuvem)', '2026/1', 'Matutino', 2026, 'Infraestrutura de Redes, Firewalls, DevSecOps e Defesa Cibernética.', 'active')
-          ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            course = EXCLUDED.course,
-            status = 'active';
-
-          INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status)
-          VALUES
-            ('b1000000-0000-4000-a000-000000000001', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Lucas Gabriel Santos', '2026-DS-01', 'lucas.santos@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
-            ('b1000000-0000-4000-a000-000000000002', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Mariana Costa Silva', '2026-DS-02', 'mariana.costa@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
-            ('b1000000-0000-4000-a000-000000000003', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Guilherme Oliveira', '2026-DS-03', 'guilherme.oliveira@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
-            ('b1000000-0000-4000-a000-000000000004', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Beatriz Helena Lima', '2026-DS-04', 'beatriz.lima@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
-            ('b1000000-0000-4000-a000-000000000005', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Felipe Rodrigues', '2026-DS-05', 'felipe.rodrigues@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
-            ('b1000000-0000-4000-a000-000000000006', 'teacher_portal', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'Ana Clara Mendes', '2026-DS-06', 'ana.mendes@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
-            ('b1000000-0000-4000-a000-000000000007', 'teacher_portal', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'Rafael Souza Dias', '2026-DS-07', 'rafael.dias@aluno.senai.br', 'Aluno matriculado regularmente', 'active')
-          ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            email = EXCLUDED.email,
-            status = 'active';
+          DELETE FROM d_student_grades WHERE class_id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026');
+          DELETE FROM d_student_record WHERE id IN ('b1000000-0000-4000-a000-000000000001', 'b1000000-0000-4000-a000-000000000002', 'b1000000-0000-4000-a000-000000000003', 'b1000000-0000-4000-a000-000000000004', 'b1000000-0000-4000-a000-000000000005', 'b1000000-0000-4000-a000-000000000006', 'b1000000-0000-4000-a000-000000000007') OR id LIKE 'stu-%' OR teacher_id = 'teacher_portal';
+          DELETE FROM d_class_group WHERE id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026') OR teacher_id = 'teacher_portal';
         `);
-      } catch (seedErr) {
-        console.warn("[initializeDatabase] Seed default classes warning:", seedErr);
+      } catch (cleanErr) {
+        // Ignora se tabelas ainda não existirem
       }
     }
 
@@ -577,279 +558,10 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
   });
 
 
-  // --- CLASSES & STUDENTS IN-MEMORY STORE (Isolated Synthetic Demonstration Fixtures) ---
-  const inMemoryClasses: any[] = [
-    {
-      id: "class-senai-dev-2026",
-      teacher_id: "teacher_1",
-      name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
-      course: "Técnico em Desenvolvimento de Sistemas (Sintético)",
-      module: "Módulo 2 - Back-end & Banco de Dados",
-      semester: "1º Semestre",
-      shift: "Noturno",
-      year: "2026",
-      description: "[Ambiente Sintético Isolado de Demonstração]",
-      status: "active",
-      students_count: 5,
-      average_score: 78.5,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "class-senai-iot-2026",
-      teacher_id: "teacher_1",
-      name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
-      course: "Técnico em Automação Industrial e IoT (Sintético)",
-      module: "Módulo 3 - Redes Industriais & Telemetria",
-      semester: "1º Semestre",
-      shift: "Vespertino",
-      year: "2026",
-      description: "[Ambiente Sintético Isolado de Demonstração]",
-      status: "active",
-      students_count: 4,
-      average_score: 82.0,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-      teacher_id: "teacher_portal",
-      name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-      course: "Desenvolvimento de Sistemas",
-      module: "Módulo I (Fundamentos)",
-      semester: "2026/1",
-      shift: "Noturno",
-      year: 2026,
-      description: "Turma de formação técnica em programação, lógica e estruturas de dados.",
-      status: "active",
-      students_count: 5,
-      average_score: 82.5,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "e2b65a58-860f-4e08-9df5-636bc5b0fa63",
-      teacher_id: "teacher_portal",
-      name: "Técnico em Desenvolvimento de Sistemas - 2º Termo",
-      course: "Desenvolvimento de Sistemas",
-      module: "Módulo II (Avançado)",
-      semester: "2026/1",
-      shift: "Vespertino",
-      year: 2026,
-      description: "Programação Web, APIs REST, Banco de Dados e Arquitetura de Software.",
-      status: "active",
-      students_count: 2,
-      average_score: 78.0,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "b4c73d91-5a21-4f16-8349-1e42a9d8ef12",
-      teacher_id: "teacher_portal",
-      name: "Técnico em Redes e Cibersegurança - 3º Termo",
-      course: "Redes e Cibersegurança",
-      module: "Módulo III (Segurança e Nuvem)",
-      semester: "2026/1",
-      shift: "Matutino",
-      year: 2026,
-      description: "Infraestrutura de Redes, Firewalls, DevSecOps e Defesa Cibernética.",
-      status: "active",
-      students_count: 2,
-      average_score: 85.0,
-      created_at: new Date().toISOString()
-    }
-  ];
+  // --- CLASSES & STUDENTS IN-MEMORY STORE (Clean Slate - Empty by default) ---
+  const inMemoryClasses: any[] = [];
 
-  const inMemoryStudents: any[] = [
-    {
-      id: "stu-001",
-      class_id: "class-senai-dev-2026",
-      name: "[Sintético] Estudante Alpha",
-      enrollment_code: "2026TDS001",
-      email: "estudante.alpha.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Destaque em Algoritmos e Lógica",
-      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
-      course_name: "Técnico em Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 85.0
-    },
-    {
-      id: "stu-002",
-      class_id: "class-senai-dev-2026",
-      name: "[Sintético] Estudante Beta",
-      enrollment_code: "2026TDS002",
-      email: "estudante.beta.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Foco em Banco de Dados e Modelagem",
-      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
-      course_name: "Técnico em Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 92.0
-    },
-    {
-      id: "stu-003",
-      class_id: "class-senai-dev-2026",
-      name: "[Sintético] Estudante Gamma",
-      enrollment_code: "2026TDS003",
-      email: "estudante.gamma.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Acompanhamento em Clean Code",
-      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
-      course_name: "Técnico em Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 74.0
-    },
-    {
-      id: "stu-004",
-      class_id: "class-senai-dev-2026",
-      name: "[Sintético] Estudante Delta",
-      enrollment_code: "2026TDS004",
-      email: "estudante.delta.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Interesse em Segurança e DevSecOps",
-      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
-      course_name: "Técnico em Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 88.0
-    },
-    {
-      id: "stu-005",
-      class_id: "class-senai-dev-2026",
-      name: "[Sintético] Estudante Epsilon",
-      enrollment_code: "2026TDS005",
-      email: "estudante.epsilon.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Desenvolvedor Front-end e APIs",
-      class_name: "[Sintético] Turma Demo TDS-2026/1 - Desenvolvimento de Sistemas",
-      course_name: "Técnico em Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 79.5
-    },
-    {
-      id: "stu-006",
-      class_id: "class-senai-iot-2026",
-      name: "[Sintético] Estudante Zeta",
-      enrollment_code: "2026IOT001",
-      email: "estudante.zeta.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Projetos em MQTT e CLP",
-      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
-      course_name: "Técnico em Automação Industrial e IoT",
-      status: "active",
-      average_score: 89.0
-    },
-    {
-      id: "stu-007",
-      class_id: "class-senai-iot-2026",
-      name: "[Sintético] Estudante Eta",
-      enrollment_code: "2026IOT002",
-      email: "estudante.eta.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Sistemas Embarcados e Edge",
-      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
-      course_name: "Técnico em Automação Industrial e IoT",
-      status: "active",
-      average_score: 81.0
-    },
-    {
-      id: "stu-008",
-      class_id: "class-senai-iot-2026",
-      name: "[Sintético] Estudante Theta",
-      enrollment_code: "2026IOT003",
-      email: "estudante.theta.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Telemetria Industrial",
-      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
-      course_name: "Técnico em Automação Industrial e IoT",
-      status: "active",
-      average_score: 86.5
-    },
-    {
-      id: "stu-009",
-      class_id: "class-senai-iot-2026",
-      name: "[Sintético] Estudante Iota",
-      enrollment_code: "2026IOT004",
-      email: "estudante.iota.demo@codecheck.sintetico.local",
-      notes: "[Dado Sintético] Hardware-in-the-Loop",
-      class_name: "[Sintético] Turma Demo IOT-2026/1 - Indústria 4.0 & IoT",
-      course_name: "Técnico em Automação Industrial e IoT",
-      status: "active",
-      average_score: 72.0
-    },
-    {
-      id: "b1000000-0000-4000-a000-000000000001",
-      class_id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-      name: "Lucas Gabriel Santos",
-      enrollment_code: "2026-DS-01",
-      email: "lucas.santos@aluno.senai.br",
-      notes: "Aluno destaque em lógica e algoritmos",
-      class_name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-      course_name: "Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 88.0
-    },
-    {
-      id: "b1000000-0000-4000-a000-000000000002",
-      class_id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-      name: "Mariana Costa Silva",
-      enrollment_code: "2026-DS-02",
-      email: "mariana.costa@aluno.senai.br",
-      notes: "Destaque em front-end e UX",
-      class_name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-      course_name: "Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 91.5
-    },
-    {
-      id: "b1000000-0000-4000-a000-000000000003",
-      class_id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-      name: "Guilherme Oliveira",
-      enrollment_code: "2026-DS-03",
-      email: "guilherme.oliveira@aluno.senai.br",
-      notes: "Foco em Python e arquitetura backend",
-      class_name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-      course_name: "Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 79.0
-    },
-    {
-      id: "b1000000-0000-4000-a000-000000000004",
-      class_id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-      name: "Beatriz Helena Lima",
-      enrollment_code: "2026-DS-04",
-      email: "beatriz.lima@aluno.senai.br",
-      notes: "Foco em lógica e banco de dados relacional",
-      class_name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-      course_name: "Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 84.0
-    },
-    {
-      id: "b1000000-0000-4000-a000-000000000005",
-      class_id: "930166c4-ee91-4502-8cf4-398d0d598c20",
-      name: "Felipe Rodrigues",
-      enrollment_code: "2026-DS-05",
-      email: "felipe.rodrigues@aluno.senai.br",
-      notes: "Participação ativa e entregas regulares",
-      class_name: "Técnico em Desenvolvimento de Sistemas - 1º Termo",
-      course_name: "Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 80.5
-    },
-    {
-      id: "b1000000-0000-4000-a000-000000000006",
-      class_id: "e2b65a58-860f-4e08-9df5-636bc5b0fa63",
-      name: "Ana Clara Mendes",
-      enrollment_code: "2026-DS-06",
-      email: "ana.mendes@aluno.senai.br",
-      notes: "Turma de 2º Termo",
-      class_name: "Técnico em Desenvolvimento de Sistemas - 2º Termo",
-      course_name: "Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 86.0
-    },
-    {
-      id: "b1000000-0000-4000-a000-000000000007",
-      class_id: "e2b65a58-860f-4e08-9df5-636bc5b0fa63",
-      name: "Rafael Souza Dias",
-      enrollment_code: "2026-DS-07",
-      email: "rafael.dias@aluno.senai.br",
-      notes: "Turma de 2º Termo",
-      class_name: "Técnico em Desenvolvimento de Sistemas - 2º Termo",
-      course_name: "Desenvolvimento de Sistemas",
-      status: "active",
-      average_score: 82.0
-    }
-  ];
+  const inMemoryStudents: any[] = [];
 
   // --- CLASSES ---
   app.get("/api/classes", async (req, res) => {
@@ -885,34 +597,9 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
         }
       }
 
-      // If database returned 0 classes, auto-seed default SENAI classes so the UI never displays empty
-      if (!rows || rows.length === 0) {
-        try {
-          await pool.query(`
-            INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status)
-            VALUES 
-              ('930166c4-ee91-4502-8cf4-398d0d598c20', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 1º Termo', 'Desenvolvimento de Sistemas', 'Módulo I (Fundamentos)', '2026/1', 'Noturno', 2026, 'Turma de formação técnica em programação, lógica e estruturas de dados.', 'active'),
-              ('e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 2º Termo', 'Desenvolvimento de Sistemas', 'Módulo II (Avançado)', '2026/1', 'Vespertino', 2026, 'Programação Web, APIs REST, Banco de Dados e Arquitetura de Software.', 'active'),
-              ('b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'teacher_portal', 'Técnico em Redes e Cibersegurança - 3º Termo', 'Redes e Cibersegurança', 'Módulo III (Segurança e Nuvem)', '2026/1', 'Matutino', 2026, 'Infraestrutura de Redes, Firewalls, DevSecOps e Defesa Cibernética.', 'active')
-            ON CONFLICT (id) DO UPDATE SET status = 'active';
-          `);
-          const retryRes = await pool.query(`
-            SELECT c.*,
-              COALESCE((SELECT COUNT(*) FROM d_student_record s WHERE s.class_id = c.id AND s.status != 'deleted'), 0)::int as students_count,
-              75.0::numeric as average_score
-            FROM d_class_group c
-            WHERE c.status != 'deleted'
-            ORDER BY c.created_at DESC
-          `);
-          rows = retryRes.rows;
-        } catch (seedErr) {
-          console.warn("[/api/classes auto-seed failed]:", seedErr);
-        }
-      }
-
       res.json(rows && rows.length > 0 ? rows : inMemoryClasses.filter((c) => c.status !== "deleted"));
     } catch (e: any) {
-      console.warn("[/api/classes unexpected error, returning inMemoryClasses]:", e?.message || e);
+      console.warn("[/api/classes error, returning empty or inMemoryClasses]:", e?.message || e);
       res.json(inMemoryClasses.filter((c) => c.status !== "deleted"));
     }
   });
@@ -1016,6 +703,23 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Limpeza total de turmas e alunos (Zerar e começar do zero)
+  app.post("/api/classes/reset-all", async (req, res) => {
+    try {
+      inMemoryClasses.length = 0;
+      inMemoryStudents.length = 0;
+      if (pool) {
+        await pool.query("DELETE FROM d_pedagogical_evidence WHERE class_id IS NOT NULL OR student_id IS NOT NULL").catch(() => {});
+        await pool.query("DELETE FROM d_student_grades").catch(() => {});
+        await pool.query("DELETE FROM d_student_record").catch(() => {});
+        await pool.query("DELETE FROM d_class_group").catch(() => {});
+      }
+      res.json({ success: true, message: "Todas as turmas e alunos foram limpos com sucesso. O sistema está pronto para uso do zero." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 

@@ -16,7 +16,6 @@ import { VercelCloudSyncModal } from "./components/VercelCloudSyncModal";
 import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import { LogOut, ShieldAlert } from "lucide-react";
-import { DEFAULT_SENAI_CLASSES, DEFAULT_SENAI_STUDENTS } from "./data/defaultClasses";
 
 import { lazyRetry } from "./utils/lazyRetry";
 
@@ -368,13 +367,11 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const [correctorClasses, setCorrectorClasses] = useState<any[]>(() => DEFAULT_SENAI_CLASSES);
-  const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>(() => DEFAULT_SENAI_CLASSES[0]?.id || '');
+  const [correctorClasses, setCorrectorClasses] = useState<any[]>(() => []);
+  const [selectedCorrectorClass, setSelectedCorrectorClass] = useState<string>('');
   const [selectedCorrectorStudent, setSelectedCorrectorStudent] = useState<string>('');
   const [showCorrectorStudentWarning, setShowCorrectorStudentWarning] = useState<boolean>(false);
-  const [correctorStudents, setCorrectorStudents] = useState<any[]>(() => 
-    DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === DEFAULT_SENAI_CLASSES[0]?.id)
-  );
+  const [correctorStudents, setCorrectorStudents] = useState<any[]>(() => []);
   const [correctorActivities, setCorrectorActivities] = useState<any[]>([]);
   const [selectedCorrectorActivity, setSelectedCorrectorActivity] = useState<string>('');
   const [productivityFocused, setProductivityFocused] = useState<boolean>(() => {
@@ -1923,20 +1920,16 @@ export default function App() {
             setSelectedCorrectorClass(classList[0].id);
           }
         } else {
-          setCorrectorClasses(DEFAULT_SENAI_CLASSES);
-          if (!selectedCorrectorClass) {
-            setSelectedCorrectorClass(DEFAULT_SENAI_CLASSES[0].id);
-          }
+          setCorrectorClasses([]);
+          setSelectedCorrectorClass('');
         }
       })
       .catch(err => {
         if (import.meta.env.DEV) {
-          console.warn("Using offline classes fallback:", err?.message || "Unknown error");
+          console.warn("Error fetching corrector classes:", err?.message || err);
         }
-        setCorrectorClasses(prev => prev && prev.length > 0 ? prev : DEFAULT_SENAI_CLASSES);
-        if (!selectedCorrectorClass) {
-          setSelectedCorrectorClass(DEFAULT_SENAI_CLASSES[0].id);
-        }
+        setCorrectorClasses([]);
+        setSelectedCorrectorClass('');
       });
   }, [currentTab, user]);
 
@@ -1973,14 +1966,12 @@ export default function App() {
           if (studentList.length > 0) {
             setCorrectorStudents(studentList);
           } else {
-            const fallbackStudents = DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === selectedCorrectorClass);
-            setCorrectorStudents(fallbackStudents.length > 0 ? fallbackStudents : DEFAULT_SENAI_STUDENTS);
+            setCorrectorStudents([]);
           }
         })
         .catch(err => {
           console.error("Error loading corrector students:", err);
-          const fallbackStudents = DEFAULT_SENAI_STUDENTS.filter(s => s.class_id === selectedCorrectorClass);
-          setCorrectorStudents(fallbackStudents.length > 0 ? fallbackStudents : DEFAULT_SENAI_STUDENTS);
+          setCorrectorStudents([]);
         });
 
       // 2. Fetch Activities for this class

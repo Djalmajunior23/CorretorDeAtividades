@@ -641,36 +641,17 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_d_corrections_teacher_id ON d_corrections(teacher_id);
     `);
 
-    // Inserção automática de turmas e alunos padrão SENAI (não destrutivo)
+    // Limpeza de fixtures sintéticas legadas (garantir sistema limpo sem turmas ou alunos automáticos)
     try {
       await pool.query(`
-        INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status)
-        VALUES 
-          ('930166c4-ee91-4502-8cf4-398d0d598c20', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 1º Termo', 'Desenvolvimento de Sistemas', 'Módulo I (Fundamentos)', '2026/1', 'Noturno', 2026, 'Turma de formação técnica em programação, lógica e estruturas de dados.', 'active'),
-          ('e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'teacher_portal', 'Técnico em Desenvolvimento de Sistemas - 2º Termo', 'Desenvolvimento de Sistemas', 'Módulo II (Avançado)', '2026/1', 'Vespertino', 2026, 'Programação Web, APIs REST, Banco de Dados e Arquitetura de Software.', 'active'),
-          ('b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'teacher_portal', 'Técnico em Redes e Cibersegurança - 3º Termo', 'Redes e Cibersegurança', 'Módulo III (Segurança e Nuvem)', '2026/1', 'Matutino', 2026, 'Infraestrutura de Redes, Firewalls, DevSecOps e Defesa Cibernética.', 'active')
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          course = EXCLUDED.course,
-          status = 'active';
-
-        INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status)
-        VALUES
-          ('b1000000-0000-4000-a000-000000000001', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Lucas Gabriel Santos', '2026-DS-01', 'lucas.santos@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
-          ('b1000000-0000-4000-a000-000000000002', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Mariana Costa Silva', '2026-DS-02', 'mariana.costa@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
-          ('b1000000-0000-4000-a000-000000000003', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Guilherme Oliveira', '2026-DS-03', 'guilherme.oliveira@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
-          ('b1000000-0000-4000-a000-000000000004', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Beatriz Helena Lima', '2026-DS-04', 'beatriz.lima@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
-          ('b1000000-0000-4000-a000-000000000005', 'teacher_portal', '930166c4-ee91-4502-8cf4-398d0d598c20', 'Felipe Rodrigues', '2026-DS-05', 'felipe.rodrigues@aluno.senai.br', 'Aluno matriculado regularmente', 'active'),
-          ('b1000000-0000-4000-a000-000000000006', 'teacher_portal', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'Ana Clara Mendes', '2026-DS-06', 'ana.mendes@aluno.senai.br', 'Aluna matriculada regularmente', 'active'),
-          ('b1000000-0000-4000-a000-000000000007', 'teacher_portal', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'Rafael Souza Dias', '2026-DS-07', 'rafael.dias@aluno.senai.br', 'Aluno matriculado regularmente', 'active')
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          email = EXCLUDED.email,
-          status = 'active';
+        DELETE FROM d_student_grades WHERE class_id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026');
+        DELETE FROM d_student_record WHERE id IN ('b1000000-0000-4000-a000-000000000001', 'b1000000-0000-4000-a000-000000000002', 'b1000000-0000-4000-a000-000000000003', 'b1000000-0000-4000-a000-000000000004', 'b1000000-0000-4000-a000-000000000005', 'b1000000-0000-4000-a000-000000000006', 'b1000000-0000-4000-a000-000000000007') OR id LIKE 'stu-%' OR teacher_id = 'teacher_portal';
+        DELETE FROM d_class_group WHERE id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026') OR teacher_id = 'teacher_portal';
       `);
-    } catch (seedClassErr) {
-      console.warn("[DB] Aviso ao sincronizar turmas padrão:", seedClassErr);
+    } catch (cleanErr) {
+      // Ignora se tabelas ainda não existirem
     }
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS d_pedagogical_evidence (
         id UUID PRIMARY KEY,
@@ -12883,32 +12864,6 @@ app.post("/api/cloud-sync/seed-cloud", async (req, res) => {
   try {
     await initDatabase();
     await initializeDatabase(pool);
-
-    // Seed default class if empty
-    const classCheck = await pool.query("SELECT COUNT(*) FROM d_class_group");
-    if (parseInt(classCheck.rows[0]?.count || "0", 10) === 0) {
-      const classId = crypto.randomUUID();
-      await pool.query(`
-        INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status)
-        VALUES ($1, 'teacher_portal', 'DS-2026-N1: Desenvolvimento de Sistemas', 'Técnico em Desenvolvimento de Sistemas', 'Módulo II - Programação Web', '1º Semestre', 'Noturno', 2026, 'Turma de Desenvolvimento e Algoritmos SENAI', 'active')
-      `, [classId]);
-
-      // Seed students
-      const students = [
-        { name: "Lucas Gabriel Santos", email: "lucas.santos@aluno.senai.br", mat: "2026-DS-01" },
-        { name: "Mariana Costa Silva", email: "mariana.costa@aluno.senai.br", mat: "2026-DS-02" },
-        { name: "Guilherme Oliveira", email: "guilherme.oliveira@aluno.senai.br", mat: "2026-DS-03" },
-        { name: "Beatriz Helena Lima", email: "beatriz.lima@aluno.senai.br", mat: "2026-DS-04" },
-        { name: "Felipe Rodrigues", email: "felipe.rodrigues@aluno.senai.br", mat: "2026-DS-05" }
-      ];
-
-      for (const s of students) {
-        await pool.query(`
-          INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status)
-          VALUES ($1, 'teacher_portal', $2, $3, $4, $5, 'Aluno matriculado regularmente', 'active')
-        `, [crypto.randomUUID(), classId, s.name, s.mat, s.email]);
-      }
-    }
 
     res.json({
       success: true,

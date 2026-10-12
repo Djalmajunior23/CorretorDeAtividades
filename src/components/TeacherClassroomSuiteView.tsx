@@ -50,7 +50,6 @@ import {
 import { OmrWebcamScannerModal } from "./OmrWebcamScannerModal";
 import { PrintableAnswerSheetModal } from "./PrintableAnswerSheetModal";
 import { apiUrl, safeJsonResponse } from "../config/api";
-import { DEFAULT_SENAI_CLASSES } from "../data/defaultClasses";
 
 const MULTI_SUBJECT_PRESETS = [
   {
@@ -159,15 +158,16 @@ export const TeacherClassroomSuiteView: React.FC = () => {
       const res = await fetch(apiUrl("/api/classes"));
       const data = await safeJsonResponse(res).catch(() => null);
       const list = Array.isArray(data) ? data : (data?.classes || []);
-      const finalList = list.length > 0 ? list : DEFAULT_SENAI_CLASSES;
-      setRegisteredClasses(finalList);
-      if (finalList.length > 0) {
-        setSelectedClassId((prev) => prev || finalList[0].id);
+      setRegisteredClasses(list);
+      if (list.length > 0) {
+        setSelectedClassId((prev) => (prev && list.some(c => c.id === prev)) ? prev : list[0].id);
+      } else {
+        setSelectedClassId("");
       }
     } catch (e) {
       console.error("Erro ao carregar turmas reais:", e);
-      setRegisteredClasses(DEFAULT_SENAI_CLASSES);
-      setSelectedClassId((prev) => prev || DEFAULT_SENAI_CLASSES[0].id);
+      setRegisteredClasses([]);
+      setSelectedClassId("");
     } finally {
       setIsLoadingClasses(false);
     }

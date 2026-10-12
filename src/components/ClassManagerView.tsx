@@ -3,7 +3,6 @@ import { Users, Library, Activity, Settings, Plus, FileText, CheckCircle, Search
 import { apiUrl, safeJsonResponse } from "../config/api";
 import { ConsolidatedPdfReportModal } from "./ConsolidatedPdfReportModal";
 import { ExportClassConsolidatedXlsxModal } from "./ExportClassConsolidatedXlsxModal";
-import { DEFAULT_SENAI_CLASSES } from "../data/defaultClasses";
 
 const emptyClassForm = () => ({
   name: "",
@@ -26,7 +25,7 @@ const normalizeClassForm = (cls: any) => ({
 });
 
 export function ClassManagerView() {
-  const [classes, setClasses] = useState<any[]>(() => DEFAULT_SENAI_CLASSES);
+  const [classes, setClasses] = useState<any[]>(() => []);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
@@ -45,13 +44,13 @@ export function ClassManagerView() {
       if (rows.length > 0) {
         setClasses(rows);
       } else {
-        setClasses(DEFAULT_SENAI_CLASSES);
+        setClasses([]);
       }
     } catch (e) {
       if (import.meta.env.DEV) {
         console.warn("Using offline seed classes fallback:", e);
       }
-      setClasses(DEFAULT_SENAI_CLASSES);
+      setClasses([]);
     }
     setLoading(false);
   };
@@ -91,6 +90,21 @@ export function ClassManagerView() {
       await fetch(apiUrl(`/api/classes/${id}`), { method: "DELETE" });
       fetchClasses();
     } catch (e) {}
+  };
+
+  const handleResetAll = async () => {
+    if (!confirm("Atenção: Deseja apagar todas as turmas e alunos e iniciar o sistema totalmente do zero?\n\nEsta ação é irreversível.")) return;
+    try {
+      setLoading(true);
+      const res = await fetch(apiUrl("/api/classes/reset-all"), { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      await fetchClasses();
+      alert(data.message || "Sistema zerado com sucesso! Nenhuma turma ou aluno ativo.");
+    } catch (e: any) {
+      alert("Erro ao zerar sistema: " + (e?.message || e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleArchive = async (id: string, currentData: any) => {
@@ -142,6 +156,16 @@ export function ClassManagerView() {
             <Plus className="w-4 h-4" />
             Nova Turma
           </button>
+          {classes.length > 0 && (
+            <button
+              onClick={handleResetAll}
+              title="Apagar todas as turmas e alunos e começar do zero"
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold py-2 px-3 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-xs"
+            >
+              <Trash className="w-3.5 h-3.5" />
+              Zerar Turmas e Alunos
+            </button>
+          )}
         </div>
       </div>
 
