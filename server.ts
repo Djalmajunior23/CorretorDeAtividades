@@ -645,8 +645,8 @@ async function initDatabase() {
     try {
       await pool.query(`
         DELETE FROM d_student_grades WHERE class_id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026');
-        DELETE FROM d_student_record WHERE id IN ('b1000000-0000-4000-a000-000000000001', 'b1000000-0000-4000-a000-000000000002', 'b1000000-0000-4000-a000-000000000003', 'b1000000-0000-4000-a000-000000000004', 'b1000000-0000-4000-a000-000000000005', 'b1000000-0000-4000-a000-000000000006', 'b1000000-0000-4000-a000-000000000007') OR id LIKE 'stu-%' OR teacher_id = 'teacher_portal';
-        DELETE FROM d_class_group WHERE id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026') OR teacher_id = 'teacher_portal';
+        DELETE FROM d_student_record WHERE id::text IN ('b1000000-0000-4000-a000-000000000001', 'b1000000-0000-4000-a000-000000000002', 'b1000000-0000-4000-a000-000000000003', 'b1000000-0000-4000-a000-000000000004', 'b1000000-0000-4000-a000-000000000005', 'b1000000-0000-4000-a000-000000000006', 'b1000000-0000-4000-a000-000000000007') OR id::text LIKE 'stu-%' OR teacher_id = 'teacher_portal';
+        DELETE FROM d_class_group WHERE id::text IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026') OR teacher_id = 'teacher_portal';
       `);
     } catch (cleanErr) {
       // Ignora se tabelas ainda não existirem
@@ -10794,37 +10794,53 @@ app.post("/api/feature-flags", (req, res) => {
 });
 
 app.get("/api/settings/linting", async (req, res) => {
-  if (pool) {
-    try {
-      const q = await pool.query(`SELECT * FROM d_teacher_linting_settings WHERE id = 'default'`);
-      if (q.rows.length > 0) {
-        return res.json({
-          success: true,
-          requireComments: q.rows[0].require_comments,
-          // ...
-        });
-      }
-      return res.json({
-        success: true,
-        requireComments: false,
-        requireIndentation: true,
-        maxLinesLimit: 0,
-        requireNoSingleLetterVars: false,
-        requireFunctions: false
-      });
-    } catch (e) {
-      console.error("Error fetching linting settings:", e);
-      return res.status(500).json({ success: false, error: "Database error" });
-    }
-  }
-  return res.json({
+  const defaultLinting = {
     success: true,
     requireComments: false,
     requireIndentation: true,
     maxLinesLimit: 0,
     requireNoSingleLetterVars: false,
     requireFunctions: false
-  });
+  };
+
+  if (pool) {
+    try {
+      const q = await pool.query(`SELECT * FROM d_teacher_linting_settings WHERE id = 'default'`);
+      if (q.rows.length > 0) {
+        return res.json({
+          success: true,
+          requireComments: q.rows[0].require_comments ?? false,
+          requireIndentation: q.rows[0].require_indentation ?? true,
+          maxLinesLimit: q.rows[0].max_lines_limit ?? 0,
+          requireNoSingleLetterVars: q.rows[0].require_no_single_letter_vars ?? false,
+          requireFunctions: q.rows[0].require_functions ?? false
+        });
+      }
+      return res.json(defaultLinting);
+    } catch (e: any) {
+      if (e?.message?.includes("does not exist") || e?.code === "42P01") {
+        try {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS d_teacher_linting_settings (
+              id VARCHAR(50) PRIMARY KEY,
+              require_comments BOOLEAN NOT NULL DEFAULT TRUE,
+              require_indentation BOOLEAN NOT NULL DEFAULT TRUE,
+              max_lines_limit INTEGER NOT NULL DEFAULT 80,
+              require_no_single_letter_vars BOOLEAN NOT NULL DEFAULT TRUE,
+              require_functions BOOLEAN NOT NULL DEFAULT FALSE,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+        } catch (tblErr) {
+          console.warn("[Linting Init Table Warning]:", tblErr);
+        }
+      } else {
+        console.warn("Aviso ao buscar linting settings do DB:", e?.message || e);
+      }
+      return res.json(defaultLinting);
+    }
+  }
+  return res.json(defaultLinting);
 });
 
 app.post("/api/settings/linting", async (req, res) => {

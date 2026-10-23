@@ -27,6 +27,8 @@ const normalizeClassForm = (cls: any) => ({
 export function ClassManagerView() {
   const [classes, setClasses] = useState<any[]>(() => []);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showXlsxModal, setShowXlsxModal] = useState(false);
@@ -39,20 +41,20 @@ export function ClassManagerView() {
     setLoading(true);
     try {
       const resp = await fetch(apiUrl("/api/classes"));
-      const data = await resp.json();
-      const rows = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
-      if (rows.length > 0) {
-        setClasses(rows);
-      } else {
-        setClasses([]);
+      if (!resp.ok) {
+        console.warn(`[ClassManagerView] fetch /api/classes returned status ${resp.status}`);
       }
+      const data = await resp.json().catch(() => null);
+      const rows = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+      setClasses(rows);
     } catch (e) {
       if (import.meta.env.DEV) {
         console.warn("Using offline seed classes fallback:", e);
       }
       setClasses([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -61,35 +63,62 @@ export function ClassManagerView() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.name || !formData.name.trim()) {
+      alert("Por favor, preencha o Nome da Turma.");
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMsg(null);
     try {
-      if (editId) {
-        await fetch(apiUrl(`/api/classes/${editId}`), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...formData, status: "active" })
-        });
-      } else {
-        await fetch(apiUrl("/api/classes"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData)
-        });
+      const payload = {
+        ...formData,
+        name: formData.name.trim(),
+        year: Number(formData.year) || new Date().getFullYear(),
+        status: "active"
+      };
+
+      const url = editId ? apiUrl(`/api/classes/${editId}`) : apiUrl("/api/classes");
+      const method = editId ? "PUT" : "POST";
+
+      const resp = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(result.error || result.message || `Falha ao salvar turma (HTTP ${resp.status})`);
       }
+
       setShowModal(false);
       setEditId(null);
       setFormData(emptyClassForm());
-      fetchClasses();
-    } catch (e) {
-      console.error(e);
+      await fetchClasses();
+    } catch (e: any) {
+      console.error("[handleSubmit error]:", e);
+      const msg = e?.message || "Erro de conexão ao salvar turma.";
+      setErrorMsg(msg);
+      alert("Erro ao salvar turma: " + msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Confirmar exclusão desta turma?")) return;
     try {
-      await fetch(apiUrl(`/api/classes/${id}`), { method: "DELETE" });
+      const resp = await fetch(apiUrl(`/api/classes/${id}`), { method: "DELETE" });
+      if (!resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        alert("Erro ao excluir turma: " + (d.error || `HTTP ${resp.status}`));
+      }
       fetchClasses();
-    } catch (e) {}
+    } catch (e: any) {
+      alert("Erro de conexão ao excluir: " + (e?.message || e));
+    }
   };
 
   const handleResetAll = async () => {
@@ -109,13 +138,19 @@ export function ClassManagerView() {
 
   const handleArchive = async (id: string, currentData: any) => {
     try {
-      await fetch(apiUrl(`/api/classes/${id}`), {
+      const resp = await fetch(apiUrl(`/api/classes/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...currentData, status: "archived" })
       });
+      if (!resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        alert("Erro ao arquivar turma: " + (d.error || `HTTP ${resp.status}`));
+      }
       fetchClasses();
-    } catch (e) {}
+    } catch (e: any) {
+      alert("Erro de conexão ao arquivar: " + (e?.message || e));
+    }
   };
 
   return (
@@ -277,25 +312,33 @@ export function ClassManagerView() {
         <div className="fixed inset-0 z-50 bg-[#030712]/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#0f172a] rounded-2xl w-full max-w-lg border border-slate-800 shadow-2xl p-6 flex flex-col gap-5">
             <h3 className="text-xl font-bold text-white">{editId ? "Editar Turma" : "Nova Turma"}</h3>
+            
+            {errorMsg && (
+              <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-slate-400 font-medium">Nome da Turma</label>
-                <input required value={formData.name ?? ""} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" placeholder="Ex: Informática T1" />
+                <label className="text-xs text-slate-400 font-medium">Nome da Turma *</label>
+                <input required value={formData.name ?? ""} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="Ex: Informática T1" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Curso</label>
-                  <input value={formData.course ?? ""} onChange={e => setFormData({...formData, course: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                  <input value={formData.course ?? ""} onChange={e => setFormData({...formData, course: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="Ex: Técnico em Desenvolvimento" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Módulo</label>
-                  <input value={formData.module ?? ""} onChange={e => setFormData({...formData, module: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                  <input value={formData.module ?? ""} onChange={e => setFormData({...formData, module: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="Ex: Módulo 1" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Turno</label>
-                  <select value={formData.shift ?? ""} onChange={e => setFormData({...formData, shift: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
+                  <select value={formData.shift ?? ""} onChange={e => setFormData({...formData, shift: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
                     <option value="">Selecione</option>
                     <option value="Matutino">Matutino</option>
                     <option value="Vespertino">Vespertino</option>
@@ -305,21 +348,23 @@ export function ClassManagerView() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Ano</label>
-                  <input type="number" value={formData.year ?? new Date().getFullYear()} onChange={e => setFormData({...formData, year: Number(e.target.value) || new Date().getFullYear()})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                  <input type="number" value={formData.year ?? new Date().getFullYear()} onChange={e => setFormData({...formData, year: Number(e.target.value) || new Date().getFullYear()})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400 font-medium">Semestre</label>
-                  <input value={formData.semester ?? ""} onChange={e => setFormData({...formData, semester: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" placeholder="Ex: 1º" />
+                  <input value={formData.semester ?? ""} onChange={e => setFormData({...formData, semester: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="Ex: 1º" />
                 </div>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-slate-400 font-medium">Descrição</label>
-                <textarea rows={3} value={formData.description ?? ""} onChange={e => setFormData({...formData, description: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />
+                <textarea rows={3} value={formData.description ?? ""} onChange={e => setFormData({...formData, description: e.target.value})} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="Observações opcionais..." />
               </div>
               
               <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg">Cancelar</button>
-                <button type="submit" className="px-5 py-2 text-sm font-bold bg-emerald-500 text-slate-900 rounded-lg hover:bg-emerald-600">Salvar Turma</button>
+                <button type="button" disabled={submitting} onClick={() => { setErrorMsg(null); setShowModal(false); }} className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">Cancelar</button>
+                <button type="submit" disabled={submitting} className="px-5 py-2 text-sm font-bold bg-emerald-500 text-slate-900 rounded-lg hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20">
+                  {submitting ? "Salvando..." : editId ? "Atualizar Turma" : "Salvar Turma"}
+                </button>
               </div>
             </form>
           </div>
