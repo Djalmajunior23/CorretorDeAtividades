@@ -937,7 +937,8 @@ Foco: Código realista com 2 a 3 bugs sutis de produção.
       bodyStyles: { fontSize: 8, cellPadding: 2.5 }
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    const arrayBuffer = doc.output("arraybuffer");
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
   }
 }
 

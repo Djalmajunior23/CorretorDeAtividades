@@ -1104,7 +1104,7 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
     });
 
     const arrayBuffer = doc.output("arraybuffer");
-    return Buffer.from(arrayBuffer);
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
   }
 
   /**
@@ -1279,7 +1279,8 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
       alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    const arrayBuffer = doc.output("arraybuffer");
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
   }
 
   /**
@@ -1402,7 +1403,8 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
       });
     });
 
-    return Buffer.from(doc.output("arraybuffer"));
+    const arrayBuffer = doc.output("arraybuffer");
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
   }
 
   /**
@@ -1479,7 +1481,8 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
       doc.text(splitStatement, 14, 84);
     }
 
-    return Buffer.from(doc.output("arraybuffer"));
+    const arrayBuffer = doc.output("arraybuffer");
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
   }
 
   /**
@@ -1529,7 +1532,8 @@ Retorne RIGOROSAMENTE apenas um JSON no formato:
       doc.line(26, lineY, 192, lineY);
     }
 
-    return Buffer.from(doc.output("arraybuffer"));
+    const arrayBuffer = doc.output("arraybuffer");
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
   }
 
   /**

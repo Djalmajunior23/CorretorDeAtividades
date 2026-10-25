@@ -160,7 +160,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
       const list = Array.isArray(data) ? data : (data?.classes || []);
       setRegisteredClasses(list);
       if (list.length > 0) {
-        setSelectedClassId((prev) => (prev && list.some(c => c.id === prev)) ? prev : list[0].id);
+        setSelectedClassId((prev) => (prev && list.some((c: any) => c.id === prev)) ? prev : list[0].id);
       } else {
         setSelectedClassId("");
       }

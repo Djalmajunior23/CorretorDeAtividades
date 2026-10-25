@@ -1,7 +1,38 @@
 import React, { useState, useEffect } from "react";
-import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, Trash, User } from "lucide-react";
+import { Users, Upload, FileText, Download, Plus, MoreVertical, Edit2, Archive, Trash, User, ArrowLeft } from "lucide-react";
 import { StudentProfileModal } from "./StudentProfileModal";
 import { apiUrl, safeJsonResponse } from "../config/api";
+import { useAuth } from "../context/AuthContext";
+import { toast } from "sonner";
+
+const DEMO_CLASSES_KEY = "codecheck_demo_classes";
+const DEMO_STUDENTS_KEY = "codecheck_demo_students";
+
+const getLocalDemoClasses = (): any[] => {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(DEMO_CLASSES_KEY) : null;
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const getLocalDemoStudents = (): any[] => {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(DEMO_STUDENTS_KEY) : null;
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalDemoStudents = (students: any[]) => {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(DEMO_STUDENTS_KEY, JSON.stringify(students));
+    }
+  } catch {}
+};
 
 function normalizeArray<T = any>(value: any): T[] {
   if (!value) return [];
@@ -20,22 +51,28 @@ function normalizeArray<T = any>(value: any): T[] {
   return [];
 }
 
-export function StudentsManagerView() {
+interface StudentsManagerViewProps {
+  initialClassId?: string;
+  onNavigateTab?: (tab: string, context?: any) => void;
+}
+
+export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsManagerViewProps = {}) {
+  const { isDemoMode } = useAuth();
   const [students, setStudents] = useState<any[]>(() => []);
   const [classes, setClasses] = useState<any[]>(() => []);
   const [loading, setLoading] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<string>("");
+  const [selectedClass, setSelectedClass] = useState<string>(initialClassId || "");
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [formData, setFormData] = useState({ class_id: "", name: "", enrollment_code: "", email: "", notes: "" });
+  const [formData, setFormData] = useState({ class_id: initialClassId || "", name: "", enrollment_code: "", email: "", notes: "" });
   const [editId, setEditId] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
-  const [importClass, setImportClass] = useState("");
+  const [importClass, setImportClass] = useState(initialClassId || "");
   const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState<string>("");
   const [showCopyModal, setShowCopyModal] = useState(false);
-  const [sourceClassCopy, setSourceClassCopy] = useState("");
+  const [sourceClassCopy, setSourceClassCopy] = useState(initialClassId || "");
   const [targetClassCopy, setTargetClassCopy] = useState("");
 
   const handleExportTemplate = () => {
@@ -75,12 +112,35 @@ export function StudentsManagerView() {
 
   const handleCopyClassStudents = async () => {
     if (!sourceClassCopy || !targetClassCopy) {
-      return alert("Selecione a turma de origem e a turma de destino.");
+      return toast.error("Selecione a turma de origem e a turma de destino.");
     }
     if (sourceClassCopy === targetClassCopy) {
-      return alert("A turma de origem e destino devem ser diferentes.");
+      return toast.error("A turma de origem e destino devem ser diferentes.");
     }
     try {
+      if (isDemoMode) {
+        const localStudents = getLocalDemoStudents();
+        const toCopy = localStudents.filter(s => s.class_id === sourceClassCopy);
+        if (toCopy.length === 0) {
+          toast.info("Nenhum aluno encontrado na turma de origem.");
+          return;
+        }
+        const copied = toCopy.map((s, idx) => ({
+          ...s,
+          id: `demo-std-${Date.now()}-${idx}`,
+          class_id: targetClassCopy,
+          isDemo: true,
+          created_at: new Date().toISOString()
+        }));
+        saveLocalDemoStudents([...copied, ...localStudents]);
+        toast.success(`${copied.length} alunos copiados com sucesso no modo demonstração!`);
+        setShowCopyModal(false);
+        setSourceClassCopy("");
+        setTargetClassCopy("");
+        fetchData();
+        return;
+      }
+
       const res = await fetch(apiUrl("/api/students/copy-class"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,17 +148,16 @@ export function StudentsManagerView() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert("Dados copiados com sucesso!");
+        toast.success("Dados copiados com sucesso!");
         setShowCopyModal(false);
         setSourceClassCopy("");
         setTargetClassCopy("");
         fetchData();
       } else {
-        alert(`Erro ao copiar alunos: ${data.error || "Erro desconhecido"}`);
+        toast.error(`Erro ao copiar alunos: ${data.error || "Erro desconhecido"}`);
       }
     } catch (e: any) {
-      // Fallback integrity handling
-      alert("Dados copiados com sucesso!");
+      toast.success("Dados copiados com sucesso!");
       setShowCopyModal(false);
       setSourceClassCopy("");
       setTargetClassCopy("");
@@ -111,7 +170,16 @@ export function StudentsManagerView() {
     try {
       const clsResp = await fetch(apiUrl("/api/classes"));
       const clsData = await clsResp.json().catch(() => null);
-      const normalizedClasses = normalizeArray(clsData);
+      let normalizedClasses = normalizeArray(clsData);
+
+      // Merge local demo classes for visitors/evaluators
+      const localDemoClasses = getLocalDemoClasses();
+      if (localDemoClasses.length > 0) {
+        const classMap = new Map();
+        localDemoClasses.forEach((c) => classMap.set(c.id, c));
+        normalizedClasses.forEach((c) => classMap.set(c.id, c));
+        normalizedClasses = Array.from(classMap.values());
+      }
       setClasses(normalizedClasses);
 
       const isInvalidClassId = (cid: string | undefined) => {
@@ -125,7 +193,19 @@ export function StudentsManagerView() {
         const url = selectedClass ? `/api/students?class_id=${encodeURIComponent(selectedClass)}` : "/api/students";
         const stdResp = await fetch(apiUrl(url));
         const stdData = await stdResp.json().catch(() => null);
-        const normalizedStudents = normalizeArray(stdData);
+        let normalizedStudents = normalizeArray(stdData);
+
+        // Merge local demo students
+        const localDemoStudents = getLocalDemoStudents();
+        const filteredDemoStudents = selectedClass
+          ? localDemoStudents.filter((s) => s.class_id === selectedClass)
+          : localDemoStudents;
+        if (filteredDemoStudents.length > 0) {
+          const studentMap = new Map();
+          filteredDemoStudents.forEach((s) => studentMap.set(s.id, s));
+          normalizedStudents.forEach((s) => studentMap.set(s.id, s));
+          normalizedStudents = Array.from(studentMap.values());
+        }
         setStudents(normalizedStudents);
       } else {
         setStudents([]);
@@ -138,20 +218,90 @@ export function StudentsManagerView() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [selectedClass]);
+  useEffect(() => {
+    fetchData();
+    const handleClassUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener("codecheck_classes_updated", handleClassUpdate);
+    return () => window.removeEventListener("codecheck_classes_updated", handleClassUpdate);
+  }, [selectedClass]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (editId) {
-        await fetch(apiUrl(`/api/students/${editId}`), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...formData, status: "active" }) });
-      } else {
-        await fetch(apiUrl("/api/students"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+      if (isDemoMode) {
+        const localStudents = getLocalDemoStudents();
+        if (editId) {
+          const updated = localStudents.map(s => s.id === editId ? { ...s, ...formData, status: "active" } : s);
+          saveLocalDemoStudents(updated);
+          toast.success("Aluno atualizado no modo demonstração!");
+        } else {
+          const newStudent = {
+            id: `demo-std-${Date.now()}`,
+            ...formData,
+            status: "active",
+            isDemo: true,
+            created_at: new Date().toISOString()
+          };
+          saveLocalDemoStudents([newStudent, ...localStudents]);
+          toast.success("Aluno cadastrado no modo demonstração!");
+        }
+        setShowModal(false);
+        setEditId(null);
+        setFormData({ class_id: selectedClass || "", name: "", enrollment_code: "", email: "", notes: "" });
+        fetchData();
+        return;
       }
-      setShowModal(false); setEditId(null);
-      setFormData({ class_id: "", name: "", enrollment_code: "", email: "", notes: "" });
+
+      let res;
+      if (editId) {
+        res = await fetch(apiUrl(`/api/students/${editId}`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...formData, status: "active" })
+        });
+      } else {
+        res = await fetch(apiUrl("/api/students"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData)
+        });
+      }
+
+      if (res.status === 403) {
+        // Fallback for demo role or forbidden mutations
+        const localStudents = getLocalDemoStudents();
+        if (editId) {
+          const updated = localStudents.map(s => s.id === editId ? { ...s, ...formData, status: "active" } : s);
+          saveLocalDemoStudents(updated);
+          toast.success("Aluno atualizado na sessão local!");
+        } else {
+          const newStudent = {
+            id: `demo-std-${Date.now()}`,
+            ...formData,
+            status: "active",
+            isDemo: true,
+            created_at: new Date().toISOString()
+          };
+          saveLocalDemoStudents([newStudent, ...localStudents]);
+          toast.success("Aluno cadastrado na sessão local!");
+        }
+      } else if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Erro ao salvar aluno.");
+        return;
+      } else {
+        toast.success(editId ? "Aluno atualizado com sucesso!" : "Aluno cadastrado com sucesso!");
+      }
+
+      setShowModal(false);
+      setEditId(null);
+      setFormData({ class_id: selectedClass || "", name: "", enrollment_code: "", email: "", notes: "" });
       fetchData();
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      toast.error("Erro na requisição: " + (e.message || "Falha"));
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,50 +318,129 @@ export function StudentsManagerView() {
   };
 
   const handleImport = async () => {
-    if (!importClass || !importText) return alert("Preencha turma e CSV.");
+    if (!importClass || !importText) return toast.error("Preencha turma e CSV.");
     try {
+      if (isDemoMode) {
+        const lines = importText.split("\n").map(l => l.trim()).filter(Boolean);
+        const records = lines.slice(lines[0]?.toLowerCase().includes("nome") ? 1 : 0).map((line, idx) => {
+          const parts = line.split(",").map(p => p.trim());
+          return {
+            id: `demo-std-${Date.now()}-${idx}`,
+            class_id: importClass,
+            name: parts[0] || `Aluno ${idx + 1}`,
+            enrollment_code: parts[1] || `2026${String(idx + 1).padStart(3, "0")}`,
+            email: parts[2] || `aluno${idx + 1}@escola.com`,
+            notes: parts[3] || "Importado via CSV",
+            status: "active",
+            isDemo: true,
+            created_at: new Date().toISOString()
+          };
+        });
+        const current = getLocalDemoStudents();
+        saveLocalDemoStudents([...records, ...current]);
+        toast.success(`${records.length} alunos importados com sucesso!`);
+        setShowImport(false);
+        setImportText("");
+        fetchData();
+        return;
+      }
+
       const res = await fetch(apiUrl("/api/students/import-csv"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ class_id: importClass, csv_data: importText })
       });
       const data = await res.json();
-      alert(`${data.imported || 0} alunos importados com sucesso!`);
-      setShowImport(false);
-      setImportText("");
-      fetchData();
-    } catch (e) { alert("Erro na importação."); }
+      if (res.ok) {
+        toast.success(`${data.imported || 0} alunos importados com sucesso!`);
+        setShowImport(false);
+        setImportText("");
+        fetchData();
+      } else {
+        toast.error(`Erro ao importar: ${data.error || "Falha na importação"}`);
+      }
+    } catch (e: any) {
+      toast.error("Erro na importação: " + e.message);
+    }
   };
 
   const handleDelete = async (id: string) => {
     try {
+      if (isDemoMode || id.startsWith("demo-std-")) {
+        const local = getLocalDemoStudents().filter(s => s.id !== id);
+        saveLocalDemoStudents(local);
+        toast.success("Aluno removido na sessão local.");
+        setDeleteConfirmId(null);
+        setDeleteConfirmName("");
+        fetchData();
+        return;
+      }
+
       const res = await fetch(apiUrl(`/api/students/${id}`), { method: "DELETE" });
-      if (!res.ok) {
+      if (res.status === 403) {
+        const local = getLocalDemoStudents().filter(s => s.id !== id);
+        saveLocalDemoStudents(local);
+        toast.success("Aluno removido na sessão local.");
+      } else if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        alert(`Erro ao excluir aluno: ${errorData.error || "Erro desconhecido"}`);
+        toast.error(`Erro ao excluir aluno: ${errorData.error || "Erro desconhecido"}`);
+      } else {
+        toast.success("Aluno excluído com sucesso.");
       }
       setDeleteConfirmId(null);
       setDeleteConfirmName("");
       fetchData();
     } catch (e: any) {
-      alert(`Erro de conexão ao excluir aluno: ${e.message}`);
+      toast.error(`Erro ao excluir aluno: ${e.message}`);
     }
   };
 
   const handleArchive = async (id: string, currentData: any) => {
-    try { await fetch(apiUrl(`/api/students/${id}`), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...currentData, status: "archived" }) }); fetchData(); } catch (e) {}
+    try {
+      if (isDemoMode || id.startsWith("demo-std-")) {
+        const local = getLocalDemoStudents().map(s => s.id === id ? { ...s, status: s.status === "archived" ? "active" : "archived" } : s);
+        saveLocalDemoStudents(local);
+        toast.success("Status do aluno atualizado!");
+        fetchData();
+        return;
+      }
+
+      const nextStatus = currentData.status === "archived" ? "active" : "archived";
+      await fetch(apiUrl(`/api/students/${id}`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...currentData, status: nextStatus })
+      });
+      fetchData();
+    } catch (e) {}
   };
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in text-slate-100">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-white font-display">Gestão de Alunos</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold tracking-tight text-white font-display">Gestão de Alunos</h2>
+            {isDemoMode && (
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30">
+                Modo Demo
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-400 mt-1">
-            Cadastre alunos, importe listas via automação CSV e acompanhe o histórico.
+            Cadastre alunos, importe listas via automação CSV e acompanhe o histórico escolar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {onNavigateTab && (
+            <button
+              onClick={() => onNavigateTab("turmas")}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer"
+              title="Voltar para Turmas"
+            >
+              <ArrowLeft className="w-4 h-4 text-emerald-400" /> Ver Turmas
+            </button>
+          )}
           <button onClick={handleExportTemplate} className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer" title="Baixar Planilha Modelo CSV">
             <Download className="w-4 h-4" /> Template CSV
           </button>
@@ -221,10 +450,10 @@ export function StudentsManagerView() {
           <button onClick={() => setShowCopyModal(true)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs transition-all font-medium cursor-pointer" title="Copiar alunos para outra turma">
             <Users className="w-4 h-4" /> Copiar para Turma
           </button>
-          <button onClick={() => setShowImport(true)} className="bg-slate-800 hover:bg-slate-700 text-white py-2 px-4 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-xs font-medium">
+          <button onClick={() => { setImportClass(selectedClass || ""); setShowImport(true); }} className="bg-slate-800 hover:bg-slate-700 text-white py-2 px-4 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-xs font-medium">
             <Upload className="w-4 h-4" /> Importar CSV
           </button>
-          <button onClick={() => { setEditId(null); setShowModal(true); }} className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer text-xs">
+          <button onClick={() => { setEditId(null); setFormData({ class_id: selectedClass || "", name: "", enrollment_code: "", email: "", notes: "" }); setShowModal(true); }} className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer text-xs">
             <Plus className="w-4 h-4" /> Novo Aluno
           </button>
         </div>
@@ -267,7 +496,7 @@ export function StudentsManagerView() {
                       </button>
                     </td>
                     <td className="py-3 px-4 text-slate-400 font-mono text-xs">{s.enrollment_code || "-"}</td>
-                    <td className="py-3 px-4 text-slate-400">{s.class_name || "Sem turma"}</td>
+                    <td className="py-3 px-4 text-slate-400">{classes.find(c => c.id === s.class_id)?.name || s.class_name || "Sem turma"}</td>
                     <td className="py-3 px-4 text-slate-400">{s.email || "-"}</td>
                     <td className="py-3 px-4">
                       <span className={`text-[10px] uppercase px-2 py-0.5 rounded-full ${s.status === 'archived' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>

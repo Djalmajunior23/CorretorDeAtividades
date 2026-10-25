@@ -55,7 +55,8 @@ import {
   MessageSquare,
   Bell,
   HeartPulse,
-  Code2
+  Code2,
+  Camera
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -147,7 +148,9 @@ export default function Sidebar({
         { id: "teacher_superpowers", label: "Superpoderes Docentes", icon: Sparkles, desc: "Ações 1-Clique, Omnikit & Autopilot" },
         { id: "diary", label: "Diário de Classe", icon: BookOpen, desc: "Registro Inteligente de Frequência & Aulas" },
         { id: "planejamento", label: "Planejamento Semestral", icon: Layers, desc: "Ecosistema Curricular & Cronograma" },
+        { id: "teacher_classroom_suite", label: "Estúdio de Provas & OMR", icon: Camera, desc: "Gerador de Avaliações, Correção Óptica e Webcam", isNew: true },
         { id: "turmas", label: "Turmas & Alunos", icon: Users, desc: "Gestão Corporativa de Turmas" },
+        { id: "students", label: "Gestão de Alunos", icon: Users, desc: "Cadastro Individual & Importação CSV" },
         { id: "materiais", label: "Materiais & Apoio", icon: Library, desc: "Repositório Didático & Apostilas" }
       ]
     },
@@ -188,6 +191,7 @@ export default function Sidebar({
       icon: Brain,
       color: "text-indigo-400",
       items: [
+        { id: "academy_mastery", label: "CiberAcademy - Aprendizado Profundo", icon: Cpu, desc: "Debugger Mental, Inquérito Socrático & Domínio Técnico", isNew: true },
         { id: "career_bridge", label: "Passaporte de Empregabilidade & Vagas", icon: Award, desc: "Credenciais W3C & Radar de Empregos", isNew: true },
         { id: "guided_refactoring", label: "Ciclo de Refação Orientada", icon: RefreshCw, desc: "Scaffolding, Dicas & Justificativa", isNew: true },
         { id: "smart_code_refactor", label: "Estúdio de Refatoração & Clean Code", icon: Code2, desc: "Complexidade Ciclomática, AST & AppSec", isNew: true },

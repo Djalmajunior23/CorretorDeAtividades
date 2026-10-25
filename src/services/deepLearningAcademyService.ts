@@ -631,10 +631,10 @@ Retorne rigorosamente apenas um JSON no formato:
 
     // Footer signatures
     doc.setTextColor(148, 163, 184);
-    doc.setFontSize(7);
     doc.text("Documento Oficial emitido pelo CodeCheck AI • CiberAcademy SENAI Learning Engine", 14, 285);
     doc.text(`Emitido em: ${new Date(passport.issuedAt).toLocaleDateString("pt-BR")}`, 160, 285);
 
-    return Buffer.from(doc.output("arraybuffer"));
+    const arrayBuffer = doc.output("arraybuffer");
+    return typeof Buffer !== "undefined" ? Buffer.from(arrayBuffer) : (new Uint8Array(arrayBuffer) as any);
   }
 }

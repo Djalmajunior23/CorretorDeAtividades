@@ -489,7 +489,7 @@ export class TeacherPowerhouseService {
 
     if (format === "csv") {
       const csvString = XLSX.utils.sheet_to_csv(ws);
-      return Buffer.from(csvString, "utf-8");
+      return typeof Buffer !== "undefined" ? Buffer.from(csvString, "utf-8") : (new TextEncoder().encode(csvString) as any);
     }
 
     const excelBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
@@ -689,7 +689,7 @@ ${params.code}
     doc.text("Assinatura do Estudante", 138, signY + 6);
 
     const pdfArray = doc.output("arraybuffer");
-    return Buffer.from(pdfArray);
+    return typeof Buffer !== "undefined" ? Buffer.from(pdfArray) : (new Uint8Array(pdfArray) as any);
   }
 
   /**
@@ -808,7 +808,7 @@ ${params.code}
     doc.text("Assinatura do Estudante", 138, signPageY + 34);
 
     const pdfBuffer = doc.output("arraybuffer");
-    return Buffer.from(pdfBuffer);
+    return typeof Buffer !== "undefined" ? Buffer.from(pdfBuffer) : (new Uint8Array(pdfBuffer) as any);
   }
 
   // =========================================================================
@@ -1218,7 +1218,7 @@ ${params.code}
     });
 
     const pdfBuffer = doc.output("arraybuffer");
-    return Buffer.from(pdfBuffer);
+    return typeof Buffer !== "undefined" ? Buffer.from(pdfBuffer) : (new Uint8Array(pdfBuffer) as any);
   }
 
   // =========================================================================

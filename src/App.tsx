@@ -1892,45 +1892,71 @@ export default function App() {
 
   // Fetch classes on mount and when entering class/grade management tabs
   useEffect(() => {
-    if (correctorClasses.length > 0 && !["turmas", "notas", "corrector", "dashboard"].includes(currentTab)) {
-      return;
-    }
-    fetch(apiUrl("/api/classes"))
-      .then(res => safeJsonResponse(res))
-      .then(data => {
-        let classList: any[] = [];
-        if (data) {
-          if (Array.isArray(data)) {
-            classList = data;
-          } else if (Array.isArray(data.classes)) {
-            classList = data.classes;
-          } else if (Array.isArray(data.data)) {
-            classList = data.data;
-          } else if (Array.isArray(data.data?.classes)) {
-            classList = data.data.classes;
-          } else if (Array.isArray(data.items)) {
-            classList = data.items;
-          } else if (Array.isArray(data.data?.items)) {
-            classList = data.data.items;
+    const fetchCorrectorClasses = () => {
+      fetch(apiUrl("/api/classes"))
+        .then(res => safeJsonResponse(res))
+        .then(data => {
+          let classList: any[] = [];
+          if (data) {
+            if (Array.isArray(data)) {
+              classList = data;
+            } else if (Array.isArray(data.classes)) {
+              classList = data.classes;
+            } else if (Array.isArray(data.data)) {
+              classList = data.data;
+            } else if (Array.isArray(data.data?.classes)) {
+              classList = data.data.classes;
+            } else if (Array.isArray(data.items)) {
+              classList = data.items;
+            } else if (Array.isArray(data.data?.items)) {
+              classList = data.data.items;
+            }
           }
-        }
-        if (classList.length > 0) {
-          setCorrectorClasses(classList);
-          if (!selectedCorrectorClass || !classList.some(c => c.id === selectedCorrectorClass)) {
-            setSelectedCorrectorClass(classList[0].id);
+
+          // Merge local demo/cached classes
+          let localDemos: any[] = [];
+          try {
+            const raw = localStorage.getItem("codecheck_demo_classes");
+            if (raw) localDemos = JSON.parse(raw);
+          } catch {}
+
+          const mergedMap = new Map();
+          classList.forEach((c) => mergedMap.set(c.id, c));
+          localDemos.forEach((c) => mergedMap.set(c.id, c));
+          const combined = Array.from(mergedMap.values());
+
+          if (combined.length > 0) {
+            setCorrectorClasses(combined);
+            if (!selectedCorrectorClass || !combined.some(c => c.id === selectedCorrectorClass)) {
+              setSelectedCorrectorClass(combined[0].id);
+            }
+          } else {
+            setCorrectorClasses([]);
+            setSelectedCorrectorClass('');
           }
-        } else {
-          setCorrectorClasses([]);
-          setSelectedCorrectorClass('');
-        }
-      })
-      .catch(err => {
-        if (import.meta.env.DEV) {
-          console.warn("Error fetching corrector classes:", err?.message || err);
-        }
-        setCorrectorClasses([]);
-        setSelectedCorrectorClass('');
-      });
+        })
+        .catch(err => {
+          if (import.meta.env.DEV) {
+            console.warn("Error fetching corrector classes:", err?.message || err);
+          }
+          let localDemos: any[] = [];
+          try {
+            const raw = localStorage.getItem("codecheck_demo_classes");
+            if (raw) localDemos = JSON.parse(raw);
+          } catch {}
+          if (localDemos.length > 0) {
+            setCorrectorClasses(localDemos);
+            setSelectedCorrectorClass(localDemos[0].id);
+          } else {
+            setCorrectorClasses([]);
+            setSelectedCorrectorClass('');
+          }
+        });
+    };
+
+    fetchCorrectorClasses();
+    window.addEventListener("codecheck_classes_updated", fetchCorrectorClasses);
+    return () => window.removeEventListener("codecheck_classes_updated", fetchCorrectorClasses);
   }, [currentTab, user]);
 
   // Synchronously fetch students and activities for the selected corrector class
@@ -2709,11 +2735,11 @@ export default function App() {
           )}
 
           {currentTab === "turmas" && (
-            <ClassManagerView />
+            <ClassManagerView onNavigateTab={setTab} />
           )}
 
           {currentTab === "students" && (
-            <StudentsManagerView />
+            <StudentsManagerView onNavigateTab={setTab} />
           )}
           {currentTab === "notas" && (
             <GradesManagerView 
