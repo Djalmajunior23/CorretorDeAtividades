@@ -23,7 +23,7 @@ export class AIGateway {
 
             // Tenta chamar o provedor customizado ou padrão com fallback
             const customOptions = finalOptConfig?.providerConfig || options?.providerConfig;
-            const provider = customOptions 
+            const provider = customOptions
                 ? ProviderFactory.createCustomProvider(customOptions)
                 : ProviderFactory.createProvider(task);
 
@@ -44,7 +44,7 @@ export class AIGateway {
             }
 
             if (task === AITask.GENERAL_ANALYSIS || task === AITask.REPORT_GENERATION) {
-                return ("📊 **Resumo Executivo Diário (Fallback por Indisponibilidade de IA)**:\n• **Status da Turma**: 91% de participação em tempo real.\n• **Ritmo Acadêmico**: Aceleração de 12% na velocidade de entrega.\n• **Recomendação**: Mantenha o monitoramento ativo dos prazos de SLA.") as any as T;
+                return ("IA indisponível. Não foi possível gerar a análise solicitada. Consulte os registros reais da turma e tente novamente após restabelecer a conexão com o provedor.") as any as T;
             }
 
             // O LocalRuleEngine é acionado caso seja uma correção/validação.
@@ -53,7 +53,7 @@ export class AIGateway {
             else if (prompt.toLowerCase().includes('javascript') || prompt.toLowerCase().includes('typescript')) lang = 'javascript';
 
             const fallbackResult = LocalRuleEngine.analyzeCode(lang, prompt);
-            
+
             return fallbackResult as any as T;
         }
     }

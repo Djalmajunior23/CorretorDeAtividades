@@ -6,13 +6,23 @@ import os from "os";
 import { ExecutionRequest, ExecutionResponse, TestCase, TestCaseResult, ExecutionStatus } from "./types";
 import { SecurityScanner } from "./security_scanner";
 import { AIExecutor } from "./AIExecutor";
+import { allowTrustedLocalExecution } from "../../../utils/executionPolicy";
 
 export class ExecutionService {
   private static TEMP_DIR = path.join(os.tmpdir(), "codecheck-sandbox");
 
   static async run(request: ExecutionRequest): Promise<ExecutionResponse> {
-    const language = request.language.toLowerCase();
-    
+    if (!allowTrustedLocalExecution()) {
+      return this.createErrorResponse(request?.language || "", "security_blocked", "Execução indisponível: configure um worker isolado para executar código de alunos.");
+    }
+    if (!request || typeof request.language !== "string" || typeof request.code !== "string") {
+      return this.createErrorResponse("", "internal_error", "Linguagem e código devem ser textos.");
+    }
+    const aliases: Record<string, string> = { js: "javascript", node: "javascript", nodejs: "javascript", py: "python", python3: "python", "c++": "cpp" };
+    const requestedLanguage = request.language.toLowerCase().trim();
+    const language = aliases[requestedLanguage] || requestedLanguage;
+    request = { ...request, language };
+
     // 1. Initial Scan
     const scanResult = SecurityScanner.scan(language, request.code);
     if (!scanResult.safe) {
@@ -21,7 +31,7 @@ export class ExecutionService {
 
     // 2. Determine execution mode (Local vs AI Simulation)
     // Only Python and JS/Node are typically available in standard serverless containers
-    const localInterpreters = ["python", "javascript", "node", "typescript"];
+    const localInterpreters = ["python", "javascript", "js", "node", "typescript"];
     const needsAI = !localInterpreters.includes(language);
 
     if (needsAI) {
@@ -50,7 +60,7 @@ export class ExecutionService {
 
       if (testCases.length === 0) {
         // Run once without stdin if none provided
-        const result = await this.execute(request.language, jobDir, fileName, "");
+        const result = await this.execute(request.language, jobDir, fileName, "", request.timeout_seconds);
         totalTime = result.time;
         lastStdout = result.stdout;
         lastStderr = result.stderr;
@@ -58,10 +68,10 @@ export class ExecutionService {
       } else {
         for (const tc of testCases) {
           const result = await this.execute(request.language, jobDir, fileName, tc.stdin, request.timeout_seconds);
-          
+
           let passed = false;
           if (result.status === "accepted") {
-            passed = tc.expected_stdout ? result.stdout.trim() === tc.expected_stdout.trim() : true;
+            passed = !request.test_cases || result.stdout.trim() === (tc.expected_stdout ?? "").trim();
           }
 
           testResults.push({
@@ -76,7 +86,7 @@ export class ExecutionService {
           totalTime += result.time;
           lastStdout = result.stdout;
           lastStderr = result.stderr;
-          
+
           if (result.status !== "accepted") {
             finalStatus = result.status;
             break;
@@ -88,7 +98,7 @@ export class ExecutionService {
         finalStatus = "wrong_answer";
       }
 
-      const score = testCases.length > 0 ? Math.round((totalPassed / testCases.length) * 100) : 100;
+      const score = testCases.length > 0 ? Math.round((totalPassed / testCases.length) * 100) : finalStatus === "accepted" ? 100 : 0;
 
       return {
         success: true,
@@ -121,15 +131,15 @@ export class ExecutionService {
     let finalStatus: ExecutionStatus = "accepted";
     let lastStdout = "";
     let lastStderr = "";
-    
-    const testCases = request.test_cases || (request.stdin !== undefined ? [{ name: "Teste Manual", stdin: request.stdin, expected_stdout: "" }] : []);
+
+    const testCases = request.test_cases?.length ? request.test_cases : [{ name: "Execução simulada", stdin: request.stdin ?? "", expected_stdout: "" }];
 
     for (const tc of testCases) {
       const result = await AIExecutor.simulate(request.language, request.code, tc.stdin);
-      
+
       let passed = false;
       if (result.status === "accepted") {
-        passed = tc.expected_stdout ? result.stdout.trim() === tc.expected_stdout.trim() : true;
+        passed = !request.test_cases?.length || result.stdout.trim() === (tc.expected_stdout ?? "").trim();
       }
 
       testResults.push({
@@ -143,7 +153,7 @@ export class ExecutionService {
       if (passed) totalPassed++;
       lastStdout = result.stdout;
       lastStderr = result.stderr;
-      
+
       if (result.status !== "accepted") {
         finalStatus = result.status;
         break;
@@ -167,7 +177,7 @@ export class ExecutionService {
       memory_used_mb: 0,
       test_results: testResults,
       security_flags: [],
-      teacher_summary: `Validado via Sandbox IA (Simulação determinística): ${this.getStatusLabel(finalStatus)}`
+      teacher_summary: `Simulação por IA; não substitui execução real: ${this.getStatusLabel(finalStatus)}`
     };
   }
 
@@ -229,31 +239,31 @@ export class ExecutionService {
       if (process.env.SYSTEMROOT) safeEnv.SYSTEMROOT = process.env.SYSTEMROOT;
       if (process.env.HOMEPATH) safeEnv.HOMEPATH = process.env.HOMEPATH;
 
-      const child = spawn(command.cmd, command.args, { 
-        cwd, 
+      const child = spawn(command.cmd, command.args, {
+        cwd,
         env: safeEnv,
+        detached: process.platform !== "win32",
         stdio: ["pipe", "pipe", "pipe"]
       });
 
+      const timeoutMs = Number.isFinite(timeoutSec) ? Math.max(100, Math.min(timeoutSec * 1000, 30000)) : 5000;
       const timeout = setTimeout(() => {
-        try {
-          child.kill();
-        } catch (e) {}
         status = "timeout";
-      }, timeoutSec * 1000);
-
-      if (stdin) {
         try {
-          child.stdin.write(stdin);
-          child.stdin.end();
+          if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL");
+          else child.kill("SIGKILL");
         } catch (e) {}
-      }
+      }, timeoutMs);
 
-      child.stdout.on("data", (data) => { 
-        if (stdout.length < 100000) stdout += data.toString(); 
+      // EOF is required even with empty stdin, otherwise readers wait until timeout.
+      child.stdin.on("error", () => {}); // The program may exit before consuming input.
+      child.stdin.end(stdin || "");
+
+      child.stdout.on("data", (data) => {
+        if (stdout.length < 100000) stdout += data.toString().slice(0, 100000 - stdout.length);
       });
-      child.stderr.on("data", (data) => { 
-        if (stderr.length < 100000) stderr += data.toString(); 
+      child.stderr.on("data", (data) => {
+        if (stderr.length < 100000) stderr += data.toString().slice(0, 100000 - stderr.length);
       });
 
       child.on("close", (code) => {

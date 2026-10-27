@@ -84,33 +84,23 @@ export function ClassManagerView({ onNavigateTab }: ClassManagerViewProps = {}) 
 
   const fetchClasses = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const resp = await fetch(apiUrl("/api/classes"));
-      let rows: any[] = [];
-      if (resp.ok) {
-        const data = await resp.json().catch(() => null);
-        rows = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+      const data = await safeJsonResponse(resp);
+      const rows = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+      if (rows.length > 0) {
+        setClasses(rows);
       } else {
-        console.warn(`[ClassManagerView] fetch /api/classes returned status ${resp.status}`);
+        setClasses([]);
       }
-
-      // Merge server rows with locally saved classes (local classes take precedence on conflict)
-      const localDemos = getLocalDemoClasses();
-      const mergedMap = new Map();
-      rows.forEach((c) => mergedMap.set(c.id, c));
-      localDemos.forEach((c) => mergedMap.set(c.id, c));
-      const combined = Array.from(mergedMap.values());
-
-      setClasses(combined);
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn("Using offline seed classes fallback:", e);
+        console.warn("Falha ao carregar turmas:", e);
       }
-      const localDemos = getLocalDemoClasses();
-      setClasses(localDemos);
-    } finally {
-      setLoading(false);
+      setErrorMsg(e instanceof Error ? e.message : "Não foi possível carregar as turmas.");
     }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -124,158 +114,30 @@ export function ClassManagerView({ onNavigateTab }: ClassManagerViewProps = {}) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.name.trim()) {
-      setErrorMsg("Por favor, preencha o Nome da Turma.");
-      return;
-    }
-
+    if (submitting) return;
     setSubmitting(true);
     setErrorMsg(null);
     try {
-      const cleanName = formData.name.trim();
-      const numYear = Number(formData.year) || new Date().getFullYear();
-      const payload = {
-        ...formData,
-        name: cleanName,
-        year: numYear,
-        status: "active"
-      };
-
-      const storedToken = (typeof localStorage !== "undefined" ? localStorage.getItem("token") : null) || (user as any)?.token;
-      const isUnauthenticatedOrDemo = isDemoMode || !storedToken || !user;
-
-      // 1. If in Demo Mode or unauthenticated, save directly to local session
-      if (isUnauthenticatedOrDemo) {
-        const localDemos = getLocalDemoClasses();
-        const demoId = editId || `demo_cls_${Date.now()}`;
-        const newDemoClass = {
-          id: demoId,
-          ...payload,
-          teacher_id: user?.id || "local_teacher",
-          students_count: 0,
-          average_score: 75.0,
-          isDemo: true,
-          created_at: new Date().toISOString()
-        };
-
-        const updatedDemos = editId
-          ? localDemos.map((c) => (c.id === editId ? { ...c, ...newDemoClass } : c))
-          : [newDemoClass, ...localDemos.filter((c) => c.id !== demoId)];
-
-        saveLocalDemoClasses(updatedDemos);
-        window.dispatchEvent(new CustomEvent("codecheck_classes_updated"));
-
-        try {
-          toast.success(editId ? "Turma atualizada com sucesso!" : "Turma cadastrada com sucesso!");
-        } catch {
-          alert(editId ? "Turma atualizada com sucesso!" : "Turma cadastrada com sucesso!");
-        }
-
-        setShowModal(false);
-        setEditId(null);
-        setFormData(emptyClassForm());
-        await fetchClasses();
-        return;
-      }
-
-      // 2. Real API endpoint invocation for authenticated teachers
-      const url = editId ? apiUrl(`/api/classes/${editId}`) : apiUrl("/api/classes");
-      const method = editId ? "PUT" : "POST";
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-      };
-      if (storedToken) {
-        headers["Authorization"] = `Bearer ${storedToken}`;
-      }
-
-      let resp: Response;
-      try {
-        resp = await fetch(url, {
-          method,
-          headers,
-          body: JSON.stringify(payload)
-        });
-      } catch (fetchErr) {
-        // Network failure: save to local session so user NEVER loses data
-        console.warn("[handleSubmit fetch failed, fallback to local]:", fetchErr);
-        const localDemos = getLocalDemoClasses();
-        const demoId = editId || `local_cls_${Date.now()}`;
-        const fallbackClass = {
-          id: demoId,
-          ...payload,
-          teacher_id: user?.id || "local_teacher",
-          students_count: 0,
-          average_score: 75.0,
-          created_at: new Date().toISOString()
-        };
-        const updatedDemos = editId
-          ? localDemos.map((c) => (c.id === editId ? { ...c, ...fallbackClass } : c))
-          : [fallbackClass, ...localDemos.filter((c) => c.id !== demoId)];
-        saveLocalDemoClasses(updatedDemos);
-        window.dispatchEvent(new CustomEvent("codecheck_classes_updated"));
-        try { toast.success("Turma salva localmente!"); } catch {}
-        setShowModal(false);
-        setEditId(null);
-        setFormData(emptyClassForm());
-        await fetchClasses();
-        return;
-      }
-
-      const result = await resp.json().catch(() => ({}));
-
-      // Resilient fallback if demo mutation blocked or unauthenticated
-      if (resp.status === 401 || resp.status === 403 || result?.code === "DEMO_MUTATION_BLOCKED" || result?.code === "UNAUTHENTICATED") {
-        const localDemos = getLocalDemoClasses();
-        const demoId = editId || `local_cls_${Date.now()}`;
-        const newDemoClass = {
-          id: demoId,
-          ...payload,
-          teacher_id: user?.id || "local_teacher",
-          students_count: 0,
-          average_score: 75.0,
-          created_at: new Date().toISOString()
-        };
-
-        const updatedDemos = editId
-          ? localDemos.map((c) => (c.id === editId ? { ...c, ...newDemoClass } : c))
-          : [newDemoClass, ...localDemos.filter((c) => c.id !== demoId)];
-
-        saveLocalDemoClasses(updatedDemos);
-        window.dispatchEvent(new CustomEvent("codecheck_classes_updated"));
-        try {
-          toast.success("Turma salva com sucesso na sua sessão!");
-        } catch {}
-        setShowModal(false);
-        setEditId(null);
-        setFormData(emptyClassForm());
-        await fetchClasses();
-        return;
-      }
-
-      if (!resp.ok) {
-        throw new Error(result.error || result.message || `Falha ao salvar turma (HTTP ${resp.status})`);
-      }
-
-      // If saved to server, also update local storage if it was previously an in-memory/local demo
       if (editId) {
-        const localDemos = getLocalDemoClasses().filter((c) => c.id !== editId);
-        saveLocalDemoClasses(localDemos);
+        await fetch(apiUrl(`/api/classes/${editId}`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...formData, status: "active" })
+        }).then(safeJsonResponse);
+      } else {
+        await fetch(apiUrl("/api/classes"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData)
+        }).then(safeJsonResponse);
       }
-      window.dispatchEvent(new CustomEvent("codecheck_classes_updated"));
-
-      try {
-        toast.success(editId ? "Turma atualizada com sucesso!" : "Turma cadastrada com sucesso!");
-      } catch {}
-
       setShowModal(false);
       setEditId(null);
       setFormData(emptyClassForm());
-      await fetchClasses();
-    } catch (e: any) {
-      console.error("[handleSubmit error]:", e);
-      const msg = e?.message || "Erro de conexão ao salvar turma.";
-      setErrorMsg(msg);
+      window.dispatchEvent(new CustomEvent("codecheck_classes_updated"));
+      fetchClasses();
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "Não foi possível salvar a turma.");
     } finally {
       setSubmitting(false);
     }
@@ -284,68 +146,22 @@ export function ClassManagerView({ onNavigateTab }: ClassManagerViewProps = {}) 
   const handleDelete = async (id: string) => {
     if (!confirm("Confirmar exclusão desta turma?")) return;
     try {
-      const localDemos = getLocalDemoClasses();
-      const nextDemos = localDemos.filter((c) => c.id !== id);
-      saveLocalDemoClasses(nextDemos);
-
-      const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
-      if (storedToken && !id.startsWith("demo_cls_") && !id.startsWith("local_cls_")) {
-        await fetch(apiUrl(`/api/classes/${id}`), {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${storedToken}` }
-        }).catch(() => null);
-      }
-
+      await fetch(apiUrl(`/api/classes/${id}`), { method: "DELETE" }).then(safeJsonResponse);
       window.dispatchEvent(new CustomEvent("codecheck_classes_updated"));
-      try { toast.success("Turma excluída com sucesso!"); } catch {}
-      await fetchClasses();
-    } catch (e: any) {
-      alert("Erro ao excluir turma: " + (e?.message || e));
-    }
-  };
-
-  const handleResetAll = async () => {
-    if (!confirm("Atenção: Deseja apagar todas as turmas e alunos e iniciar o sistema totalmente do zero?\n\nEsta ação é irreversível.")) return;
-    try {
-      setLoading(true);
-      saveLocalDemoClasses([]);
-      if (!isDemoMode) {
-        const res = await fetch(apiUrl("/api/classes/reset-all"), { method: "POST" });
-        const data = await res.json().catch(() => ({}));
-        alert(data.message || "Sistema zerado com sucesso! Nenhuma turma ou aluno ativo.");
-      } else {
-        alert("Sessão de demonstração zerada com sucesso!");
-      }
-      await fetchClasses();
-    } catch (e: any) {
-      alert("Erro ao zerar sistema: " + (e?.message || e));
-    } finally {
-      setLoading(false);
-    }
+      fetchClasses();
+    } catch (e) { alert(e instanceof Error ? e.message : "Não foi possível excluir a turma."); }
   };
 
   const handleArchive = async (id: string, currentData: any) => {
     try {
-      const localDemos = getLocalDemoClasses();
-      const newStatus = currentData.status === "archived" ? "active" : "archived";
-      const nextDemos = localDemos.map((c) => (c.id === id ? { ...c, status: newStatus } : c));
-      saveLocalDemoClasses(nextDemos);
-
-      const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
-      if (storedToken && !id.startsWith("demo_cls_") && !id.startsWith("local_cls_")) {
-        await fetch(apiUrl(`/api/classes/${id}`), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${storedToken}` },
-          body: JSON.stringify({ ...currentData, status: newStatus })
-        }).catch(() => null);
-      }
-
+      await fetch(apiUrl(`/api/classes/${id}`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...currentData, status: "archived" })
+      }).then(safeJsonResponse);
       window.dispatchEvent(new CustomEvent("codecheck_classes_updated"));
-      try { toast.success("Status da turma atualizado com sucesso!"); } catch {}
-      await fetchClasses();
-    } catch (e: any) {
-      alert("Erro ao arquivar turma: " + (e?.message || e));
-    }
+      fetchClasses();
+    } catch (e) { alert(e instanceof Error ? e.message : "Não foi possível excluir a turma."); }
   };
 
   const filteredClasses = classes.filter((cls) => {
@@ -420,16 +236,7 @@ export function ClassManagerView({ onNavigateTab }: ClassManagerViewProps = {}) 
             <Plus className="w-4 h-4" />
             Nova Turma
           </button>
-          {classes.length > 0 && (
-            <button
-              onClick={handleResetAll}
-              title="Apagar todas as turmas e alunos e começar do zero"
-              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold py-2 px-3 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-xs"
-            >
-              <Trash className="w-3.5 h-3.5" />
-              Zerar Turmas e Alunos
-            </button>
-          )}
+
         </div>
       </div>
 

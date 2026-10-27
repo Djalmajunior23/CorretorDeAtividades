@@ -16,7 +16,7 @@ export class SecurityScanner {
     ],
     cpp: [
       "system(", "fork(", "exec(", "#include <unistd.h>", "#include <sys/socket.h>",
-      "#include <fstream>", "#include <iostream>", // Sometimes we allow iostream but block fstream
+      "#include <fstream>",
       "std::filesystem", "remove(", "rename("
     ],
     c: [
@@ -34,12 +34,14 @@ export class SecurityScanner {
   };
 
   static scan(language: string, code: string): { safe: boolean; flaggedPatterns: string[] } {
-    const lang = language.toLowerCase();
+    const aliases: Record<string, string> = { js: "javascript", node: "javascript", nodejs: "javascript", typescript: "javascript", py: "python", python3: "python", "c++": "cpp" };
+    const normalized = language.toLowerCase().trim();
+    const lang = aliases[normalized] || normalized;
     const patterns = this.BLOCKED_PATTERNS[lang] || [];
     const flaggedPatterns: string[] = [];
 
     for (const pattern of patterns) {
-      if (code.includes(pattern)) {
+      if (lang === "sql" ? code.toUpperCase().includes(pattern) : code.includes(pattern)) {
         flaggedPatterns.push(pattern);
       }
     }

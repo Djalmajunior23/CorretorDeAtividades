@@ -17,8 +17,9 @@ print(json.dumps(dict(os.environ)))
 `;
       const result = await executeInSandbox(hostileCode, "python", "", 4000);
       expect(result).toBeDefined();
-      expect(result.isolationGuaranteed).toBe(true);
-      
+      // Scrubbing environment variables does not isolate the filesystem.
+      expect(result.isolationGuaranteed).toBe(false);
+
       if (result.status === "ACCEPTED" && result.stdout) {
         // Assegura que variáveis críticas do sistema como GEMINI_API_KEY, DATABASE_URL, JWT_SECRET não vazem
         expect(result.stdout).not.toContain("GEMINI_API_KEY");

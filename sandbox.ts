@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
+import { allowTrustedLocalExecution } from "./src/utils/executionPolicy";
 
 /**
  * ============================================================================
@@ -51,6 +52,9 @@ export async function executeInSandbox(
   timeLimitMs: number = 3000,
   memoryLimitMb: number = 128
 ): Promise<ExecutionResult> {
+  if (!allowTrustedLocalExecution()) {
+    return { status: "SECURITY_VIOLATION", stdout: "", stderr: "Execução indisponível: configure um worker isolado para executar código de alunos.", executionTimeMs: 0, isolationGuaranteed: false };
+  }
   const sessionId = crypto.randomUUID();
   const tmpDir = path.join(process.cwd(), "tmp_sandbox", sessionId);
 
@@ -87,7 +91,7 @@ export async function executeInSandbox(
       stdout: "",
       stderr: `Linguagem '${language}' não suportada pelo ambiente seguro de execução.`,
       executionTimeMs: 0,
-      isolationGuaranteed: true,
+      isolationGuaranteed: false,
     };
   }
 
@@ -119,7 +123,7 @@ export async function executeInSandbox(
           stdout: "",
           stderr: compileResult.stderr || "Erro de compilação.",
           executionTimeMs: Date.now() - compileStart,
-          isolationGuaranteed: true,
+          isolationGuaranteed: false,
         };
       }
 
@@ -133,7 +137,7 @@ export async function executeInSandbox(
         stdout: "",
         stderr: `Falha no compilador: ${err.message}`,
         executionTimeMs: 0,
-        isolationGuaranteed: true,
+        isolationGuaranteed: false,
       };
     }
   }
@@ -189,7 +193,7 @@ export async function executeInSandbox(
         stdout,
         stderr: `Erro de execução no runtime isolado: ${err.message}`,
         executionTimeMs: Date.now() - start,
-        isolationGuaranteed: true,
+        isolationGuaranteed: false,
       });
     });
 
@@ -202,7 +206,7 @@ export async function executeInSandbox(
         stdout: stdout.trimEnd(),
         stderr: stderr.trimEnd(),
         executionTimeMs,
-        isolationGuaranteed: true,
+        isolationGuaranteed: false,
       };
 
       if (isTerminated || signal === "SIGTERM" || signal === "SIGKILL" || executionTimeMs >= timeLimitMs) {

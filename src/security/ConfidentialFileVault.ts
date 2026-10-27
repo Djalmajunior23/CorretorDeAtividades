@@ -21,6 +21,7 @@ export type ConfidentialCategory =
   | "PEDAGOGICAL_RECORDS";
 
 export interface EncryptedFilePackage {
+  encryptionVersion?: "aes-256-gcm-v2";
   fileId: string;
   category: ConfidentialCategory;
   fileName: string;
@@ -107,8 +108,8 @@ export class ConfidentialFileVault {
     metadata?: Record<string, unknown>;
   }): EncryptedFilePackage {
     const fileId = `vault-${params.category.toLowerCase()}-${crypto.randomUUID()}`;
-    const plainText = typeof params.content === "string" 
-      ? params.content 
+    const plainText = typeof params.content === "string"
+      ? params.content
       : (typeof Buffer !== "undefined" && Buffer.isBuffer(params.content) ? params.content.toString("utf8") : String(params.content));
 
     // 1. Calculate plain SHA-256 checksum
