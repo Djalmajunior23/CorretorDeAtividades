@@ -79,5 +79,5 @@ alcançável a partir do backend e, se necessário, `OLLAMA_PROXY_TOKEN`.
 a sondagem de disponibilidade. Verifique `/api/ai/status` e uma geração real
 antes de considerar a integração validada.
 
-Consulte [a revisão técnica](docs/REVISAO_TECNICA.md) para as correções,
+Consulte [as correções operacionais](docs/CORRECOES_OPERACIONAIS.md) para as correções,
 validações e limitações de produção identificadas.

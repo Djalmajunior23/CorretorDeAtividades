@@ -36,3 +36,7 @@ Configurados o provedor Ollama, sua URL HTTPS, timeouts e chaves sensíveis est�
 5. Estender autorização por proprietário aos demais módulos. Esta alteração cobre as rotas de gestão de turmas/alunos e não certifica isolamento de cada relatório, nota ou evidência.
 
 Não foi executada limpeza global nem migração no Neon de produção.
+
+## Preview publicado
+
+Código disponibilizado no PR #4, branch `fix/operational-readiness-20261027`. A Vercel concluiu o build do commit `815b541` e o endpoint `/health` retornou JSON com status 200. `/api/ready` retornou 503 por ausência de conexão de banco no Preview; `/api/ai/status` continuou indicando IA indisponível. Esses resultados não validam login nem persistência no Neon publicado. Production e a implantação anterior não foram substituídas.
