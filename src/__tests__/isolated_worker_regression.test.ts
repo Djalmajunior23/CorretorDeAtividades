@@ -43,4 +43,18 @@ describe("Executor isolado em produção",()=>{
   it("saúde depende da resposta real do serviço",async()=>{
     setup([{status:"ready",isolation:"docker",network:"none"}]);expect(await workerHealth()).toBe(true);
   });
+  it("reutiliza credencial apenas quando Ollama pertence exatamente ao mesmo gateway",async()=>{
+    const fetch=setup([{status:"ready",isolation:"docker",network:"none"}]);
+    vi.stubEnv("OLLAMA_BASE_URL","https://worker.example.test/codecheck-ops/ollama");
+    vi.stubEnv("OLLAMA_PROXY_TOKEN","shared-gateway-fixture");
+    expect(await workerHealth()).toBe(true);
+    expect((fetch.mock.calls[0][1]?.headers as Record<string,string>).Authorization).toBe("Bearer shared-gateway-fixture");
+  });
+  it("não envia a credencial de IA a outro serviço",async()=>{
+    const fetch=setup([{status:"ready",isolation:"docker",network:"none"}]);
+    vi.stubEnv("OLLAMA_BASE_URL","https://other.example.test/ollama");
+    vi.stubEnv("OLLAMA_PROXY_TOKEN","must-not-leak");
+    expect(await workerHealth()).toBe(true);
+    expect((fetch.mock.calls[0][1]?.headers as Record<string,string>).Authorization).toBe("Bearer test-only-secret");
+  });
 });

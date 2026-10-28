@@ -1,12 +1,19 @@
 import type { ExecutionRequest, ExecutionResponse, ExecutionStatus } from "./types";
 
 export function isolatedWorkerConfigured() {
-  return Boolean(process.env.ISOLATED_WORKER_URL && process.env.ISOLATED_WORKER_TOKEN);
+  const base = process.env.ISOLATED_WORKER_URL?.replace(/\/$/, "");
+  return Boolean(base && workerToken(base));
+}
+function workerToken(base: string) {
+  // A single gateway has a single bearer credential. Only reuse the Ollama key
+  // when its URL is exactly this worker's own /ollama route.
+  const sameGateway = process.env.OLLAMA_BASE_URL?.replace(/\/$/, "") === base + "/ollama";
+  return (sameGateway ? process.env.OLLAMA_PROXY_TOKEN : undefined) || process.env.ISOLATED_WORKER_TOKEN;
 }
 function config() {
   const url = new URL(process.env.ISOLATED_WORKER_URL || "");
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("Worker exige URL HTTPS sem credenciais.");
-  const token = process.env.ISOLATED_WORKER_TOKEN;
+  const token = workerToken(url.href.replace(/\/$/, ""));
   if (!token) throw new Error("Credencial do worker ausente.");
   return { base: url.href.replace(/\/$/, ""), token };
 }
