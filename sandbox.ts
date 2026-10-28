@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { allowTrustedLocalExecution } from "./src/utils/executionPolicy";
+import { isolatedWorkerConfigured, runIsolated } from "./src/ai/services/sandbox/isolatedWorker";
 
 /**
  * ============================================================================
@@ -52,6 +53,11 @@ export async function executeInSandbox(
   timeLimitMs: number = 3000,
   memoryLimitMb: number = 128
 ): Promise<ExecutionResult> {
+  if (isolatedWorkerConfigured()) {
+    const result = await runIsolated({ code, language, stdin: inputData, timeout_seconds: timeLimitMs / 1000 });
+    const statuses: Record<string, ExecutionResult["status"]> = { accepted: "ACCEPTED", wrong_answer: "WRONG_ANSWER", compilation_error: "COMPILATION_ERROR", runtime_error: "RUNTIME_ERROR", timeout: "TIME_LIMIT_EXCEEDED", memory_limit_exceeded: "MEMORY_LIMIT_EXCEEDED", security_blocked: "SECURITY_VIOLATION" };
+    return { status: statuses[result.status] || "INTERNAL_ERROR", stdout: result.stdout, stderr: result.stderr, executionTimeMs: result.execution_time_ms, isolationGuaranteed: result.success };
+  }
   if (!allowTrustedLocalExecution()) {
     return { status: "SECURITY_VIOLATION", stdout: "", stderr: "Execução indisponível: configure um worker isolado para executar código de alunos.", executionTimeMs: 0, isolationGuaranteed: false };
   }

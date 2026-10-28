@@ -1,3 +1,4 @@
+import { workerHealth } from "./src/ai/services/sandbox/isolatedWorker";
 import "dotenv/config";
 // ... helper functions
 function isValidUuid(value: unknown): value is string {
@@ -2630,6 +2631,7 @@ app.get("/api/health-status", async (req, res) => {
     }
   }
 
+  const executionAvailable = await workerHealth();
   return res.json({
     status: dbStatus === "POSTGRES_CONNECTED" ? "healthy" : "degraded",
     backend_status: "CONNECTED",
@@ -2642,17 +2644,17 @@ app.get("/api/health-status", async (req, res) => {
       available: fs.existsSync(process.env.PERSISTENT_VOLUME_PATH || "/data")
     },
     executors_status: {
-      python: "ISOLATED_WORKER_REQUIRED",
-      javascript: "ISOLATED_WORKER_REQUIRED",
-      typescript: "UNAVAILABLE",
+      python: executionAvailable ? "READY" : "UNAVAILABLE",
+      javascript: executionAvailable ? "READY" : "UNAVAILABLE",
+      typescript: executionAvailable ? "READY" : "UNAVAILABLE",
       sql_neon: "NOT_VERIFIED",
       portugol_static: "STATIC_ANALYSIS_ONLY"
     },
     sandbox_parameters: {
-      isolation_guaranteed: false,
+      isolation_guaranteed: executionAvailable,
       local_execution_in_production: "DISABLED",
-      io_restrictions: "NOT_ISOLATED",
-      network_policy: "NOT_ISOLATED",
+      io_restrictions: executionAvailable ? "READ_ONLY_CONTAINER" : "UNAVAILABLE",
+      network_policy: executionAvailable ? "NONE" : "UNAVAILABLE",
       execution_timeout_ms: 3000
     },
     telemetry: {
@@ -2954,24 +2956,18 @@ app.post("/api/execution/test", async (req, res) => {
 
 app.get("/api/execution/languages", (req, res) => {
   res.json([
-    { id: "python", name: "Python 3", version: "3.10" },
-    { id: "javascript", name: "JavaScript/Node.js", version: "18.x" },
-    { id: "php", name: "PHP", version: "8.1" }
+    { id: "python", name: "Python", version: "3.x" },
+    { id: "javascript", name: "JavaScript/Node.js", version: "24.x" },
+    { id: "typescript", name: "TypeScript (tipos removidos pelo Node.js)", version: "Node.js 24" }
   ]);
 });
 
 app.get("/api/execution/status", async (req, res) => {
+  const available = await workerHealth();
   res.json({
-    success: true,
-    status: "online",
-    sandbox: "active",
-    provider: "local",
-    engines: {
-      python: "available",
-      node: "available",
-      gcc: "missing",
-      gplusplus: "missing"
-    }
+    success: true, status: available ? "online" : "unavailable",
+    sandbox: available ? "active" : "unavailable", provider: "isolated_worker",
+    engines: { python: available ? "available" : "unavailable", node: available ? "available" : "unavailable", typescript: available ? "available" : "unavailable", gcc: "missing", gplusplus: "missing" }
   });
 });
 
@@ -3808,21 +3804,11 @@ app.get("/api/ai/status", async (req, res) => {
   try {
     if (provider === "ollama") {
       const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-
       try {
-        const response = await fetch(ollamaUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!response.ok && response.status !== 404) {
-          throw new Error(`Ollama root retornou status ${response.status}`);
-        }
-
-
-        // Fetch models dynamically from tags
-        const modelsList = await getOllamaModels(ollamaUrl);
-
+        const configured = new OllamaProvider({ provider: "ollama", model: process.env.AI_CODE_MODEL || "qwen2.5-coder:3b", baseUrl: ollamaUrl, apiKey: process.env.OLLAMA_PROXY_TOKEN });
+        if (!await configured.isAvailable()) throw new Error("Ollama não respondeu ao protocolo autenticado.");
+        const modelsList = await OllamaProvider.listModels(ollamaUrl, process.env.OLLAMA_PROXY_TOKEN);
+        if (!modelsList.length) throw new Error("Ollama não tem modelos disponíveis.");
         return res.json({
           success: true,
           message: "Ollama online",
@@ -3836,7 +3822,6 @@ app.get("/api/ai/status", async (req, res) => {
           health: "ok"
         });
       } catch (e: any) {
-        clearTimeout(timeoutId);
         console.error(`[AI STATUS OBS] Provider: ollama | Available: false | Error: ${e.message} | Duration: ${Date.now() - start}ms`);
         if (process.env.GEMINI_API_KEY) {
           return res.json({
@@ -3901,27 +3886,7 @@ app.get("/api/ai/status", async (req, res) => {
 
 // Helper for dynamic models detection (Etapa 5)
 async function getOllamaModels(ollamaUrl: string): Promise<string[]> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
-  try {
-    const response = await fetch(`${ollamaUrl}/api/tags`, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (response.ok) {
-      const data = await response.json();
-      if (data && Array.isArray(data.models)) {
-        return data.models.map((m: any) => m.name);
-      }
-    }
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    console.warn("[OLLAMA TAGS] Falha ao listar tags dinamicamente do Ollama:", error.message);
-  }
-  return [
-    process.env.AI_CODE_MODEL || "qwen2.5-coder:7b",
-    process.env.AI_FEEDBACK_MODEL || "gemma3:12b",
-    process.env.AI_REPORT_MODEL || "phi4",
-    process.env.AI_GENERAL_MODEL || "llama3.2:3b"
-  ];
+  return OllamaProvider.listModels(ollamaUrl, process.env.OLLAMA_PROXY_TOKEN);
 }
 
 // Helper function to map model types based on name

@@ -14,6 +14,8 @@ export default defineConfig({
       "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY", "DEEPSEEK_API_KEY", "OLLAMA_PROXY_TOKEN",
       ].map(name => [name, ""])),
       AI_PROVIDER: "ollama",
+      ISOLATED_WORKER_URL: "",
+      ISOLATED_WORKER_TOKEN: "",
       // Port 1 is forbidden by fetch, so fallback tests cannot contact a real AI.
       OLLAMA_BASE_URL: "http://127.0.0.1:1",
     },

@@ -7,11 +7,13 @@ import { ExecutionRequest, ExecutionResponse, TestCase, TestCaseResult, Executio
 import { SecurityScanner } from "./security_scanner";
 import { AIExecutor } from "./AIExecutor";
 import { allowTrustedLocalExecution } from "../../../utils/executionPolicy";
+import { isolatedWorkerConfigured, runIsolated } from "./isolatedWorker";
 
 export class ExecutionService {
   private static TEMP_DIR = path.join(os.tmpdir(), "codecheck-sandbox");
 
   static async run(request: ExecutionRequest): Promise<ExecutionResponse> {
+    if (isolatedWorkerConfigured()) return runIsolated(request);
     if (!allowTrustedLocalExecution()) {
       return this.createErrorResponse(request?.language || "", "security_blocked", "Execução indisponível: configure um worker isolado para executar código de alunos.");
     }
