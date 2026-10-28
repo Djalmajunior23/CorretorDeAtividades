@@ -38,7 +38,9 @@ export function createWorker(token,execute=run){
   const send=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
   const supplied=Buffer.from(req.headers.authorization||'');const expected=Buffer.from('Bearer '+token);
   if(!token||supplied.length!==expected.length||!crypto.timingSafeEqual(supplied,expected))return send(401,{error:'unauthorized'});
-  const path=(req.url||'').split('?')[0];
+  const originalPath=(req.url||'').split('?')[0];
+  // Accept either Traefik forwarding mode; local probes use the unprefixed form.
+  const path=originalPath.startsWith('/codecheck-ops/')?originalPath.slice('/codecheck-ops'.length):originalPath;
   if(req.method==='GET'&&path==='/health')return send(200,{status:'ready',languages:['javascript','typescript','python'],isolation:'docker',network:'none'});
   if(active>=2)return send(429,{error:'worker_busy'});
   const minute=Math.floor(Date.now()/60000);if(!quotas.has(minute))quotas.clear();

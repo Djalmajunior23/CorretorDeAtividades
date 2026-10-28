@@ -24,7 +24,9 @@ test('Authenticated boundary rejects anonymous calls and model mutation routes',
   assert.equal((await fetch(base+'/ollama/api/delete',{method:'POST',headers,body:'{}'})).status,404);
   const result=await fetch(base+'/run',{method:'POST',headers,body:JSON.stringify({language:'py',code:'print(42)'})});
   assert.equal(result.status,200);assert.equal((await result.json()).isolation_guaranteed,true);assert.equal(jobs[0].language,'python');
+  const forwarded=await fetch(base+'/codecheck-ops/run',{method:'POST',headers,body:JSON.stringify({language:'py',code:'print(42)'})});
+  assert.equal(forwarded.status,200);assert.equal((await forwarded.json()).stdout,'42\n');
   assert.equal((await fetch(base+'/run',{method:'POST',headers,body:'{'})).status,400);
-  assert.equal(jobs.length,1);
+  assert.equal(jobs.length,2);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });

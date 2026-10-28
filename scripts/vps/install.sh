@@ -78,13 +78,25 @@ docker run -d --name codecheck-ops --restart unless-stopped \
   --label traefik.enable=true \
   --label "traefik.docker.network=$TRAEFIK_NETWORK" \
   --label 'traefik.http.routers.codecheck-ops.rule=Host(`api.teacherjuniors.com.br`) && PathPrefix(`/codecheck-ops/`)' \
-  --label traefik.http.routers.codecheck-ops.priority=2000 \
+  --label traefik.http.routers.codecheck-ops.priority=2147480000 \
+  --label traefik.http.routers.codecheck-ops.service=codecheck-ops \
   --label traefik.http.routers.codecheck-ops.entrypoints=websecure \
   --label traefik.http.routers.codecheck-ops.tls.certresolver=letsencrypt \
-  --label traefik.http.routers.codecheck-ops.middlewares=codecheck-ops-strip \
-  --label traefik.http.middlewares.codecheck-ops-strip.stripprefix.prefixes=/codecheck-ops \
   --label traefik.http.services.codecheck-ops.loadbalancer.server.port=8080 \
   "codecheck-ops:$RELEASE_SHA" >/dev/null
+
+# Confirm the actual service before checking routing; never parse an empty curl pipe.
+docker exec -i codecheck-ops node --input-type=module <<'JS'
+import fs from 'node:fs';
+const token=fs.readFileSync('/run/secrets/ops_token','utf8').trim();
+let ready=false;
+for(let i=0;i<20;i++){
+ try{const r=await fetch('http://127.0.0.1:8080/health',{headers:{Authorization:'Bearer '+token}});if(r.ok&&(await r.json()).isolation==='docker'){ready=true;break;}}catch{}
+ await new Promise(r=>setTimeout(r,500));
+}
+if(!ready){console.error('Serviço local não iniciou; confira docker logs codecheck-ops.');process.exit(1);}
+console.log('Serviço local autenticado: OK');
+JS
 
 TOKEN=$(cat "$OPS_ROOT/ops.token")
 AUTH_FILE=$(mktemp)
@@ -93,14 +105,17 @@ printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" > "$AUTH_FILE"
 HEALTH_OK=0
 for attempt in $(seq 1 15); do
   if curl --config "$AUTH_FILE" --fail --silent --show-error --max-time 10 \
-    https://api.teacherjuniors.com.br/codecheck-ops/health > "$OPS_ROOT/health.json"; then HEALTH_OK=1; break; fi
+    https://api.teacherjuniors.com.br/codecheck-ops/health > "$OPS_ROOT/health.json" && \
+    python3 -c 'import json; d=json.load(open("/opt/codecheck-ops/health.json")); assert d.get("isolation")=="docker" and d.get("status")=="ready"' 2>/dev/null; then HEALTH_OK=1; break; fi
   sleep 2
 done
-test "$HEALTH_OK" = 1 || { echo "Serviço criado, mas HTTPS não respondeu. Confira docker logs codecheck-ops."; exit 1; }
-curl --config "$AUTH_FILE" --fail --silent --show-error --max-time 25 \
+test "$HEALTH_OK" = 1 || { echo "Worker local pronto, mas o Traefik não encaminhou HTTPS ao worker. Envie: docker logs --tail 30 traefik"; exit 1; }
+if ! curl --config "$AUTH_FILE" --fail --silent --show-error --max-time 25 \
   -H 'Content-Type: application/json' -d '{"language":"python","code":"print(42)","timeout_ms":1000}' \
-  https://api.teacherjuniors.com.br/codecheck-ops/run | \
-  python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["status"]=="accepted" and r["stdout"].strip()=="42"; print("Worker HTTPS e execução Python isolada: OK")'
+  https://api.teacherjuniors.com.br/codecheck-ops/run -o "$OPS_ROOT/run-test.json"; then
+  echo 'Falha HTTP no teste de execução; nenhum JSON vazio será interpretado.'; exit 1
+fi
+python3 -c 'import json; r=json.load(open("/opt/codecheck-ops/run-test.json")); assert r["status"]=="accepted" and r["stdout"].strip()=="42", r.get("stderr","Falha na execução"); print("Worker HTTPS e execução Python isolada: OK")'
 if curl --config "$AUTH_FILE" --fail --silent --show-error --max-time 15 \
   https://api.teacherjuniors.com.br/codecheck-ops/ollama/api/tags > "$OPS_ROOT/models.json"; then
   python3 -c 'import json; d=json.load(open("/opt/codecheck-ops/models.json")); print("Modelos Ollama:", ", ".join(m["name"] for m in d.get("models",[])) or "nenhum instalado")'
