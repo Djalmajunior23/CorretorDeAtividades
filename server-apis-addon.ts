@@ -1,3 +1,4 @@
+import { registerAcademicRoutes } from "./server/academicRoutes";
 import { Pool } from "pg";
 import express from "express";
 import crypto from "crypto";
@@ -213,20 +214,11 @@ export async function initializeDatabase(pool: Pool | null, vaultPool?: Pool | n
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_student_grades_key 
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_student_grades_key
         ON d_student_grades (student_id, class_id, activity_name);
       `).catch(err => console.warn("[DB Init] d_student_grades warning:", err?.message || err));
 
-      // Limpeza de fixtures sintéticas legadas com cast seguro
-      try {
-        await pool.query(`
-          DELETE FROM d_student_grades WHERE class_id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026');
-          DELETE FROM d_student_record WHERE id::text IN ('b1000000-0000-4000-a000-000000000001', 'b1000000-0000-4000-a000-000000000002', 'b1000000-0000-4000-a000-000000000003', 'b1000000-0000-4000-a000-000000000004', 'b1000000-0000-4000-a000-000000000005', 'b1000000-0000-4000-a000-000000000006', 'b1000000-0000-4000-a000-000000000007') OR id::text LIKE 'stu-%' OR teacher_id = 'teacher_portal';
-          DELETE FROM d_class_group WHERE id::text IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026') OR teacher_id = 'teacher_portal';
-        `);
-      } catch (cleanErr) {
-        // Ignora se tabelas ainda não existirem
-      }
+    // Startup migrations must preserve existing academic records.
     }
 
     if (activeVaultPool) {
@@ -266,7 +258,7 @@ export async function initializeDatabase(pool: Pool | null, vaultPool?: Pool | n
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
-        
+
         CREATE INDEX IF NOT EXISTS idx_correction_vault_student_key ON correction_vault(student_key);
         CREATE INDEX IF NOT EXISTS idx_correction_vault_student_id ON correction_vault(student_id);
         CREATE INDEX IF NOT EXISTS idx_correction_vault_student_registration ON correction_vault(student_registration);
@@ -283,84 +275,22 @@ export async function initializeDatabase(pool: Pool | null, vaultPool?: Pool | n
   }
 }
 
-export function setupTeacherAPIs(app: express.Application, pool: Pool | null, vaultPool?: Pool | null) {
+/** Run after the core schema exists; never race schema changes against registration. */
+export async function initializeTeacherSchema(pool: Pool | null, vaultPool?: Pool | null): Promise<void> {
   const activeVaultPool = vaultPool || pool;
-  console.log("[DEBUG] setupTeacherAPIs called (Hybrid Mode: Neon Core + VPS Vault)");
-  
-  app.get("/api/health/corrections", (req, res) => res.json({ status: "ok" }));
-  app.get("/api/health/database", async (req, res) => {
-    try {
-      if (!pool && !activeVaultPool) return res.status(503).json({ status: "error", message: "Database not available" });
-      const start = Date.now();
-      if (pool) await pool.query("SELECT 1");
-      const coreLatency = Date.now() - start;
-
-      let vaultStatus = "shared_with_core";
-      let vaultLatency = coreLatency;
-      if (vaultPool && vaultPool !== pool) {
-        try {
-          const vStart = Date.now();
-          await vaultPool.query("SELECT 1");
-          vaultStatus = "vps_vault_connected";
-          vaultLatency = Date.now() - vStart;
-        } catch {
-          vaultStatus = "vps_vault_fallback_to_core";
-        }
-      }
-
-      res.json({ 
-        status: "ok", 
-        database: "connected",
-        core_database: pool ? "neon_connected" : "none",
-        vault_database: vaultStatus,
-        latencyMs: coreLatency,
-        vaultLatencyMs: vaultLatency
-      });
-    } catch (e) {
-      res.status(500).json({ status: "error" });
-    }
-  });
-
-  // --- DATABASE MIGRATIONS FOR THE NEW COLUMNS ---
-  if (pool || activeVaultPool) {
-    initializeDatabase(pool, activeVaultPool).catch((err) => {
-      console.error("[DEBUG] Failed to initializeDatabase correction_vault:", err);
-    });
-
-    // 1. Migrate activities (Core Pool)
-    if (pool) {
-      pool
-        .query(
-          `
+  await initializeDatabase(pool, vaultPool);
+  if (pool) await pool.query(`
         ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS class_id UUID;
         ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS deadline VARCHAR(100);
         ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR(255);
         ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS description TEXT;
         ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 100;
         ALTER TABLE d_activities ADD COLUMN IF NOT EXISTS sla_tolerance_hours INTEGER DEFAULT 12;
-      `,
-        )
-        .catch((err) =>
-          console.error("Error migrating d_activities columns:", err),
-        );
-    }
-
-    // 3. Migrate correction_vault (Vault Pool)
-    if (activeVaultPool) {
-      activeVaultPool
-        .query(
-          `
+      `);
+  if (activeVaultPool) await activeVaultPool.query(`
         ALTER TABLE correction_vault ADD COLUMN IF NOT EXISTS pedagogical_notes TEXT;
-      `,
-        )
-        .catch((err) =>
-          console.error("Error migrating correction_vault columns:", err),
-        );
-
-      // 2. Create correction_results table
-      activeVaultPool
-        .query(
-          `
+      `);
+  if (activeVaultPool) await activeVaultPool.query(`
         CREATE TABLE IF NOT EXISTS correction_results (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           student_id TEXT NOT NULL,
@@ -389,7 +319,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_correction_results_student_id ON correction_results(student_id);
-      
+
       CREATE TABLE IF NOT EXISTS submissions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         student_id TEXT NOT NULL,
@@ -460,31 +390,13 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
       CREATE INDEX IF NOT EXISTS idx_student_correction_results_student_registration ON student_correction_results(student_registration);
       CREATE INDEX IF NOT EXISTS idx_student_correction_results_class_id ON student_correction_results(class_id);
       CREATE INDEX IF NOT EXISTS idx_student_correction_results_created_at ON student_correction_results(created_at DESC);
-    `,
-      )
-      .catch((err) =>
-        console.error("Error creating tables:", err),
-      );
-    }
-
-    // 3. Migrate d_pedagogical_evidence (Core Pool)
-    if (pool) {
-      pool
-        .query(
-          `
+    `);
+  if (pool) await pool.query(`
         ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS activity_id UUID REFERENCES d_activities(id);
         ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS correction_id UUID;
         ALTER TABLE d_pedagogical_evidence ADD COLUMN IF NOT EXISTS evidence_type VARCHAR(100);
-      `,
-        )
-        .catch((err) =>
-          console.error("Error migrating d_pedagogical_evidence table:", err),
-        );
-
-      // 4. Create d_teacher_library_item table (Core Pool)
-      pool
-        .query(
-          `
+      `);
+  if (pool) await pool.query(`
         CREATE TABLE IF NOT EXISTS d_teacher_library_item (
           id UUID PRIMARY KEY,
           teacher_id VARCHAR(100) NOT NULL,
@@ -501,18 +413,54 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-      `,
-        )
-        .catch((err) =>
-          console.error("Error creating d_teacher_library_item table:", err),
-        );
+      `);
+  if (pool) startPeriodicBackupSchedule(pool, 12 * 60 * 60 * 1000);
+}
 
-      // Register automatic background backup schedules every 12 hours
-      startPeriodicBackupSchedule(pool, 12 * 60 * 60 * 1000);
+export function setupTeacherAPIs(app: express.Application, pool: Pool | null, vaultPool?: Pool | null, options: { initializeSchema?: boolean } = {}) {
+  const activeVaultPool = vaultPool || pool;
+  console.log("[DEBUG] setupTeacherAPIs called (Hybrid Mode: Neon Core + VPS Vault)");
+
+  app.get("/api/health/corrections", (req, res) => res.json({ status: "ok" }));
+  app.get("/api/health/database", async (req, res) => {
+    try {
+      if (!pool && !activeVaultPool) return res.status(503).json({ status: "error", message: "Database not available" });
+      const start = Date.now();
+      if (pool) await pool.query("SELECT 1");
+      const coreLatency = Date.now() - start;
+
+      let vaultStatus = "shared_with_core";
+      let vaultLatency = coreLatency;
+      if (vaultPool && vaultPool !== pool) {
+        try {
+          const vStart = Date.now();
+          await vaultPool.query("SELECT 1");
+          vaultStatus = "vps_vault_connected";
+          vaultLatency = Date.now() - vStart;
+        } catch {
+          vaultStatus = "vps_vault_fallback_to_core";
+        }
+      }
+
+      res.json({
+        status: "ok",
+        database: "connected",
+        core_database: pool ? "neon_connected" : "none",
+        vault_database: vaultStatus,
+        latencyMs: coreLatency,
+        vaultLatencyMs: vaultLatency
+      });
+    } catch (e) {
+      res.status(500).json({ status: "error" });
     }
+  });
+
+  if (options.initializeSchema !== false && (pool || activeVaultPool)) {
+    initializeTeacherSchema(pool, vaultPool).catch(err => {
+      console.error("Teacher schema initialization failed:", err);
+    });
   }
 
-  
   // --- GRADES MODULE ---
   app.get("/api/grades/:classId", async (req, res) => {
     try {
@@ -526,12 +474,12 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
     }
   });
 
-  
+
   app.post("/api/grades/update", async (req, res) => {
     try {
       if (!pool) return res.json({ success: true, results: [] });
       const { grades } = req.body; // Expect an array of grades
-      
+
       if (!Array.isArray(grades)) {
         return res.status(400).json({ error: "O corpo da requisição deve conter um array 'grades'" });
       }
@@ -558,10 +506,10 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
           );
 
           if (q.rows.length > 0) {
-            results.push({ 
-              id: q.rows[0].id, 
+            results.push({
+              id: q.rows[0].id,
               inserted: q.rows[0].inserted === true,
-              updated: q.rows[0].inserted !== true 
+              updated: q.rows[0].inserted !== true
             });
           }
         }
@@ -587,7 +535,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
       if (!student_id || !class_id || !activity_name) {
         return res.status(400).json({ error: "student_id, class_id e activity_name são obrigatórios." });
       }
-      
+
       const q = await pool.query(
         `INSERT INTO d_student_grades (student_id, class_id, activity_name, grade, feedback, updated_at)
          VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
@@ -596,20 +544,20 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
          RETURNING id, (xmax = 0) AS inserted`,
         [student_id, class_id, activity_name, grade != null ? Number(grade) : null, feedback || null]
       );
-      
+
       const isInserted = q.rows[0]?.inserted === true;
-      res.json({ 
-        success: true, 
-        id: q.rows[0]?.id, 
+      res.json({
+        success: true,
+        id: q.rows[0]?.id,
         inserted: isInserted,
-        updated: !isInserted 
+        updated: !isInserted
       });
     } catch (err: any) {
       console.error("Error in /api/grades:", err);
       res.status(500).json({ error: err.message });
     }
   });
-  
+
   app.delete("/api/grades/:id", async (req, res) => {
     try {
       if (!pool) return res.json({ success: true });
@@ -622,529 +570,9 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
   });
 
 
-  // --- CLASSES & STUDENTS IN-MEMORY STORE (Clean Slate - Empty by default) ---
-  const inMemoryClasses: any[] = [];
+  // Legacy report fallbacks remain empty; academic records are database-backed.
   const inMemoryStudents: any[] = [];
-
-  const ensureClassGroupTable = async (p: Pool) => {
-    try {
-      await p.query(`
-        CREATE TABLE IF NOT EXISTS d_class_group (
-          id UUID PRIMARY KEY,
-          teacher_id VARCHAR(100) NOT NULL,
-          name VARCHAR(255) NOT NULL,
-          course VARCHAR(255),
-          module VARCHAR(255),
-          semester VARCHAR(50),
-          shift VARCHAR(50),
-          year INT,
-          description TEXT,
-          status VARCHAR(50) DEFAULT 'active',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-    } catch (e: any) {
-      console.warn("[ensureClassGroupTable warning]:", e?.message || e);
-    }
-  };
-
-  // --- CLASSES ---
-  app.get("/api/classes", async (req, res) => {
-    try {
-      if (!pool) {
-        return res.json(inMemoryClasses.filter((c) => c.status !== "deleted"));
-      }
-      let rows: any[] = [];
-      try {
-        const result = await pool.query(`
-          SELECT c.*,
-            COALESCE((SELECT COUNT(*) FROM d_student_record s WHERE s.class_id = c.id AND s.status != 'deleted'), 0)::int as students_count,
-            COALESCE((SELECT ROUND(AVG(cr.score), 1) FROM d_corrections cr WHERE cr.class_id::text = c.id::text), 75.0)::numeric as average_score
-          FROM d_class_group c
-          WHERE c.status != 'deleted'
-          ORDER BY c.created_at DESC
-        `);
-        rows = result.rows;
-      } catch (subErr: any) {
-        if (subErr?.message?.includes("does not exist") || subErr?.code === "42P01") {
-          await ensureClassGroupTable(pool);
-        }
-        try {
-          const fallbackRes = await pool.query(`
-            SELECT c.*,
-              COALESCE((SELECT COUNT(*) FROM d_student_record s WHERE s.class_id = c.id AND s.status != 'deleted'), 0)::int as students_count,
-              75.0::numeric as average_score
-            FROM d_class_group c
-            WHERE c.status != 'deleted'
-            ORDER BY c.created_at DESC
-          `);
-          rows = fallbackRes.rows;
-        } catch (fbErr) {
-          console.warn("[/api/classes fallback query failed]:", fbErr);
-        }
-      }
-
-      // Merge rows with inMemoryClasses so newly created classes are always visible
-      const mergedMap = new Map();
-      inMemoryClasses.filter((c) => c.status !== "deleted").forEach((c) => mergedMap.set(c.id, c));
-      (rows || []).forEach((r) => mergedMap.set(r.id, r));
-      const combined = Array.from(mergedMap.values());
-
-      res.json(combined);
-    } catch (e: any) {
-      console.warn("[/api/classes error, returning inMemoryClasses]:", e?.message || e);
-      res.json(inMemoryClasses.filter((c) => c.status !== "deleted"));
-    }
-  });
-
-  app.post("/api/classes", async (req, res) => {
-    try {
-      const id = uuidv4();
-      const { name, course, module, semester, shift, year, description } = req.body || {};
-
-      if (!name || typeof name !== "string" || !name.trim()) {
-        return res.status(400).json({ error: "O nome da turma é obrigatório." });
-      }
-
-      const cleanName = name.trim();
-      const numYear = Number(year);
-      const parsedYear = Number.isInteger(numYear) && numYear >= 1900 && numYear <= 2100
-        ? numYear
-        : new Date().getFullYear();
-
-      const newClass = {
-        id,
-        teacher_id: (req as any).user?.id || "teacher_1",
-        name: cleanName,
-        course: course || "Técnico SENAI",
-        module: module || "Módulo Integrado",
-        semester: semester || "1º Semestre",
-        shift: shift || "Noturno",
-        year: parsedYear,
-        description: description || "",
-        status: "active",
-        students_count: 0,
-        average_score: 75.0,
-        created_at: new Date().toISOString()
-      };
-
-      // Always save to inMemoryClasses for immediate resilience
-      inMemoryClasses.unshift(newClass);
-
-      if (pool) {
-        try {
-          await pool.query(
-            "INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')",
-            [id, newClass.teacher_id, cleanName, course || null, module || null, semester || null, shift || null, parsedYear, description || null]
-          );
-        } catch (dbErr: any) {
-          if (dbErr?.message?.includes("does not exist") || dbErr?.code === "42P01") {
-            await ensureClassGroupTable(pool);
-            await pool.query(
-              "INSERT INTO d_class_group (id, teacher_id, name, course, module, semester, shift, year, description, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')",
-              [id, newClass.teacher_id, cleanName, course || null, module || null, semester || null, shift || null, parsedYear, description || null]
-            ).catch((retryErr) => {
-              console.warn("[/api/classes POST retry failed]:", retryErr?.message || retryErr);
-            });
-          } else {
-            console.warn("[/api/classes POST db warning]:", dbErr?.message || dbErr);
-          }
-        }
-      }
-
-      res.status(201).json({ id, success: true, class: newClass });
-    } catch (e: any) {
-      console.error("[/api/classes POST error]:", e);
-      res.status(500).json({ error: e.message || "Erro interno ao cadastrar turma." });
-    }
-  });
-
-  app.put("/api/classes/:id", async (req, res) => {
-    try {
-      const {
-        name,
-        course,
-        module,
-        semester,
-        shift,
-        year,
-        description,
-        status,
-      } = req.body || {};
-
-      const numYear = Number(year);
-      const parsedYear = Number.isInteger(numYear) && numYear >= 1900 && numYear <= 2100 ? numYear : undefined;
-
-      const idx = inMemoryClasses.findIndex((c) => c.id === req.params.id);
-      if (idx !== -1) {
-        inMemoryClasses[idx] = {
-          ...inMemoryClasses[idx],
-          name: name !== undefined ? name : inMemoryClasses[idx].name,
-          course: course !== undefined ? course : inMemoryClasses[idx].course,
-          module: module !== undefined ? module : inMemoryClasses[idx].module,
-          semester: semester !== undefined ? semester : inMemoryClasses[idx].semester,
-          shift: shift !== undefined ? shift : inMemoryClasses[idx].shift,
-          year: parsedYear !== undefined ? parsedYear : inMemoryClasses[idx].year,
-          description: description !== undefined ? description : inMemoryClasses[idx].description,
-          status: status !== undefined ? status : inMemoryClasses[idx].status,
-        };
-      }
-
-      if (pool) {
-        try {
-          await pool.query(
-            "UPDATE d_class_group SET name=COALESCE($1, name), course=COALESCE($2, course), module=COALESCE($3, module), semester=COALESCE($4, semester), shift=COALESCE($5, shift), year=COALESCE($6, year), description=COALESCE($7, description), status=COALESCE($8, status) WHERE id=$9",
-            [
-              name || null,
-              course || null,
-              module || null,
-              semester || null,
-              shift || null,
-              parsedYear || null,
-              description || null,
-              status || null,
-              req.params.id,
-            ],
-          );
-        } catch (dbErr: any) {
-          if (dbErr?.message?.includes("does not exist") || dbErr?.code === "42P01") {
-            await ensureClassGroupTable(pool);
-            await pool.query(
-              "UPDATE d_class_group SET name=COALESCE($1, name), course=COALESCE($2, course), module=COALESCE($3, module), semester=COALESCE($4, semester), shift=COALESCE($5, shift), year=COALESCE($6, year), description=COALESCE($7, description), status=COALESCE($8, status) WHERE id=$9",
-              [
-                name || null,
-                course || null,
-                module || null,
-                semester || null,
-                shift || null,
-                parsedYear || null,
-                description || null,
-                status || null,
-                req.params.id,
-              ],
-            ).catch(() => {});
-          } else {
-            console.warn("[/api/classes PUT db warning]:", dbErr?.message || dbErr);
-          }
-        }
-      }
-
-      res.json({ success: true });
-    } catch (e: any) {
-      console.error("[/api/classes PUT error]:", e);
-      res.status(500).json({ error: e.message || "Erro ao atualizar turma." });
-    }
-  });
-
-  app.delete("/api/classes/:id", async (req, res) => {
-    try {
-      const idx = inMemoryClasses.findIndex((c) => c.id === req.params.id);
-      if (idx !== -1) {
-        inMemoryClasses[idx].status = "deleted";
-      }
-
-      if (pool) {
-        try {
-          await pool.query(
-            "UPDATE d_class_group SET status='deleted' WHERE id=$1",
-            [req.params.id],
-          );
-        } catch (dbErr: any) {
-          console.warn("[/api/classes DELETE db warning]:", dbErr?.message || dbErr);
-        }
-      }
-
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // Limpeza total de turmas e alunos (Zerar e começar do zero)
-  app.post("/api/classes/reset-all", async (req, res) => {
-    try {
-      inMemoryClasses.length = 0;
-      inMemoryStudents.length = 0;
-      if (pool) {
-        await pool.query("DELETE FROM d_pedagogical_evidence WHERE class_id IS NOT NULL OR student_id IS NOT NULL").catch(() => {});
-        await pool.query("DELETE FROM d_student_grades").catch(() => {});
-        await pool.query("DELETE FROM d_student_record").catch(() => {});
-        await pool.query("DELETE FROM d_class_group").catch(() => {});
-      }
-      res.json({ success: true, message: "Todas as turmas e alunos foram limpos com sucesso. O sistema está pronto para uso do zero." });
-    } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
-    }
-  });
-
-  // --- STUDENTS ---
-  app.get("/api/students", async (req, res) => {
-    try {
-      const classId = req.query.class_id ? String(req.query.class_id).trim() : "";
-      if (!pool) {
-        let students = inMemoryStudents.filter((s) => s.status !== "deleted");
-        if (classId) {
-          students = students.filter(
-            (s) => s.class_id === classId || s.class_name === classId
-          );
-        }
-        return res.json(students);
-      }
-
-      let query = `
-        SELECT s.*, 
-          c.name as class_name,
-          c.course as course_name,
-          COALESCE((SELECT ROUND(AVG(cr.score), 1) FROM d_corrections cr WHERE cr.student_id::text = s.id::text), 75.0)::numeric as average_score
-        FROM d_student_record s
-        LEFT JOIN d_class_group c ON c.id = s.class_id
-        WHERE s.status != 'deleted'
-      `;
-      const values: any[] = [];
-      if (classId) {
-        query += " AND (s.class_id::text = $1 OR c.name = $1 OR c.id::text = $1)";
-        values.push(classId);
-      }
-      query += " ORDER BY s.name ASC";
-
-      let rows: any[] = [];
-      try {
-        const result = await pool.query(query, values);
-        rows = result.rows;
-      } catch (queryErr) {
-        // Fallback without d_corrections
-        try {
-          let fbQuery = `
-            SELECT s.*, 
-              c.name as class_name,
-              c.course as course_name,
-              75.0::numeric as average_score
-            FROM d_student_record s
-            LEFT JOIN d_class_group c ON c.id = s.class_id
-            WHERE s.status != 'deleted'
-          `;
-          const fbValues: any[] = [];
-          if (classId) {
-            fbQuery += " AND (s.class_id::text = $1 OR c.name = $1 OR c.id::text = $1)";
-            fbValues.push(classId);
-          }
-          fbQuery += " ORDER BY s.name ASC";
-          const fbResult = await pool.query(fbQuery, fbValues);
-          rows = fbResult.rows;
-        } catch (fbErr) {
-          console.warn("[/api/students fallback query error]:", fbErr);
-        }
-      }
-
-      if (!rows || rows.length === 0) {
-        let students = inMemoryStudents.filter((s) => s.status !== "deleted");
-        if (classId) {
-          students = students.filter(
-            (s) => s.class_id === classId || s.class_name === classId
-          );
-        }
-        return res.json(students);
-      }
-
-      res.json(rows);
-    } catch (e: any) {
-      console.warn("[/api/students unexpected error]:", e);
-      let students = inMemoryStudents.filter((s) => s.status !== "deleted");
-      if (req.query.class_id) {
-        const cId = String(req.query.class_id).trim();
-        students = students.filter(
-          (s) => s.class_id === cId || s.class_name === cId
-        );
-      }
-      res.json(students);
-    }
-  });
-
-  app.post("/api/students", async (req, res) => {
-    try {
-      const id = uuidv4();
-      const { class_id, name, enrollment_code, email, notes } = req.body;
-      if (!pool) {
-        const cls = inMemoryClasses.find((c) => c.id === class_id);
-        const newStu = {
-          id,
-          class_id: class_id || null,
-          name,
-          enrollment_code: enrollment_code || `ENR-${Date.now().toString(36).toUpperCase()}`,
-          email: email || "",
-          notes: notes || "",
-          class_name: cls?.name || "Turma Geral",
-          course_name: cls?.course || "Curso Técnico",
-          status: "active",
-          average_score: 75.0
-        };
-        inMemoryStudents.push(newStu);
-        return res.json({ id });
-      }
-      await pool.query(
-        "INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status) VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, 'active')",
-        [id, class_id || null, name, enrollment_code, email, notes],
-      );
-      res.json({ id });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.put("/api/students/:id", async (req, res) => {
-    try {
-      const { class_id, name, enrollment_code, email, notes, status } =
-        req.body;
-      if (!pool) {
-        const idx = inMemoryStudents.findIndex((s) => s.id === req.params.id);
-        if (idx !== -1) {
-          inMemoryStudents[idx] = {
-            ...inMemoryStudents[idx],
-            class_id: class_id ?? inMemoryStudents[idx].class_id,
-            name: name ?? inMemoryStudents[idx].name,
-            enrollment_code: enrollment_code ?? inMemoryStudents[idx].enrollment_code,
-            email: email ?? inMemoryStudents[idx].email,
-            notes: notes ?? inMemoryStudents[idx].notes,
-            status: status ?? inMemoryStudents[idx].status,
-          };
-        }
-        return res.json({ success: true });
-      }
-      await pool.query(
-        "UPDATE d_student_record SET class_id=$1, name=$2, enrollment_code=$3, email=$4, notes=$5, status=$6 WHERE id=$7",
-        [
-          class_id || null,
-          name,
-          enrollment_code,
-          email,
-          notes,
-          status,
-          req.params.id,
-        ],
-      );
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.delete("/api/students/:id", async (req, res) => {
-    try {
-      if (!pool) {
-        const idx = inMemoryStudents.findIndex((s) => s.id === req.params.id);
-        if (idx !== -1) {
-          inMemoryStudents[idx].status = "deleted";
-        }
-        return res.json({ success: true });
-      }
-      await pool.query(
-        "UPDATE d_student_record SET status='deleted' WHERE id=$1",
-        [req.params.id],
-      );
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/students/import-csv", async (req, res) => {
-    try {
-      if (!pool) return res.json({ success: true, imported: 0 });
-      const { class_id, csv_data } = req.body;
-      if (!class_id || !csv_data)
-        return res.status(400).json({ error: "Missing class_id or csv_data" });
-
-      const lines = csv_data
-        .split("\n")
-        .map((l: string) => l.trim())
-        .filter((l: string) => l.length > 0);
-      let imported = 0;
-
-      // Skip header if exists
-      let startIndex = 0;
-      if (
-        lines[0].toLowerCase().includes("nome") ||
-        lines[0].toLowerCase().includes("matricula") ||
-        lines[0].toLowerCase().includes("email")
-      ) {
-        startIndex = 1;
-      }
-
-      for (let i = startIndex; i < lines.length; i++) {
-        // Handle comma or semicolon
-        const delimiter = lines[i].includes(";") ? ";" : ",";
-        const parts = lines[i].split(delimiter);
-        if (parts.length >= 1) {
-          const name = parts[0]?.trim() || "Desconhecido";
-          const enrollment_code = parts[1]?.trim() || "";
-          const email = parts[2]?.trim() || "";
-
-          await pool.query(
-            "INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, status) VALUES ($1, 'teacher_1', $2, $3, $4, $5, 'active')",
-            [uuidv4(), class_id, name, enrollment_code, email],
-          );
-          imported++;
-        }
-      }
-
-      res.json({ success: true, imported });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/students/copy-class", async (req, res) => {
-    try {
-      if (!pool) return res.json({ success: true, copied: 0 });
-      const { source_class_id, target_class_id } = req.body;
-      if (!source_class_id || !target_class_id) {
-        return res.status(400).json({ error: "Missing source_class_id or target_class_id" });
-      }
-
-      let sourceUuid = source_class_id;
-      if (!isValidUuid(source_class_id)) {
-        const clsQ = await pool.query("SELECT id FROM d_class_group WHERE id::text = $1 OR name = $1 LIMIT 1", [source_class_id]);
-        if (clsQ.rows.length > 0) {
-          sourceUuid = clsQ.rows[0].id;
-        }
-      }
-
-      let targetUuid = target_class_id;
-      if (!isValidUuid(target_class_id)) {
-        const clsQ = await pool.query("SELECT id FROM d_class_group WHERE id::text = $1 OR name = $1 LIMIT 1", [target_class_id]);
-        if (clsQ.rows.length > 0) {
-          targetUuid = clsQ.rows[0].id;
-        } else {
-          targetUuid = uuidv4();
-          await pool.query(
-            "INSERT INTO d_class_group (id, teacher_id, name, status) VALUES ($1, 'teacher_1', $2, 'active')",
-            [targetUuid, target_class_id]
-          );
-        }
-      }
-
-      const sourceStudents = await pool.query(
-        "SELECT * FROM d_student_record WHERE class_id::text = $1 AND status != 'deleted'",
-        [sourceUuid]
-      );
-
-      let copiedCount = 0;
-      for (const st of sourceStudents.rows) {
-        const newId = uuidv4();
-        const newEnrollment = st.enrollment_code ? `${st.enrollment_code}-${Math.floor(100 + Math.random() * 900)}` : `C-${Math.floor(1000 + Math.random() * 9000)}`;
-        await pool.query(
-          "INSERT INTO d_student_record (id, teacher_id, class_id, name, enrollment_code, email, notes, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')",
-          [newId, st.teacher_id || 'teacher_1', targetUuid, st.name, newEnrollment, st.email || '', st.notes || 'Copiado de outra turma']
-        );
-        copiedCount++;
-      }
-      res.json({ success: true, copied: copiedCount });
-    } catch (e: any) {
-      console.error("Error in copy-class:", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
+  registerAcademicRoutes(app, pool);
 
   app.get("/api/analytics/ai-predictive-insights", async (req, res) => {
     const modelName = process.env.AI_PEDAGOGICAL_MODEL || "gemma3:4b";
@@ -1185,7 +613,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     const startTime = Date.now();
     try {
       const prompt = `Atue como Arquiteto Curricular IA especializado utilizando o modelo ${modelName}. Crie uma ementa pedagógica estruturada para o curso "${courseTitle || "Desenvolvimento Full-Stack Avançado"}" na área de ${domain || "Tecnologia da Informação"}, com duração de ${weeks || 8} semanas e nível ${level || "Intermediário"}. Retorne um objeto JSON contendo: courseOverview, targetCompetencies (array de strings), e weeklyModules (array de objetos com weekNumber, title, objectives, labChallenge, and assessmentCriteria).`;
-      
+
       let aiText = "";
       try {
         aiText = await aiService.generateWithRetry(prompt);
@@ -1253,7 +681,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     const startTime = Date.now();
     try {
       const prompt = `Atue como 'IA Visionary Teacher' utilizando o modelo ${modelName}. Analise o desempenho da turma nas submissões recentes, identifique as competências com menores notas (ex: ponteiros em C, manipulação de DOM, consultas SQL complexas, laços aninhados) e gere 3 variações avançadas de exercícios corretivos contendo: título, descrição detalhada do enunciado, restrições algorítmicas e 3 novos casos de teste unitários em formato JSON estruturado.`;
-      
+
       let aiText = "";
       try {
         aiText = await aiService.generateWithRetry(prompt);
@@ -1374,10 +802,10 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     try {
       if (!pool) return res.json([]);
       const result = await pool.query(`
-        SELECT a.*, c.name as class_name 
-        FROM d_activities a 
+        SELECT a.*, c.name as class_name
+        FROM d_activities a
         LEFT JOIN d_class_group c ON a.class_id = c.id
-        WHERE a.status != 'deleted' 
+        WHERE a.status != 'deleted'
         ORDER BY a.created_at DESC
       `);
       res.json(result.rows);
@@ -1434,10 +862,10 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
       let rows: any[] = [];
       try {
         const result = await pool.query(`
-          SELECT a.*, c.name as class_name 
-          FROM d_activities a 
+          SELECT a.*, c.name as class_name
+          FROM d_activities a
           LEFT JOIN d_class_group c ON a.class_id = c.id
-          WHERE a.status != 'deleted' 
+          WHERE a.status != 'deleted'
           ORDER BY a.created_at DESC
         `);
         rows = result.rows;
@@ -1446,10 +874,10 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
           await ensureActivitiesTable(pool);
           try {
             const retryRes = await pool.query(`
-              SELECT a.*, c.name as class_name 
-              FROM d_activities a 
+              SELECT a.*, c.name as class_name
+              FROM d_activities a
               LEFT JOIN d_class_group c ON a.class_id = c.id
-              WHERE a.status != 'deleted' 
+              WHERE a.status != 'deleted'
               ORDER BY a.created_at DESC
             `);
             rows = retryRes.rows;
@@ -1487,10 +915,10 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
       const desc = description || problem_description || "";
       const rub = rubric || rubric_suggested || "";
       const fullDesc = `${desc}${constraints ? `\n\nRestrições:\n${constraints}` : ""}${test_cases ? `\n\nCasos de Teste:\n${JSON.stringify(test_cases)}` : ""}`;
-      
+
       try {
         await pool.query(
-          `INSERT INTO d_activities (id, teacher_id, title, problem_description, language, rubric_suggested, class_id, deadline, attachment_filename, status) 
+          `INSERT INTO d_activities (id, teacher_id, title, problem_description, language, rubric_suggested, class_id, deadline, attachment_filename, status)
            VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, $7, $8, 'active')`,
           [
             id,
@@ -1507,7 +935,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
         if (dbErr?.message?.includes("does not exist") || dbErr?.code === "42P01") {
           await ensureActivitiesTable(pool);
           await pool.query(
-            `INSERT INTO d_activities (id, teacher_id, title, problem_description, language, rubric_suggested, class_id, deadline, attachment_filename, status) 
+            `INSERT INTO d_activities (id, teacher_id, title, problem_description, language, rubric_suggested, class_id, deadline, attachment_filename, status)
              VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, $7, $8, 'active')`,
             [
               id,
@@ -1553,7 +981,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
         attachment_filename,
       } = req.body;
       await pool.query(
-        `INSERT INTO d_activities (id, teacher_id, title, problem_description, language, rubric_suggested, class_id, deadline, attachment_filename, status) 
+        `INSERT INTO d_activities (id, teacher_id, title, problem_description, language, rubric_suggested, class_id, deadline, attachment_filename, status)
          VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, $7, $8, 'active')`,
         [
           id,
@@ -1586,7 +1014,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     try {
       if (!pool) return res.status(500).json({ error: "Database not connected" });
       const { notes } = req.body;
-      
+
       for (const [id, note] of Object.entries(notes)) {
         await pool.query(
           "UPDATE correction_vault SET pedagogical_notes = $1 WHERE id = $2",
@@ -1770,8 +1198,8 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
       const totalCorrectionsRes = await pool.query("SELECT COUNT(*)::int as count FROM correction_vault");
 
       const studentAvgsRes = await pool.query(`
-        SELECT s.id, 
-          COALESCE((SELECT AVG(cr.score) FROM d_corrections cr WHERE cr.student_id = s.id), 
+        SELECT s.id,
+          COALESCE((SELECT AVG(cr.score) FROM d_corrections cr WHERE cr.student_id = s.id),
                    (SELECT AVG(g.grade) FROM d_student_grades g WHERE g.student_id = s.id), 75.0)::numeric as avg_score
         FROM d_student_record s
         WHERE s.status != 'deleted'
@@ -1844,7 +1272,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
         SELECT s.id, s.name, s.enrollment_code, s.email,
           c.name as class_name,
           c.course as course_name,
-          COALESCE((SELECT ROUND(AVG(cr.score), 1) FROM d_corrections cr WHERE cr.student_id = s.id), 
+          COALESCE((SELECT ROUND(AVG(cr.score), 1) FROM d_corrections cr WHERE cr.student_id = s.id),
                    (SELECT ROUND(AVG(g.grade), 1) FROM d_student_grades g WHERE g.student_id = s.id), 75.0)::numeric as average,
           COALESCE((SELECT COUNT(*) FROM correction_vault cv WHERE cv.student_id = s.id OR cv.student_key = s.enrollment_code), 4)::int as completed_activities
         FROM d_student_record s
@@ -1912,9 +1340,9 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
       const avgScoreQ = await pool.query("SELECT COALESCE(ROUND(AVG(score), 1), 76.5)::numeric as avg FROM d_corrections");
 
       const studentsQ = await pool.query(`
-        SELECT s.name, 
+        SELECT s.name,
           COALESCE((SELECT COUNT(*) FROM correction_vault cv WHERE cv.student_id = s.id OR cv.student_key = s.enrollment_code), 5)::int as submissions_count,
-          COALESCE((SELECT ROUND(AVG(cr.score), 1) FROM d_corrections cr WHERE cr.student_id = s.id), 
+          COALESCE((SELECT ROUND(AVG(cr.score), 1) FROM d_corrections cr WHERE cr.student_id = s.id),
                    (SELECT ROUND(AVG(g.grade), 1) FROM d_student_grades g WHERE g.student_id = s.id), 75.0)::numeric as avg_grade
         FROM d_student_record s
         WHERE s.status != 'deleted'
@@ -2136,7 +1564,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
   });
 
   // --- PRIORITY 4 & 5 BACKEND API ENDPOINTS ---
-  
+
   function resolveStudentKey(body: any): string | null {
     return (
       body.student_key ??
@@ -2573,7 +2001,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     try {
       if (!pool) return res.status(404).json({ error: "Db offline" });
       const query = `
-        SELECT 
+        SELECT
           c.*,
           cg.name AS class_name,
           sr.name AS student_name,
@@ -2598,7 +2026,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     try {
       if (!pool) return res.json([]);
       const query = `
-        SELECT 
+        SELECT
           c.*,
           cg.name AS class_name,
           sr.name AS student_name,
@@ -2621,7 +2049,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     try {
       if (!pool) return res.json([]);
       const query = `
-        SELECT 
+        SELECT
           pe.*,
           cg.name AS class_name,
           sr.name AS student_name,
@@ -2651,9 +2079,9 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
       // 1. Fetch student info and class
       const studentQuery = await pool.query(
         `
-        SELECT s.*, c.name as class_name 
-        FROM d_student_record s 
-        LEFT JOIN d_class_group c ON s.class_id = c.id 
+        SELECT s.*, c.name as class_name
+        FROM d_student_record s
+        LEFT JOIN d_class_group c ON s.class_id = c.id
         WHERE s.id = $1
       `,
         [student_id],
@@ -2667,10 +2095,10 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
       // 2. Fetch corrections from d_corrections
       const correctionsQuery = await pool.query(
         `
-        SELECT c.*, a.title as activity_title 
-        FROM d_corrections c 
-        LEFT JOIN d_activities a ON c.activity_id = a.id 
-        WHERE c.student_id = $1 
+        SELECT c.*, a.title as activity_title
+        FROM d_corrections c
+        LEFT JOIN d_activities a ON c.activity_id = a.id
+        WHERE c.student_id = $1
         ORDER BY c.created_at DESC
       `,
         [student_id],
@@ -2680,15 +2108,15 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
       // Fetch new schema results from correction_vault
       const newResultsQuery = await pool.query(
         `
-        SELECT scr.*, scr.status as result_status, scr.submitted_code, scr.score as final_score, scr.feedback as unified_feedback 
-        FROM correction_vault scr 
+        SELECT scr.*, scr.status as result_status, scr.submitted_code, scr.score as final_score, scr.feedback as unified_feedback
+        FROM correction_vault scr
         WHERE scr.student_key = $1 OR scr.student_id = $1 OR scr.student_registration = $1
            OR scr.student_key = $2 OR scr.student_id = $2 OR scr.student_registration = $2
         ORDER BY scr.created_at DESC
       `,
         [student_id, student.enrollment_code || student_id],
       );
-      
+
       const crResults = newResultsQuery.rows.map(r => {
         let meta: any = {};
         let raw: any = {};
@@ -2808,10 +2236,10 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       // 3. Fetch evidences from d_pedagogical_evidence
       const evidencesQuery = await pool.query(
         `
-        SELECT pe.*, a.title as activity_title 
-        FROM d_pedagogical_evidence pe 
-        LEFT JOIN d_activities a ON pe.activity_id = a.id 
-        WHERE pe.student_id = $1 
+        SELECT pe.*, a.title as activity_title
+        FROM d_pedagogical_evidence pe
+        LEFT JOIN d_activities a ON pe.activity_id = a.id
+        WHERE pe.student_id = $1
         ORDER BY pe.created_at DESC
       `,
         [student_id],
@@ -2902,8 +2330,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
     }
   });
 
-  
-  
+
+
   // Registered at top level getCorrectionVaultByStudent
 
   // --- PRIORIDADE 2: ENDPOINT DE HISTÓRICO DE CORREÇÕES (GERAL) ---
@@ -3269,7 +2697,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           .json({ error: "Recurso não encontrado ou sem permissão" });
 
       await pool.query(
-        `UPDATE d_teacher_library_item 
+        `UPDATE d_teacher_library_item
          SET title=$1, description=$2, type=$3, topic=$4, language=$5, tags=$6, content=$7, file_url=$8, is_favorite=$9, status=$10, updated_at=CURRENT_TIMESTAMP
          WHERE id=$11`,
         [
@@ -3429,7 +2857,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           // Fetch from correction_vault (both code and diagrams)
           try {
             const vaultQ = await pool.query(
-              `SELECT * FROM correction_vault 
+              `SELECT * FROM correction_vault
                WHERE student_id::text = $1 OR student_key::text = $1 OR student_name ILIKE $2
                ORDER BY created_at DESC`,
               [student_id, `%${studentName || student_id}%`]
@@ -3491,17 +2919,17 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           activities: activitiesList.slice(0, 10),
           evidences: evsList.length > 0 ? evsList : ["Laboratórios práticos de lógica", "Modelagem de banco de dados DER e DDL"],
           summary: `O estudante ${studentName || "avaliado"} concluiu ${totalCorrections} atividades avaliativas (código fonte e modelagem relacional) com aproveitamento médio consolidado de ${average}/100 pontos.`,
-          strengths: average >= 60 
-            ? ["Domínio sólido de estruturas algorítmicas e sintaxe", "Conformidade em modelagem relacional e normalização", "Boa autonomia na resolução de desafios"] 
+          strengths: average >= 60
+            ? ["Domínio sólido de estruturas algorítmicas e sintaxe", "Conformidade em modelagem relacional e normalização", "Boa autonomia na resolução de desafios"]
             : ["Engajamento inicial nas aulas", "Interesse em sanar dúvidas pedagógicas"],
-          improvements: average < 60 
-            ? ["Revisão de lógica condicional integrada e loops", "Aprofundamento de chaves estrangeiras e integridade referencial"] 
+          improvements: average < 60
+            ? ["Revisão de lógica condicional integrada e loops", "Aprofundamento de chaves estrangeiras e integridade referencial"]
             : ["Otimização de complexidade algorítmica", "Indexação e performance em scripts SQL"],
-          action_plan: average < 60 
+          action_plan: average < 60
             ? "Participação na monitoria de reforço e execução do plano de estudos paralelos."
             : "Manter excelente padrão de entregas e realizar desafios da trilha avançada de arquitetura.",
-          recommendations: average < 60 
-            ? ["Participar da monitoria semanal", "Completar trilha de recuperação paralela"] 
+          recommendations: average < 60
+            ? ["Participar da monitoria semanal", "Completar trilha de recuperação paralela"]
             : ["Explorar desafios de programação avançada de nível bronze na trilha pedagógica"],
           teacher_notes: teacher_notes || ""
         };
@@ -3573,19 +3001,19 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         }
       }
 
-      res.status(201).json({ 
-        success: true, 
-        id, 
-        data: { 
-          id, 
-          title: reportTitle, 
-          type, 
-          class_id: targetClassId, 
-          student_id, 
-          content: calculatedContent, 
+      res.status(201).json({
+        success: true,
+        id,
+        data: {
+          id,
+          title: reportTitle,
+          type,
+          class_id: targetClassId,
+          student_id,
+          content: calculatedContent,
           teacher_notes: teacher_notes || null,
-          created_at: createdAt 
-        } 
+          created_at: createdAt
+        }
       });
     } catch (e: any) {
       console.error("Generate report failed:", e);
@@ -3599,7 +3027,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const { student_id } = req.params;
       if (!pool) return res.json([]);
       const q = await pool.query(
-        `SELECT * FROM d_generated_report 
+        `SELECT * FROM d_generated_report
          WHERE (student_id = $1 OR student_id::text = $1)
          ORDER BY created_at DESC`,
         [student_id]
@@ -3647,7 +3075,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       if (pool) {
         try {
           const vaultQ = await pool.query(
-            `SELECT * FROM correction_vault 
+            `SELECT * FROM correction_vault
              WHERE student_id::text = $1 OR student_key::text = $1 OR student_name ILIKE $2
              ORDER BY created_at DESC`,
             [student_id, `%${studentName}%`]
@@ -3679,7 +3107,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         diagram_corrections_count: diagramCount,
         average_score: average,
         summary: `O estudante ${studentName} concluiu ${totalCorrections} avaliações no sistema (incluindo código fonte e diagramas de banco de dados), atingindo média geral de ${average}/100.`,
-        strengths: average >= 60 
+        strengths: average >= 60
           ? ["Boa resolução de requisitos de lógica e bancos de dados", "Adequada estruturação de chaves e tipos em DDL", "Pontualidade nas entregas práticas"]
           : ["Interesse demonstrado em reforço", "Evolução gradual de raciocínio lógico"],
         improvements: average < 60
@@ -4126,10 +3554,10 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       let studentsList: any[] = [];
       if (pool) {
         const studentRes = await pool.query(`
-          SELECT s.*, c.name as class_name 
-          FROM d_student s 
-          LEFT JOIN d_class_group c ON s.class_id = c.id 
-          WHERE s.status != 'deleted' 
+          SELECT s.*, c.name as class_name
+          FROM d_student s
+          LEFT JOIN d_class_group c ON s.class_id = c.id
+          WHERE s.status != 'deleted'
           ORDER BY s.average_score ASC
         `);
         studentsList = studentRes.rows;
@@ -4706,7 +4134,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   app.post("/api/database-models/assess", async (req, res) => {
     try {
       const result = await DatabaseModelAssessmentService.assessDatabaseModel(req.body);
-      
+
       let vaultId = null;
       if (req.body.studentId || req.body.studentName) {
         vaultId = await saveDiagramAssessmentToVault({
@@ -5258,7 +4686,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         const key = `${activity_id}_${st.student_id}`;
         const override = inMemoryDeliveryOverrides.get(key);
         const isDelivered = override?.delivery_status === "delivered_on_time" || override?.delivery_status === "delivered_late";
-        
+
         let scoreToAssign: number | null = null;
         let feedbackToAssign = "";
 
@@ -5807,10 +5235,10 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
 
       let currentY = 250;
 
-      const questionsList = variant === "B" && assessment.variants?.[1]?.questions 
-        ? assessment.variants[1].questions 
-        : variant === "C" && assessment.variants?.[2]?.questions 
-        ? assessment.variants[2].questions 
+      const questionsList = variant === "B" && assessment.variants?.[1]?.questions
+        ? assessment.variants[1].questions
+        : variant === "C" && assessment.variants?.[2]?.questions
+        ? assessment.variants[2].questions
         : assessment.questions;
 
       (questionsList || []).forEach((q: any, idx: number) => {
@@ -6043,7 +5471,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           time_spent_seconds: timeSpent,
           verdict: integrityScore >= 80 ? "Alta Integridade (Confiável)" : integrityScore >= 50 ? "Alerta de Foco Moderado" : "Possível Infração / Perda de Foco Excessiva"
         },
-        feedback: isApproved 
+        feedback: isApproved
           ? "Excelente desempenho na avaliação com aprovação imediata."
           : "Desempenho insuficiente (nota < 60). Discente encaminhado para a Recuperação Paralela Contínua."
       });
@@ -6154,8 +5582,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const studentName = student_name || "Discente";
 
       const allDeficiencies = deficiencies.length > 0 ? deficiencies : failed_competencies;
-      const defText = allDeficiencies.length > 0 
-        ? allDeficiencies.join(", ") 
+      const defText = allDeficiencies.length > 0
+        ? allDeficiencies.join(", ")
         : "Laços de Repetição e Vetores";
 
       const plan = {
@@ -6289,7 +5717,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         is_approved: isApproved,
         status: isApproved ? "Aprovado" : "Recuperação",
         recalculated_average: scoreNum,
-        message: isApproved 
+        message: isApproved
           ? `Nota de recuperação (${scoreNum}) lançada com sucesso. Aluno promovido a Aprovado!`
           : `Nota de recuperação (${scoreNum}) lançada. Aluno permanece com rendimento inferior a 60 pontos.`
       });
@@ -6633,7 +6061,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       // Evaluates student defenses
       const totalAnswers = answers.length || 3;
       const validAnswers = answers.filter((a: any) => (a.answer || "").length > 15).length;
-      
+
       let masteryScore = 85;
       if (validAnswers === 0) masteryScore = 40;
       else if (validAnswers === 1) masteryScore = 55;
@@ -6650,10 +6078,10 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         authorship_confidence: authorshipConfidence,
         is_approved: isApproved,
         status: isApproved ? "Aprovado" : "Recuperação",
-        defense_verdict: isApproved 
-          ? "O estudante articulou com precisão as escolhas lógicas e os casos de borda do código." 
+        defense_verdict: isApproved
+          ? "O estudante articulou com precisão as escolhas lógicas e os casos de borda do código."
           : "O discente apresentou inconsistências ao justificar as estruturas implementadas.",
-        recommendations: isApproved 
+        recommendations: isApproved
           ? ["Parabéns pelo domínio conceitual", "Pronto para avançar a tópicos de estruturas avançadas"]
           : ["Revisar conceitos fundamentais do algoritmo", "Refazer teste socrático após prática guiada"]
       });
@@ -6734,7 +6162,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           { line: 4, reason: "Estrutura idiomática de alta senioridade atípica para o módulo inicial." },
           { line: 12, reason: "Comentário explicativo com padrão textual característico de ChatGPT/Claude." }
         ] : [],
-        overall_verdict: syntheticProbability < 40 
+        overall_verdict: syntheticProbability < 40
           ? "Autoria Humana Consistente (Sem indícios significativos de geração por IA externa)"
           : "Alerta de Estilometria Sintética (Recomenda-se arguição socrática com o discente)"
       });
@@ -6967,7 +6395,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   // =========================================================================
   app.post("/api/ai/audio-diary/synthesize", async (req, res) => {
     try {
-      const { 
+      const {
         audio_transcript = "Hoje ministrei aula de Banco de Dados relacional, abordamos comandos DDL CREATE TABLE, chaves primárias e estrangeiras. Os alunos tiveram dúvida na sintaxe de ON DELETE CASCADE. A turma participou ativamente.",
         class_name = "Desenvolvimento de Sistemas 1A"
       } = req.body;
@@ -7124,7 +6552,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         is_approved: isApproved,
         status: isApproved ? "Aprovado" : "Recuperação",
         mastery_level: finalGrade >= 90 ? "Domínio Pleno (Avançado)" : finalGrade >= 60 ? "Proficiente (Aprovado)" : "Necessita Intervenção Pedagógica",
-        message: isApproved 
+        message: isApproved
           ? `Quiz adaptativo concluído com sucesso! Nota final: ${finalGrade}/100 (Aprovado).`
           : `Quiz adaptativo finalizado. Nota ${finalGrade}/100 inferior a 60 pontos. Encaminhado para a Recuperação Paralela.`
       });
@@ -7961,7 +7389,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   // ==========================================
   // MODULE 20: TEACHER POWERHOUSE & CLASS ANALYTICS
   // ==========================================
-  
+
   // 1. Radar da Turma (Early Warning)
   app.get(["/api/teacher/class-radar", "/api/teacher/class-radar/:classId"], async (req, res) => {
     try {
@@ -8856,8 +8284,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
           // Non-blocking fallback
         }
       }
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: `Atividade "${activityTitle}" vinculada e disponibilizada para a turma com sucesso!`,
         publishedAt: new Date().toISOString()
       });
@@ -8976,8 +8404,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       if (pool) {
         try {
           const cRes = await pool.query(
-            `SELECT * FROM correction_vault 
-             WHERE student_id = $1 OR student_key = $1 OR student_registration = $1 
+            `SELECT * FROM correction_vault
+             WHERE student_id = $1 OR student_key = $1 OR student_registration = $1
              ORDER BY created_at DESC`,
             [studentId]
           );
@@ -9980,7 +9408,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   app.post("/api/activities/publish", authenticateToken, blockDemoMutation, async (req: any, res) => {
     try {
       const { title, statement, language, referenceSolution, testCases, rubric, report } = req.body;
-      
+
       if (!report || !report.isValidForPublishing) {
         return res.status(400).json({
           success: false,
@@ -10074,7 +9502,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   app.post("/api/activities/submissions/deliver", async (req, res) => {
     try {
       const { activityId, activityVersion, studentId, studentName, codeContent, attemptNumber, idempotencyKey } = req.body;
-      
+
       if (!activityId || !studentId || !codeContent) {
         return res.status(400).json({ success: false, error: "Parâmetros de entrega incompletos." });
       }
@@ -10132,7 +9560,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
   app.post("/api/activities/submissions/review", authenticateToken, blockDemoMutation, async (req: any, res) => {
     try {
       const { submissionId, moderatedScore, generalFeedback, justificationForOverride } = req.body;
-      
+
       if (!submissionId || moderatedScore === undefined) {
         return res.status(400).json({ success: false, error: "Identificador da submissão e nota moderada são obrigatórios." });
       }
@@ -10208,7 +9636,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
               [classId]
             );
             totalStudents = stRes.rows.length;
-            
+
             const grRes = await pool.query(
               `SELECT s.name, AVG(COALESCE(g.grade, 70)) as avg_score
                FROM d_student_record s
@@ -10264,9 +9692,9 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       if (pool && classId) {
         try {
           const q = await pool.query(
-            `SELECT s.id, s.name, COALESCE(AVG(g.grade), 55) as score 
-             FROM d_student_record s 
-             LEFT JOIN d_student_grades g ON s.id = g.student_id 
+            `SELECT s.id, s.name, COALESCE(AVG(g.grade), 55) as score
+             FROM d_student_record s
+             LEFT JOIN d_student_grades g ON s.id = g.student_id
              WHERE (s.class_id::text = $1 OR s.class_id IS NULL) AND s.status != 'deleted'
              GROUP BY s.id, s.name`,
             [classId]
@@ -10329,10 +9757,10 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       if (pool && classId) {
         try {
           const q = await pool.query(
-            `SELECT s.id, s.name, s.enrollment_code, s.email, c.name as class_name 
-             FROM d_student_record s 
-             LEFT JOIN d_class_group c ON s.class_id = c.id 
-             WHERE s.class_id::text = $1 AND s.status != 'deleted' 
+            `SELECT s.id, s.name, s.enrollment_code, s.email, c.name as class_name
+             FROM d_student_record s
+             LEFT JOIN d_class_group c ON s.class_id = c.id
+             WHERE s.class_id::text = $1 AND s.status != 'deleted'
              ORDER BY s.name ASC`,
             [classId]
           );
@@ -10400,8 +9828,8 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         try {
           const q = await pool.query(
             `SELECT s.*, c.name as class_name, c.course as course_name, c.shift, c.semester
-             FROM d_student_record s 
-             LEFT JOIN d_class_group c ON s.class_id = c.id 
+             FROM d_student_record s
+             LEFT JOIN d_class_group c ON s.class_id = c.id
              WHERE s.id::text = $1`,
             [studentId]
           );

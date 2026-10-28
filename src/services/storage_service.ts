@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { ConfidentialFileVault, ConfidentialCategory, EncryptedFilePackage } from "../security/ConfidentialFileVault";
+import { ServerFileVault } from "../security/ServerFileVault";
 
 // Categorias e seus caminhos mapeados pelas variáveis de ambiente ou fallbacks
 export const CATEGORY_DIRS = {
@@ -89,7 +90,7 @@ export class StorageService {
   public sanitizeFilename(filename: string): string {
     // Remove qualquer tentativa de path traversal (ex: ../, ..\)
     let clean = path.basename(filename);
-    
+
     // Remove caracteres que não sejam alfanuméricos, ponto, traço ou underline
     clean = clean.replace(/[^a-zA-Z0-9.\-_]/g, "_");
 
@@ -164,7 +165,7 @@ export class StorageService {
     }
 
     const categoryDir = CATEGORY_DIRS[category];
-    
+
     // Previne de vez qualquer vazamento de diretório resolvendo o caminho absoluto e garantindo que ele comece com a pasta correspondente
     const targetPath = path.resolve(categoryDir, sanitized);
     if (!targetPath.startsWith(path.resolve(categoryDir))) {
@@ -173,7 +174,7 @@ export class StorageService {
 
     try {
       fs.writeFileSync(targetPath, contentBuffer);
-      
+
       // Se for a pasta tmp, agendar limpeza ou deixar um log
       if (category === "tmp") {
         this.cleanOldTemporaryFiles();
@@ -321,7 +322,7 @@ export class StorageService {
     }
 
     try {
-      const encryptedPackage = ConfidentialFileVault.encryptConfidentialFile({
+      const encryptedPackage = ServerFileVault.encrypt({
         fileName: sanitized,
         category,
         content: fileContent,
@@ -329,7 +330,7 @@ export class StorageService {
         metadata
       });
 
-      fs.writeFileSync(targetPath, JSON.stringify(encryptedPackage, null, 2), "utf8");
+      fs.writeFileSync(targetPath, JSON.stringify(encryptedPackage, null, 2), { encoding: "utf8", mode: 0o600 });
 
       return {
         success: true,
@@ -367,13 +368,19 @@ export class StorageService {
     try {
       const rawJson = fs.readFileSync(targetPath, "utf8");
       const pkg: EncryptedFilePackage = JSON.parse(rawJson);
+      if (pkg.ownerId && actorId !== pkg.ownerId && actorId !== "system") {
+        throw new Error("Arquivo pertence a outro usuário.");
+      }
 
-      const decrypted = ConfidentialFileVault.decryptConfidentialFile(pkg, actorId);
+      // Preserve read compatibility; all newly written files use authenticated AES.
+      const buffer = pkg.encryptionVersion === "aes-256-gcm-v2"
+        ? ServerFileVault.decrypt(pkg, actorId)
+        : Buffer.from(ConfidentialFileVault.decryptConfidentialFile(pkg, actorId).plainContent, "utf8");
 
       return {
         success: true,
-        content: decrypted.plainContent,
-        buffer: Buffer.from(decrypted.plainContent, "utf8"),
+        content: buffer.toString("utf8"),
+        buffer,
         package: pkg
       };
     } catch (err: any) {

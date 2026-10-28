@@ -558,7 +558,10 @@ Anotações/Ditado Bruto do Professor: "${rawNotes}"
 `;
 
         const payload = await aiService.generateStructuredWithRetry<any>(promptText, schema, optConfig);
-        if (payload && payload.summary) {
+        if (payload && typeof payload.summary === "string" &&
+            typeof payload.officialSenaiParecer === "string" && payload.officialSenaiParecer.trim() &&
+            [payload.strengths, payload.criticalCorrections, payload.actionPlan].every(
+              items => Array.isArray(items) && items.every(item => typeof item === "string"))) {
           return {
             studentName,
             activityTitle,

@@ -169,28 +169,14 @@ describe("Pre-Flight Validator & Demo Isolation Regression Suite", () => {
       expect(data.error).toContain("Modo Demonstração (Visitante)");
     });
 
-    it("deve rotular fixtures sintéticas isoladas e expor cabeçalho X-Data-Origin", async () => {
-      // Registra estudante sintético explicitamente para o teste
-      await fetch(`${baseUrl}/api/students`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "[Sintético] Estudante Alpha",
-          email: "estudante.alpha.demo@codecheck.sintetico.local",
-          enrollment_code: "2026TDS001"
-        })
+    it("não aceita nem lista cadastros acadêmicos sem autenticação", async () => {
+      const created = await fetch(`${baseUrl}/api/students`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "[Sintético] Estudante Alpha" })
       });
-
-      const res = await fetch(`${baseUrl}/api/students`);
-      expect(res.status).toBe(200);
-
-      const students = await res.json();
-      expect(Array.isArray(students)).toBe(true);
-      expect(students.length).toBeGreaterThanOrEqual(1);
-
-      // Verify explicit synthetic identification
-      expect(students[0].name).toContain("[Sintético]");
-      expect(students[0].email).toContain("@codecheck.sintetico.local");
+      expect(created.status).toBe(401);
+      const listed = await fetch(`${baseUrl}/api/students`);
+      expect(listed.status).toBe(401);
     });
   });
 

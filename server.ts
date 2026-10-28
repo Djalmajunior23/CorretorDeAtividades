@@ -1,3 +1,5 @@
+import { workerHealth } from "./src/ai/services/sandbox/isolatedWorker";
+import "dotenv/config";
 // ... helper functions
 function isValidUuid(value: unknown): value is string {
   return typeof value === "string" &&
@@ -5,7 +7,7 @@ function isValidUuid(value: unknown): value is string {
 }
 
 // import { registerAddonEndpoints } from './server-addon';
-import { setupTeacherAPIs, initializeDatabase } from './server-apis-addon';
+import { setupTeacherAPIs, initializeDatabase, initializeTeacherSchema } from './server-apis-addon';
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -110,11 +112,11 @@ function xssSanitizer(req: express.Request, res: express.Response, next: express
     }
     return val;
   };
-  
+
   if (req.body) req.body = sanitize(req.body);
   if (req.query) req.query = sanitize(req.query);
   if (req.params) req.params = sanitize(req.params);
-  
+
   next();
 }
 
@@ -195,9 +197,14 @@ function recordAuthSuccess(ip: string) {
 }
 
 // Master password hashes stored securely using salt:scrypt
-const MASTER_SUPER_ADMIN_HASH = hashPassword(process.env.SUPERADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD || "admin123");
-const MASTER_ADMIN_HASH = hashPassword(process.env.ADMIN_PASSWORD || "admin123");
-const MASTER_TEACHER_HASH = hashPassword(process.env.TEACHER_PASSWORD || process.env.PROFESSOR_PASSWORD || "senha123");
+const developmentDefaults = process.env.NODE_ENV !== "production";
+const masterHash = (password: string | undefined, developmentPassword: string) => {
+  const value = password || (developmentDefaults ? developmentPassword : undefined);
+  return value ? hashPassword(value) : "";
+};
+const MASTER_SUPER_ADMIN_HASH = masterHash(process.env.SUPERADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD, "admin123");
+const MASTER_ADMIN_HASH = masterHash(process.env.ADMIN_PASSWORD, "admin123");
+const MASTER_TEACHER_HASH = masterHash(process.env.TEACHER_PASSWORD || process.env.PROFESSOR_PASSWORD, "senha123");
 
 // Predefined account access aliases for Djalma Junior
 const SUPER_ADMIN_EMAILS = new Set([
@@ -237,15 +244,15 @@ app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
   }
 
   const { email, password } = req.body;
-  
-  if (!email || !password) {
+
+  if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password || email.length > 320 || password.length > 1024) {
     return res.status(400).json({ detail: "E-mail e senha são obrigatórios." });
   }
 
   const cleanEmail = String(email).trim().toLowerCase();
 
   // 1. Super Admin Authentication (Djalma Junior / Root Super Admin)
-  if (SUPER_ADMIN_EMAILS.has(cleanEmail) && (verifyPassword(password, MASTER_SUPER_ADMIN_HASH) || verifyPassword(password, MASTER_ADMIN_HASH))) {
+  if (SUPER_ADMIN_EMAILS.has(cleanEmail) && verifyPassword(password, MASTER_SUPER_ADMIN_HASH)) {
     recordAuthSuccess(ip);
     const user = {
       id: "superadmin_djalma",
@@ -315,7 +322,7 @@ app.post(["/auth/login", "/api/auth/login"], async (req, res) => {
         // If student has a password hash, verify it; otherwise fallback to enrollment code match
         const isPasswordValid = student.password_hash
           ? verifyPassword(password, student.password_hash)
-          : password === student.enrollment_code || password === "aluno123";
+          : typeof student.enrollment_code === "string" && !!student.enrollment_code && password === student.enrollment_code;
 
         if (isPasswordValid) {
           recordAuthSuccess(ip);
@@ -361,7 +368,7 @@ app.post(["/auth/logout", "/api/auth/logout"], (_req, res) => {
 app.get(["/auth/me", "/api/auth/me"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ detail: "Não autenticado" });
-  
+
   const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : authHeader.split(" ")[1];
   if (!token) return res.status(401).json({ detail: "Token de autorização não fornecido" });
 
@@ -415,11 +422,11 @@ function requireAdminMfa(req: express.Request, res: express.Response, next: expr
 // -------------------------------------------------------------
 // HYBRID DUAL-POOL ARCHITECTURE (Neon Core + VPS Vault)
 // -------------------------------------------------------------
-const coreDatabaseUrl = process.env.DATABASE_URL || 
-  process.env.POSTGRES_URL || 
-  process.env.POSTGRES_PRISMA_URL || 
-  process.env.POSTGRES_URL_NON_POOLING || 
-  process.env.SUPABASE_DB_URL || 
+const coreDatabaseUrl = process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.SUPABASE_DB_URL ||
   process.env.NEON_DATABASE_URL;
 
 // Optional Dedicated Vault Database (VPS PostgreSQL, e.g., on db.edstudenthub.com:5433)
@@ -457,16 +464,16 @@ function createPgPool(rawUrl: string, poolLabel: string = "Core"): pg.Pool {
   }
 
   const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-  const max = process.env.DB_POOL_MAX 
-    ? parseInt(process.env.DB_POOL_MAX, 10) 
+  const max = process.env.DB_POOL_MAX
+    ? parseInt(process.env.DB_POOL_MAX, 10)
     : (isServerless ? 4 : 20);
 
-  const idleTimeoutMillis = process.env.DB_IDLE_TIMEOUT 
-    ? parseInt(process.env.DB_IDLE_TIMEOUT, 10) 
+  const idleTimeoutMillis = process.env.DB_IDLE_TIMEOUT
+    ? parseInt(process.env.DB_IDLE_TIMEOUT, 10)
     : (isServerless ? 10000 : 30000);
 
-  const connectionTimeoutMillis = process.env.DB_CONN_TIMEOUT 
-    ? parseInt(process.env.DB_CONN_TIMEOUT, 10) 
+  const connectionTimeoutMillis = process.env.DB_CONN_TIMEOUT
+    ? parseInt(process.env.DB_CONN_TIMEOUT, 10)
     : 5000;
 
   const instance = new Pool({
@@ -545,7 +552,7 @@ const questionsMemoryDb: any[] = [
   }
 ];
 
-setupTeacherAPIs(app, pool, vaultPool);
+setupTeacherAPIs(app, pool, vaultPool, { initializeSchema: false });
 
 
 // Initialize database schema (with advanced support for 5 relational models, CASCADE constraints, and indices)
@@ -574,14 +581,11 @@ async function initDatabase() {
     try {
       await pool.query(`
         INSERT INTO d_system_user (id, name, email, password_hash, role, status)
-        VALUES 
+        VALUES
           ('a0000000-0000-4000-a000-000000000001', 'Djalma Junior', 'djalma.superadmin@codecheck.ai', $1, 'SUPER_ADMIN', 'active'),
           ('a0000000-0000-4000-a000-000000000002', 'Djalma Junior', 'djalma.admin@codecheck.ai', $2, 'ADMIN', 'active'),
           ('a0000000-0000-4000-a000-000000000003', 'Djalma Junior', 'djalma.professor@codecheck.ai', $3, 'PROFESSOR', 'active')
-        ON CONFLICT (email) DO UPDATE SET 
-          name = EXCLUDED.name,
-          role = EXCLUDED.role,
-          password_hash = EXCLUDED.password_hash;
+        ON CONFLICT (email) DO NOTHING;
       `, [MASTER_SUPER_ADMIN_HASH, MASTER_ADMIN_HASH, MASTER_TEACHER_HASH]);
     } catch (userSeedErr) {
       console.warn("[DB] Aviso ao registrar usuários padrão do sistema:", userSeedErr);
@@ -641,16 +645,7 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_d_corrections_teacher_id ON d_corrections(teacher_id);
     `);
 
-    // Limpeza de fixtures sintéticas legadas (garantir sistema limpo sem turmas ou alunos automáticos)
-    try {
-      await pool.query(`
-        DELETE FROM d_student_grades WHERE class_id IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026');
-        DELETE FROM d_student_record WHERE id::text IN ('b1000000-0000-4000-a000-000000000001', 'b1000000-0000-4000-a000-000000000002', 'b1000000-0000-4000-a000-000000000003', 'b1000000-0000-4000-a000-000000000004', 'b1000000-0000-4000-a000-000000000005', 'b1000000-0000-4000-a000-000000000006', 'b1000000-0000-4000-a000-000000000007') OR id::text LIKE 'stu-%' OR teacher_id = 'teacher_portal';
-        DELETE FROM d_class_group WHERE id::text IN ('930166c4-ee91-4502-8cf4-398d0d598c20', 'e2b65a58-860f-4e08-9df5-636bc5b0fa63', 'b4c73d91-5a21-4f16-8349-1e42a9d8ef12', 'class-senai-dev-2026', 'class-senai-iot-2026') OR teacher_id = 'teacher_portal';
-      `);
-    } catch (cleanErr) {
-      // Ignora se tabelas ainda não existirem
-    }
+    // Startup migrations must preserve existing academic records.
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS d_pedagogical_evidence (
@@ -1037,7 +1032,7 @@ async function initDatabase() {
 
     // Allow older tables to have an activity_id
     await pool.query(`ALTER TABLE d_correction_submission ADD COLUMN IF NOT EXISTS activity_id UUID REFERENCES d_activities(id) ON DELETE SET NULL;`);
-    
+
     // Execution Jobs and Sandbox logs
     await pool.query(`
       CREATE TABLE IF NOT EXISTS d_grading_jobs (
@@ -1524,7 +1519,7 @@ async function initDatabase() {
         name VARCHAR(255) NOT NULL,
         description TEXT
       );
-      
+
       CREATE TABLE IF NOT EXISTS q_curricular_units (
         id UUID PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -1613,7 +1608,7 @@ async function initDatabase() {
         overall_score INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      
+
       CREATE TABLE IF NOT EXISTS r_class_reports (
         id UUID PRIMARY KEY,
         class_id VARCHAR(100),
@@ -1675,7 +1670,7 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      
+
       CREATE TABLE IF NOT EXISTS ai_teacher_messages (
         id UUID PRIMARY KEY,
         conversation_id UUID REFERENCES ai_teacher_conversations(id) ON DELETE CASCADE,
@@ -2015,7 +2010,7 @@ async function initDatabase() {
             [compId, comp[0], comp[1], comp[2], comp[3], comp[4], comp[5], comp[6], comp[7]]
           );
 
-          // Seed default mapping for activity 
+          // Seed default mapping for activity
           // (Let's connect activity 'act-001', 'act-002', etc. to see them in play)
           await pool.query(
             'INSERT INTO activity_competencies (id, activity_id, competency_id) VALUES ($1, $2, $3)',
@@ -2179,7 +2174,7 @@ async function initDatabase() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-      
+
       CREATE INDEX IF NOT EXISTS idx_correction_vault_student_key ON correction_vault(student_key);
       CREATE INDEX IF NOT EXISTS idx_correction_vault_student_id ON correction_vault(student_id);
       CREATE INDEX IF NOT EXISTS idx_correction_vault_student_registration ON correction_vault(student_registration);
@@ -2192,6 +2187,7 @@ async function initDatabase() {
     console.log("Neon Postgres Correction Engine 2.0 SQL schema synced successfully.");
   } catch (error) {
     console.error("Error creating tables in Neon database:", error);
+    throw error;
   }
 }
 
@@ -2256,8 +2252,8 @@ async function persistFullResult(submission: any, resFull: any) {
     const resultId = crypto.randomUUID();
     await pool.query(`
       INSERT INTO d_correction_result (
-        id, submission_id, language, status, syntax_ok, security_ok, compiled, 
-        tests_passed, total_tests, syntax_score, test_score, quality_score, final_score, 
+        id, submission_id, language, status, syntax_ok, security_ok, compiled,
+        tests_passed, total_tests, syntax_score, test_score, quality_score, final_score,
         stdout, stderr, execution_time, memory_used
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     `, [
@@ -2423,7 +2419,7 @@ const FEATURE_FLAGS = {
   ENABLE_ATTENDANCE_TRACKING: process.env.ENABLE_ATTENDANCE_TRACKING !== "false",
   ENABLE_AUTO_CLASS_SUMMARY: process.env.ENABLE_AUTO_CLASS_SUMMARY !== "false",
   ENABLE_CLASS_EXPORTS: process.env.ENABLE_CLASS_EXPORTS !== "false",
-  
+
   // Gestor de Competências (Fase 11)
   ENABLE_COMPETENCY_MANAGER: process.env.ENABLE_COMPETENCY_MANAGER !== "false",
   ENABLE_PEDAGOGICAL_OBSERVATORY: process.env.ENABLE_PEDAGOGICAL_OBSERVATORY !== "false",
@@ -2554,7 +2550,7 @@ app.get("/live", (req, res) => {
 });
 
 // Readiness probe (checks if ready to handle traffic)
-app.get("/ready", async (req, res) => {
+app.get(["/ready", "/api/ready"], async (req, res) => {
   let dbStatus = "DISCONNECTED";
   if (pool) {
     try {
@@ -2567,9 +2563,9 @@ app.get("/ready", async (req, res) => {
     dbStatus = "FALLBACK_CACHE_ACTIVE";
   }
 
-  // The server is always ready since it has dynamic in-memory caching fallback
-  return res.status(200).json({
-    status: "ready",
+  const ready = dbStatus === "READY";
+  return res.status(ready ? 200 : 503).json({
+    status: ready ? "ready" : "not_ready",
     timestamp: new Date().toISOString(),
     database: dbStatus,
     memory_healthy: process.memoryUsage().heapUsed < 800 * 1024 * 1024 // healthy if heap is < 800MB
@@ -2589,7 +2585,7 @@ app.get("/api/health-status", async (req, res) => {
     try {
       const start = Date.now();
       await pool.query("SELECT 1");
-      dbStatus = "NEON_ACTIVE";
+      dbStatus = "POSTGRES_CONNECTED";
       dbLatency = Date.now() - start;
     } catch {
       dbStatus = "ERROR_DISCONNECTED";
@@ -2635,8 +2631,9 @@ app.get("/api/health-status", async (req, res) => {
     }
   }
 
+  const executionAvailable = await workerHealth();
   return res.json({
-    status: "healthy",
+    status: dbStatus === "POSTGRES_CONNECTED" ? "healthy" : "degraded",
     backend_status: "CONNECTED",
     db_status: dbStatus,
     db_latency_ms: dbLatency,
@@ -2647,17 +2644,17 @@ app.get("/api/health-status", async (req, res) => {
       available: fs.existsSync(process.env.PERSISTENT_VOLUME_PATH || "/data")
     },
     executors_status: {
-      python: "READY",
-      javascript: "READY",
-      typescript: "READY",
-      sql_neon: "READY",
-      portugol_static: "READY"
+      python: executionAvailable ? "READY" : "UNAVAILABLE",
+      javascript: executionAvailable ? "READY" : "UNAVAILABLE",
+      typescript: executionAvailable ? "READY" : "UNAVAILABLE",
+      sql_neon: "NOT_VERIFIED",
+      portugol_static: "STATIC_ANALYSIS_ONLY"
     },
     sandbox_parameters: {
-      cpu_safety_limit: "1.5 GHz Dual-Core Isolated",
-      ram_max_allocation: "128 MB",
-      io_restrictions: "No-Disk-Writes / ReadOnly Mounts",
-      network_policy: "Blocked Outbound Firewall",
+      isolation_guaranteed: executionAvailable,
+      local_execution_in_production: "DISABLED",
+      io_restrictions: executionAvailable ? "READ_ONLY_CONTAINER" : "UNAVAILABLE",
+      network_policy: executionAvailable ? "NONE" : "UNAVAILABLE",
       execution_timeout_ms: 3000
     },
     telemetry: {
@@ -2674,7 +2671,7 @@ app.get("/api/health-status", async (req, res) => {
 app.get("/api/sandbox/health", async (req, res) => {
   try {
     const memUsage = process.memoryUsage();
-    
+
     const totalMemBytes = os.totalmem();
     const freeMemBytes = os.freemem();
     const osTotalMB = Math.round(totalMemBytes / (1024 * 1024));
@@ -2688,12 +2685,12 @@ app.get("/api/sandbox/health", async (req, res) => {
     const cpuCount = cpus.length;
     const cpuModel = cpuCount > 0 ? cpus[0].model : "Unknown";
     const loadAvg = os.loadavg();
-    
+
     const cpuLoadPercentage = Math.round((loadAvg[0] / (cpuCount || 1)) * 100);
 
     let containerMemLimitBytes: number | null = null;
     let containerCurrentMemBytes: number | null = null;
-    
+
     const cgroupPaths = [
       "/sys/fs/cgroup/memory/memory.limit_in_bytes",
       "/sys/fs/cgroup/memory.max",
@@ -2764,8 +2761,8 @@ app.get("/api/sandbox/health", async (req, res) => {
             is_cgroup_bounded: containerMemLimitMB !== null,
             limit_mb: containerMemLimitMB,
             current_usage_mb: containerCurrentMemMB,
-            usage_percentage: containerMemLimitMB && containerCurrentMemMB 
-              ? Math.max(0, Math.min(100, Math.round((containerCurrentMemMB / containerMemLimitMB) * 100))) 
+            usage_percentage: containerMemLimitMB && containerCurrentMemMB
+              ? Math.max(0, Math.min(100, Math.round((containerCurrentMemMB / containerMemLimitMB) * 100)))
               : null
           }
         },
@@ -2879,7 +2876,7 @@ app.post("/api/codecheck/activities", async (req, res) => {
 
 app.post("/api/execution/run", async (req, res) => {
   const { language, code, stdin, timeout_seconds } = req.body;
-  
+
   if (!language || !code) {
     return res.status(400).json({ error: "Linguagem e Código são obrigatórios." });
   }
@@ -2899,8 +2896,8 @@ app.post("/api/execution/run", async (req, res) => {
         INSERT INTO d_code_executions (id, teacher_id, language, code, status, score, stdout, stderr, execution_time_ms, memory_used_mb, security_flags, teacher_summary)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `, [
-        executionId, "teacher_portal", result.language, code, result.status, result.score, 
-        result.stdout, result.stderr, result.execution_time_ms, result.memory_used_mb, 
+        executionId, "teacher_portal", result.language, code, result.status, result.score,
+        result.stdout, result.stderr, result.execution_time_ms, result.memory_used_mb,
         result.security_flags, result.teacher_summary
       ]);
       result.id = executionId;
@@ -2914,7 +2911,7 @@ app.post("/api/execution/run", async (req, res) => {
 
 app.post("/api/execution/test", async (req, res) => {
   const { language, code, test_cases, timeout_seconds } = req.body;
-  
+
   if (!language || !code || !Array.isArray(test_cases)) {
     return res.status(400).json({ error: "Linguagem, Código e Casos de Teste são obrigatórios." });
   }
@@ -2934,8 +2931,8 @@ app.post("/api/execution/test", async (req, res) => {
         INSERT INTO d_code_executions (id, teacher_id, language, code, status, score, stdout, stderr, execution_time_ms, memory_used_mb, security_flags, teacher_summary)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `, [
-        executionId, "teacher_portal", result.language, code, result.status, result.score, 
-        result.stdout, result.stderr, result.execution_time_ms, result.memory_used_mb, 
+        executionId, "teacher_portal", result.language, code, result.status, result.score,
+        result.stdout, result.stderr, result.execution_time_ms, result.memory_used_mb,
         result.security_flags, result.teacher_summary
       ]);
 
@@ -2959,24 +2956,18 @@ app.post("/api/execution/test", async (req, res) => {
 
 app.get("/api/execution/languages", (req, res) => {
   res.json([
-    { id: "python", name: "Python 3", version: "3.10" },
-    { id: "javascript", name: "JavaScript/Node.js", version: "18.x" },
-    { id: "php", name: "PHP", version: "8.1" }
+    { id: "python", name: "Python", version: "3.x" },
+    { id: "javascript", name: "JavaScript/Node.js", version: "24.x" },
+    { id: "typescript", name: "TypeScript (tipos removidos pelo Node.js)", version: "Node.js 24" }
   ]);
 });
 
 app.get("/api/execution/status", async (req, res) => {
+  const available = await workerHealth();
   res.json({
-    success: true,
-    status: "online",
-    sandbox: "active",
-    provider: "local",
-    engines: {
-      python: "available",
-      node: "available",
-      gcc: "missing",
-      gplusplus: "missing"
-    }
+    success: true, status: available ? "online" : "unavailable",
+    sandbox: available ? "active" : "unavailable", provider: "isolated_worker",
+    engines: { python: available ? "available" : "unavailable", node: available ? "available" : "unavailable", typescript: available ? "available" : "unavailable", gcc: "missing", gplusplus: "missing" }
   });
 });
 
@@ -2993,7 +2984,7 @@ app.get("/api/analytics/class-average", async (req, res) => {
         JOIN d_correction_result r ON s.id = r.submission_id
         WHERE s.class_name = $1
       `, [name]);
-      
+
       const average = q.rows[0].average || 0;
       res.json({ className: name, average: parseFloat(parseFloat(average).toFixed(1)) });
     } catch (e) {
@@ -3040,7 +3031,7 @@ app.post("/api/pedagogical/rubrics", async (req, res) => {
   if (!validation.valid) return res.status(400).json({ error: validation.error });
 
   if (!pool) return res.json({ success: true, message: "Rubrica validada (Modo Memória)" });
-  
+
   try {
     const id = crypto.randomUUID();
     await pool.query(
@@ -3077,7 +3068,7 @@ app.get("/api/pedagogical/dashboard-summary", async (req, res) => {
         media_geral: qAvg.rows[0].avg || 0,
         alunos_risco: qRisk.rows[0].count,
         top_linguagem: qLang.rows[0]?.language || "N/A",
-        conteudo_critico: "Vetores e Funções", 
+        conteudo_critico: "Vetores e Funções",
         evolucao_turma: "+3.2%"
     });
   } catch (e) {
@@ -3106,7 +3097,7 @@ app.post("/api/codecheck/module04/questions", async (req, res) => {
       INSERT INTO q_question_bank_items (id, title, description, language, level, type, estimated_time, solution_code, status, teacher_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'system')
     `, [id, title, description, language, level, type, estimated_time, solution_code, status || 'draft']);
-    
+
     await pool.query(`
       INSERT INTO q_question_versions (id, question_id, version_number, changes_summary, author_id)
       VALUES ($1, $2, 1, 'Criação inicial', 'system')
@@ -3122,14 +3113,14 @@ app.put("/api/codecheck/module04/questions/:id", async (req, res) => {
 
   const qid = req.params.id;
   const { title, description, language, level, type, estimated_time, solution_code, status, changes_summary } = req.body;
-  
+
   try {
     // Current version count
     const vCountRes = await pool.query(`SELECT COUNT(*) as c FROM q_question_versions WHERE question_id=$1`, [qid]);
     const nextVersion = parseInt(vCountRes.rows[0].c, 10) + 1;
 
     await pool.query(`
-      UPDATE q_question_bank_items 
+      UPDATE q_question_bank_items
       SET title=$1, description=$2, language=$3, level=$4, type=$5, estimated_time=$6, solution_code=$7, status=$8, updated_at=CURRENT_TIMESTAMP
       WHERE id=$9
     `, [title, description, language, level, type, estimated_time, solution_code, status, qid]);
@@ -3149,7 +3140,7 @@ app.delete("/api/codecheck/module04/questions/:id", async (req, res) => {
 
   try {
     // Note: actually we archive it instead of hard delete, but for this let's just delete
-    const cmd = req.query.archive === 'true' 
+    const cmd = req.query.archive === 'true'
       ? `UPDATE q_question_bank_items SET status='archived' WHERE id=$1`
       : `DELETE FROM q_question_bank_items WHERE id=$1`;
     await pool.query(cmd, [req.params.id]);
@@ -3170,12 +3161,12 @@ app.get("/api/codecheck/module04/paths", async (req, res) => {
 
 app.get("/api/teacher-analytics/competencies", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_COMPETENCY_TAGGING) return res.status(403).json({ error: "Desativado" });
-  
+
   // Real implementation for competencies map, integrating data from questions and stats
   if (pool) {
     try {
       const dbResult = await pool.query(`
-        SELECT 
+        SELECT
           c.id AS comp_id,
           c.name AS name,
           c.description AS desc,
@@ -3188,9 +3179,9 @@ app.get("/api/teacher-analytics/competencies", async (req, res) => {
         LEFT JOIN q_question_usage_stats qs ON qs.question_id = qi.id
         GROUP BY c.id, u.name
       `);
-      
+
       const unitsArray = Array.from(new Set(dbResult.rows.map(r => r.unit_name || "Geral"))).filter(Boolean);
-      
+
       const competencies = dbResult.rows.map((r, i) => ({
         id: r.comp_id || i + 1,
         name: r.name,
@@ -3198,7 +3189,7 @@ app.get("/api/teacher-analytics/competencies", async (req, res) => {
         averageScore: Math.round(r.avg_score) || Math.floor(Math.random() * 50) + 40,
         studentCount: parseInt(r.count, 10) || Math.floor(Math.random() * 30) + 5
       }));
-      
+
       return res.json({
         units: unitsArray.length > 0 ? unitsArray : ["Lógica de Programação", "Desenvolvimento Web"],
         competencies: competencies.length > 0 ? competencies : [
@@ -3206,7 +3197,7 @@ app.get("/api/teacher-analytics/competencies", async (req, res) => {
           { id: 2, name: "Estruturas Condicionais (if/else)", unit: "Lógica de Programação", averageScore: 88, studentCount: 24 }
         ]
       });
-    } catch (e: any) { 
+    } catch (e: any) {
       // Fallback
     }
   }
@@ -3332,15 +3323,15 @@ app.get("/api/codecheck/module05/coordinator-dashboard", async (req, res) => {
 const AIProvider = {
   async generate(prompt: string, type: string) {
     const localFallback = this.getLocalFallback(prompt, type);
-    
+
     try {
       const provider = ProviderFactory.createProvider("general_analysis");
-      const systemInstruction = `Você é o assistente pedagógico inteligente do CodeCheck. 
+      const systemInstruction = `Você é o assistente pedagógico inteligente do CodeCheck.
       Sua tarefa é gerar um recurso do tipo "${type}" com base no prompt: "${prompt}".
       Gere a resposta estritamente em formato JSON seguindo este esquema de exemplo:
       ${JSON.stringify(localFallback, null, 2)}
       Retorne APENAS o objeto JSON válido correspondente, sem tags markdown ou explicações.`;
-      
+
       const responseText = await provider.generateContent(systemInstruction);
       const cleanJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
@@ -3466,18 +3457,18 @@ function safeParseAI(textOrObj: any): any {
     } else if (jsonStr.includes("```")) {
        jsonStr = jsonStr.replace(/```\n?/, "").replace(/```$/, "");
     }
-    
+
     const firstBrace = jsonStr.indexOf("{");
     const lastBrace = jsonStr.lastIndexOf("}");
     const firstBracket = jsonStr.indexOf("[");
     const lastBracket = jsonStr.lastIndexOf("]");
-    
+
     if (firstBrace !== -1 && lastBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
       jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
     } else if (firstBracket !== -1 && lastBracket !== -1) {
       jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
     }
-    
+
     return JSON.parse(jsonStr.trim());
   } catch (err) {
     console.warn("[safeParseAI] JSON parse failed, returning raw/empty:", err);
@@ -3496,7 +3487,7 @@ app.post("/api/ai/generate-schedule", async (req, res) => {
   Você é um assistente pedagógico especialista. O professor enviou o seguinte pedido para criar um cronograma de aulas:
   "${prompt}"
 
-  Com base nisso, gere um cronograma estruturado, formato JSON puro, como uma matriz (array) de objetos. 
+  Com base nisso, gere um cronograma estruturado, formato JSON puro, como uma matriz (array) de objetos.
   Cada objeto do array deve conter as chaves:
   - week: (number) número da semana
   - title: (string) título ou tema da aula
@@ -3710,23 +3701,23 @@ app.post("/api/ai/correct-image", async (req, res) => {
   try {
     const { image, ...metadata } = req.body;
     const { text: extractedText, aiAnalysisAvailable, error: ocrError } = await OCRService.extractTextFromImage(image);
-    
+
     // Only attempt correction if AI is available, else return extracted text with a warning
     if (aiAnalysisAvailable && !ocrError) {
         const result = await CodeAnalysisService.correctCode({
           ...metadata,
           code: extractedText
         });
-        res.json({ 
-            ...result, 
+        res.json({
+            ...result,
             success: true,
             message: "Correção por imagem realizada com IA.",
             data: { ...result, extractedText },
             ai_available: true,
             fallback_used: false,
             provider: "ollama",
-            extractedText, 
-            ai_analysis_available: true 
+            extractedText,
+            ai_analysis_available: true
         });
     } else {
         res.json({
@@ -3757,17 +3748,17 @@ app.post("/api/ai/correct-image", async (req, res) => {
 app.post("/api/ai/generate-feedback", async (req, res) => {
   try {
     const result = await FeedbackService.generateFeedback(req.body);
-    res.json({ 
+    res.json({
       success: true,
       message: "Feedback gerado com IA.",
       data: { feedback: result },
       ai_available: true,
       fallback_used: false,
       provider: "ollama",
-      feedback: result 
+      feedback: result
     });
   } catch (error: any) {
-    res.json({ 
+    res.json({
       success: true,
       message: "IA indisponível. Foi usado fallback local.",
       data: { feedback: "Bom trabalho! Pratique mais para evoluir." },
@@ -3775,7 +3766,7 @@ app.post("/api/ai/generate-feedback", async (req, res) => {
       fallback_used: true,
       provider: "local",
       feedback: "Bom trabalho! Pratique mais para evoluir.",
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -3783,17 +3774,17 @@ app.post("/api/ai/generate-feedback", async (req, res) => {
 app.post("/api/ai/generate-report", async (req, res) => {
   try {
     const result = await ReportService.generateReport(req.body);
-    res.json({ 
+    res.json({
       success: true,
       message: "Relatório gerado com IA.",
       data: { report: result },
       ai_available: true,
       fallback_used: false,
       provider: "ollama",
-      report: result 
+      report: result
     });
   } catch (error: any) {
-    res.json({ 
+    res.json({
       success: true,
       message: "IA indisponível. Foi usado fallback local.",
       data: { report: "O desempenho geral tem sido satisfatório, mas necessita revisões." },
@@ -3801,7 +3792,7 @@ app.post("/api/ai/generate-report", async (req, res) => {
       fallback_used: true,
       provider: "local",
       report: "O desempenho geral tem sido satisfatório, mas necessita revisões.",
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -3813,21 +3804,11 @@ app.get("/api/ai/status", async (req, res) => {
   try {
     if (provider === "ollama") {
       const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-
       try {
-        const response = await fetch(ollamaUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!response.ok && response.status !== 404) {
-          throw new Error(`Ollama root retornou status ${response.status}`);
-        }
-
-      
-        // Fetch models dynamically from tags
-        const modelsList = await getOllamaModels(ollamaUrl);
-
+        const configured = new OllamaProvider({ provider: "ollama", model: process.env.AI_CODE_MODEL || "qwen2.5-coder:3b", baseUrl: ollamaUrl, apiKey: process.env.OLLAMA_PROXY_TOKEN });
+        if (!await configured.isAvailable()) throw new Error("Ollama não respondeu ao protocolo autenticado.");
+        const modelsList = await OllamaProvider.listModels(ollamaUrl, process.env.OLLAMA_PROXY_TOKEN);
+        if (!modelsList.length) throw new Error("Ollama não tem modelos disponíveis.");
         return res.json({
           success: true,
           message: "Ollama online",
@@ -3841,7 +3822,6 @@ app.get("/api/ai/status", async (req, res) => {
           health: "ok"
         });
       } catch (e: any) {
-        clearTimeout(timeoutId);
         console.error(`[AI STATUS OBS] Provider: ollama | Available: false | Error: ${e.message} | Duration: ${Date.now() - start}ms`);
         if (process.env.GEMINI_API_KEY) {
           return res.json({
@@ -3906,27 +3886,7 @@ app.get("/api/ai/status", async (req, res) => {
 
 // Helper for dynamic models detection (Etapa 5)
 async function getOllamaModels(ollamaUrl: string): Promise<string[]> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
-  try {
-    const response = await fetch(`${ollamaUrl}/api/tags`, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (response.ok) {
-      const data = await response.json();
-      if (data && Array.isArray(data.models)) {
-        return data.models.map((m: any) => m.name);
-      }
-    }
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    console.warn("[OLLAMA TAGS] Falha ao listar tags dinamicamente do Ollama:", error.message);
-  }
-  return [
-    process.env.AI_CODE_MODEL || "qwen2.5-coder:7b",
-    process.env.AI_FEEDBACK_MODEL || "gemma3:12b",
-    process.env.AI_REPORT_MODEL || "phi4",
-    process.env.AI_GENERAL_MODEL || "llama3.2:3b"
-  ];
+  return OllamaProvider.listModels(ollamaUrl, process.env.OLLAMA_PROXY_TOKEN);
 }
 
 // Helper function to map model types based on name
@@ -3944,7 +3904,7 @@ function getModelType(name: string): string {
 app.get("/api/ai/models", async (req, res) => {
   const provider = process.env.AI_PROVIDER || "ollama";
   const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-  
+
   const defaultRichModels = [
     {
       name: process.env.AI_CODE_MODEL || "qwen2.5-coder:7b",
@@ -4064,10 +4024,10 @@ app.get("/api/ai/models", async (req, res) => {
 app.get("/api/ai/models/health", async (req, res) => {
   const provider = process.env.AI_PROVIDER || "ollama";
   const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434";
-  
+
   const routing = AI_MODEL_ROUTING;
   const configuredModels = Array.from(new Set(Object.values(routing))) as string[];
-  
+
   let installed: string[] = [];
   let missing: string[] = [];
   const recommended = [
@@ -4130,7 +4090,7 @@ app.post("/api/ai/test", async (req, res) => {
 
   try {
     const provider = ProviderFactory.createProvider("general_analysis");
-    
+
     // Simple retry mechanism (Etapa 4)
     let lastError: any = null;
     let responseText = "";
@@ -4254,25 +4214,25 @@ app.post("/api/ai/generate-questions", async (req, res) => {
   try {
     const provider = ProviderFactory.createProvider("question_generation");
     const response = await provider.generateContent(`Gere ${amount || 3} perguntas de múltipla escolha sobre o tema: ${topic || "Algoritmos"}`);
-    res.json({ 
+    res.json({
       success: true,
       message: "Questões geradas com IA.",
       data: { questions: response, duration: Date.now() - start },
       ai_available: true,
       fallback_used: false,
       provider: "ollama",
-      questions: response, 
-      duration: Date.now() - start 
+      questions: response,
+      duration: Date.now() - start
     });
   } catch (e: any) {
-    res.json({ 
+    res.json({
       success: true,
       message: "IA indisponível. Foi usado fallback local.",
       data: { questions: "Desculpe, IA falhou." },
       ai_available: false,
       fallback_used: true,
       provider: "local",
-      error: e.message 
+      error: e.message
     });
   }
 });
@@ -4344,9 +4304,9 @@ app.get("/api/classes/:className/linting-settings", async (req, res) => {
 app.post("/api/classes/:className/linting-settings", async (req, res) => {
   const { className } = req.params;
   const settings = req.body;
-  
+
   if (!pool) return res.status(503).json({ error: "DB not connected" });
-  
+
   try {
     await pool.query(`
       INSERT INTO d_class_linting_settings (class_name, teacher_id, settings, updated_at)
@@ -4354,7 +4314,7 @@ app.post("/api/classes/:className/linting-settings", async (req, res) => {
       ON CONFLICT (class_name, teacher_id)
       DO UPDATE SET settings = EXCLUDED.settings, updated_at = CURRENT_TIMESTAMP
     `, [className, "teacher_portal", JSON.stringify(settings)]);
-    
+
     logAudit("teacher_portal", "UPDATE_CLASS_LINTING", `Class: ${className}`);
     res.json({ success: true, settings });
   } catch (e) {
@@ -4388,18 +4348,18 @@ app.post("/api/smart-labs", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
   const { title, description, class_name, topic, language, difficulty, learning_objectives, statement, rubric, test_cases, reference_solution } = req.body;
   const id = crypto.randomUUID();
-  
+
   try {
     await pool.query(`
       INSERT INTO d_smart_lab (
-        id, teacher_id, class_name, title, description, topic, language, difficulty, 
+        id, teacher_id, class_name, title, description, topic, language, difficulty,
         learning_objectives, statement, rubric, test_cases, reference_solution
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `, [
-      id, "teacher_portal", class_name, title, description, topic, language, difficulty, 
+      id, "teacher_portal", class_name, title, description, topic, language, difficulty,
       learning_objectives, statement, JSON.stringify(rubric), JSON.stringify(test_cases), reference_solution
     ]);
-    
+
     logAudit("teacher_portal", "CREATE_SMART_LAB", `Lab: ${title}`);
     res.json({ success: true, id });
   } catch (e) {
@@ -4421,17 +4381,17 @@ app.get("/api/smart-labs/:id", async (req, res) => {
 app.put("/api/smart-labs/:id", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
   const { title, description, class_name, topic, language, difficulty, learning_objectives, statement, rubric, test_cases, reference_solution, status } = req.body;
-  
+
   try {
     await pool.query(`
       UPDATE d_smart_lab SET
-        title = $1, description = $2, class_name = $3, topic = $4, language = $5, 
-        difficulty = $6, learning_objectives = $7, statement = $8, rubric = $9, 
+        title = $1, description = $2, class_name = $3, topic = $4, language = $5,
+        difficulty = $6, learning_objectives = $7, statement = $8, rubric = $9,
         test_cases = $10, reference_solution = $11, status = $12, updated_at = CURRENT_TIMESTAMP
       WHERE id = $13 AND teacher_id = $14
     `, [
-      title, description, class_name, topic, language, difficulty, 
-      learning_objectives, statement, JSON.stringify(rubric), JSON.stringify(test_cases), 
+      title, description, class_name, topic, language, difficulty,
+      learning_objectives, statement, JSON.stringify(rubric), JSON.stringify(test_cases),
       reference_solution, status, req.params.id, "teacher_portal"
     ]);
     res.json({ success: true });
@@ -4467,7 +4427,7 @@ app.post("/api/smart-labs/:id/submissions", async (req, res) => {
   const { student_name, filename, code_content } = req.body;
   const lab_id = req.params.id;
   const sub_id = crypto.randomUUID();
-  
+
   try {
     await pool.query(`
       INSERT INTO d_smart_lab_submission (id, lab_id, teacher_id, student_name, filename, code_content, status)
@@ -4484,7 +4444,7 @@ app.post("/api/smart-labs/:id/submissions/batch", async (req, res) => {
   const { submissions } = req.body;
   const lab_id = req.params.id;
   if (!pool) return res.status(503).json({ error: "DB not connected" });
-  
+
   try {
     for (const sub of submissions) {
       const id = crypto.randomUUID();
@@ -4502,13 +4462,13 @@ app.post("/api/smart-labs/:id/submissions/batch", async (req, res) => {
 // Correct Lab Submission
 app.post("/api/smart-labs/submissions/:subId/correct", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
-  
+
   try {
     // 1. Get submission and lab details
     const subRes = await pool.query("SELECT * FROM d_smart_lab_submission WHERE id = $1", [req.params.subId]);
     if (subRes.rows.length === 0) return res.status(404).json({ error: "Submission not found" });
     const submission = subRes.rows[0];
-    
+
     const labRes = await pool.query("SELECT * FROM d_smart_lab WHERE id = $1", [submission.lab_id]);
     if (labRes.rows.length === 0) return res.status(404).json({ error: "Lab not found" });
     const lab = labRes.rows[0];
@@ -4551,14 +4511,14 @@ app.get("/api/smart-labs/:id/report/csv", async (req, res) => {
   try {
     const labRes = await pool.query("SELECT title FROM d_smart_lab WHERE id = $1", [req.params.id]);
     const labTitle = labRes.rows[0]?.title || "Lab Report";
-    
+
     const subRes = await pool.query(`
-      SELECT student_name, filename, score, status, created_at 
-      FROM d_smart_lab_submission 
-      WHERE lab_id = $1 
+      SELECT student_name, filename, score, status, created_at
+      FROM d_smart_lab_submission
+      WHERE lab_id = $1
       ORDER BY student_name ASC
     `, [req.params.id]);
-    
+
     const header = ["Aluno", "Arquivo", "Nota", "Status", "Data"];
     const rows = subRes.rows.map(s => [
       s.student_name,
@@ -4567,7 +4527,7 @@ app.get("/api/smart-labs/:id/report/csv", async (req, res) => {
       s.status,
       new Date(s.created_at).toLocaleString()
     ]);
-    
+
     const csvContent = [header, ...rows].map(e => e.join(",")).join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename=${labTitle}.csv`);
@@ -4584,25 +4544,25 @@ app.get("/api/smart-labs/:id/report/csv", async (req, res) => {
 app.post("/api/pedagogical-tracks", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
   const id = crypto.randomUUID();
-  const { 
-    class_id, student_id, title, type, diagnosis, critical_topics, 
-    learning_objectives, recommended_activities, recommended_questions, 
-    recommended_labs, estimated_duration, success_criteria, 
-    ai_recommendations, teacher_notes, status 
+  const {
+    class_id, student_id, title, type, diagnosis, critical_topics,
+    learning_objectives, recommended_activities, recommended_questions,
+    recommended_labs, estimated_duration, success_criteria,
+    ai_recommendations, teacher_notes, status
   } = req.body;
 
   try {
     await pool.query(`
       INSERT INTO d_pedagogical_track (
-        id, teacher_id, class_id, student_id, title, type, diagnosis, 
-        critical_topics, learning_objectives, recommended_activities, 
-        recommended_questions, recommended_labs, estimated_duration, 
+        id, teacher_id, class_id, student_id, title, type, diagnosis,
+        critical_topics, learning_objectives, recommended_activities,
+        recommended_questions, recommended_labs, estimated_duration,
         success_criteria, ai_recommendations, teacher_notes, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     `, [
-      id, "teacher_portal", class_id, student_id, title, type, diagnosis, 
-      critical_topics, learning_objectives, JSON.stringify(recommended_activities), 
-      recommended_questions, recommended_labs, estimated_duration, 
+      id, "teacher_portal", class_id, student_id, title, type, diagnosis,
+      critical_topics, learning_objectives, JSON.stringify(recommended_activities),
+      recommended_questions, recommended_labs, estimated_duration,
       success_criteria, JSON.stringify(ai_recommendations), teacher_notes, status || 'draft'
     ]);
     res.json({ success: true, id });
@@ -4638,7 +4598,7 @@ app.put("/api/pedagogical-tracks/:id", async (req, res) => {
   const { title, diagnosis, status, teacher_notes } = req.body;
   try {
     await pool.query(`
-      UPDATE d_pedagogical_track 
+      UPDATE d_pedagogical_track
       SET title = $1, diagnosis = $2, status = $3, teacher_notes = $4, updated_at = CURRENT_TIMESTAMP
       WHERE id = $5
     `, [title, diagnosis, status, teacher_notes, req.params.id]);
@@ -4668,7 +4628,7 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
     // 1. Collect data for IA
     // In a real app we would aggregate analytics here
     const analytics = await pool.query(`
-      SELECT topic, AVG(score) as avg_score 
+      SELECT topic, AVG(score) as avg_score
       FROM d_smart_lab_submission s
       JOIN d_smart_lab l ON s.lab_id = l.id
       WHERE l.class_name = $1
@@ -4676,11 +4636,11 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
     `, [classId]);
 
     const criticalTopics = analytics.rows.filter(r => r.avg_score < 70).map(r => r.topic);
-    
+
     // 2. Call AI
     const prompt = `Gere uma trilha pedagógica para a turma ${classId} com foco em ${type}.
       Tópicos críticos identificados: ${criticalTopics.join(", ")}.
-      
+
       Retorne um JSON com:
       {
         "title": "Título da Trilha",
@@ -4693,13 +4653,13 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
 
     const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
     const aiResult = safeParseAI(dataText);
-    
+
     // 3. Save as draft
     const id = crypto.randomUUID();
     await pool.query(`
       INSERT INTO d_pedagogical_track (
-        id, teacher_id, class_id, title, type, diagnosis, 
-        critical_topics, learning_objectives, recommended_activities, 
+        id, teacher_id, class_id, title, type, diagnosis,
+        critical_topics, learning_objectives, recommended_activities,
         estimated_duration, success_criteria, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'draft')
     `, [
@@ -4719,22 +4679,22 @@ app.post("/api/pedagogical-tracks/generate/class/:classId", async (req, res) => 
 app.post("/api/intervention-plans", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
   const id = crypto.randomUUID();
-  const { 
-    class_id, student_id, title, diagnosis, objectives, 
-    actions, resources, schedule, success_criteria, 
-    monitoring_strategy, status 
+  const {
+    class_id, student_id, title, diagnosis, objectives,
+    actions, resources, schedule, success_criteria,
+    monitoring_strategy, status
   } = req.body;
 
   try {
     await pool.query(`
       INSERT INTO d_intervention_plan (
-        id, teacher_id, class_id, student_id, title, diagnosis, 
-        objectives, actions, resources, schedule, success_criteria, 
+        id, teacher_id, class_id, student_id, title, diagnosis,
+        objectives, actions, resources, schedule, success_criteria,
         monitoring_strategy, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `, [
-      id, "teacher_portal", class_id, student_id, title, diagnosis, 
-      objectives, JSON.stringify(actions), resources, schedule, 
+      id, "teacher_portal", class_id, student_id, title, diagnosis,
+      objectives, JSON.stringify(actions), resources, schedule,
       success_criteria, monitoring_strategy, status || 'draft'
     ]);
     res.json({ success: true, id });
@@ -4795,7 +4755,7 @@ app.post("/api/intervention-plans/generate/class/:classId", async (req, res) => 
     // 2. Call AI
     const prompt = `Gere um plano de intervenção pedagógica para a turma ${classId}.
       O plano deve ser baseado em dificuldades comuns de programação.
-      
+
       Retorne um JSON com:
       {
         "title": "Plano de Intervenção - [Tema]",
@@ -4810,11 +4770,11 @@ app.post("/api/intervention-plans/generate/class/:classId", async (req, res) => 
     const dataText = await AIGateway.executeTask<string>(AITask.REPORT_GENERATION, prompt);
     const aiResult = safeParseAI(dataText);
     const id = crypto.randomUUID();
-    
+
     await pool.query(`
       INSERT INTO d_intervention_plan (
-        id, teacher_id, class_id, title, diagnosis, 
-        objectives, actions, schedule, success_criteria, 
+        id, teacher_id, class_id, title, diagnosis,
+        objectives, actions, schedule, success_criteria,
         monitoring_strategy, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'draft')
     `, [
@@ -4867,12 +4827,12 @@ app.post("/api/materials/generate", async (req, res) => {
 
   try {
     const prompt = `Gere um material didático do tipo "${tipo}" sobre o tema "${tema}".
-      Dificuldade: ${dificuldade}. 
+      Dificuldade: ${dificuldade}.
       Público-alvo: ${target_audience}.
       Duração estimada: ${duracao}.
       Quantidade de questões (se aplicável): ${quantity}.
       Incluir gabarito: ${include_answer_key ? "Sim" : "Não"}.
-      
+
       Retorne um JSON com esta estrutura:
       {
         "title": "Título Profissional",
@@ -4979,9 +4939,9 @@ app.post("/api/materials/generate", async (req, res) => {
       }
     }
 
-    return res.json({ 
-      success: true, 
-      id, 
+    return res.json({
+      success: true,
+      id,
       data: mergedData,
       ai_available: aiAvailable,
       fallback_used: fallbackUsed,
@@ -5038,12 +4998,12 @@ Retorne obrigatoriamente um JSON puro seguindo este esquema exato:
   "title": "Título do Simulado",
   "description": "Descrição explicando por que este simulado foi gerado com base nos dados analisados",
   "questions": [
-    { 
-      "id": number, 
-      "title": "Título da Questão", 
-      "type": "Code" | "Logic", 
-      "difficulty": "Easy" | "Medium" | "Hard", 
-      "statement": "Enunciado completo da questão" 
+    {
+      "id": number,
+      "title": "Título da Questão",
+      "type": "Code" | "Logic",
+      "difficulty": "Easy" | "Medium" | "Hard",
+      "statement": "Enunciado completo da questão"
     }
   ]
 }`,
@@ -5104,7 +5064,7 @@ app.put("/api/materials/:id", async (req, res) => {
   if (pool) {
     try {
       await pool.query(`
-        UPDATE d_generated_material 
+        UPDATE d_generated_material
         SET title = $1, content = $2, status = $3, updated_at = CURRENT_TIMESTAMP
         WHERE id = $4
       `, [title, JSON.stringify(content), status, req.params.id]);
@@ -5195,7 +5155,7 @@ app.get("/api/materials/:id/export/html", async (req, res) => {
     let html = `<html><head><style>body{font-family:sans-serif;padding:40px;}h1{color:#333;} .section{margin-bottom:20px;}</style></head><body>`;
     html += `<h1>${material.title || "Guia de Programação"}</h1>`;
     html += `<p><em>${material.type || ""} - ${material.topic || ""}</em></p>`;
-    
+
     if (content.sections) {
       content.sections.forEach((s: any) => {
         html += `<div class="section"><h2>${s.heading || ""}</h2><p>${s.content || ""}</p></div>`;
@@ -5242,7 +5202,7 @@ app.post("/api/resources", async (req, res) => {
   const { folder_id, title, description, type, topic, language, difficulty, tags, content } = req.body;
   try {
     await pool.query(`
-      INSERT INTO d_resource_library_item 
+      INSERT INTO d_resource_library_item
       (id, teacher_id, folder_id, title, description, type, topic, language, difficulty, tags, content, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
     `, [id, "teacher_portal", folder_id, title, description, type, topic, language, difficulty, tags, content]);
@@ -5296,7 +5256,7 @@ app.post(["/api/reports/generate", "/api/pedagogical-reports/generate"], async (
     const prompt = `Gere um relatório pedagógico do tipo "${report_type}" para a turma ${class_id} e aluno ${student_id || 'Todos'} (período: ${period}).
       Evite termos negativos (como "fracassou", "péssimo"). Use termos pedagógicos positivos de desenvolvimento.
       Incluir evidências: ${include_evidences}. Incluir recomendações: ${include_recommendations}.
-      
+
       Retorne um JSON:
       {
         "title": "Parecer Pedagógico",
@@ -5319,16 +5279,16 @@ app.post(["/api/reports/generate", "/api/pedagogical-reports/generate"], async (
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft')
     `, [id, "teacher_portal", class_id, student_id, report_type, aiResult.title, JSON.stringify(aiResult)]);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: "Relatório gerado com IA.",
       data: { id, ...aiResult },
       ai_available: true,
       fallback_used: false,
       provider: "ollama",
       // legacy support
-      id, 
-      ...aiResult 
+      id,
+      ...aiResult
     });
   } catch (e) {
     console.error(e);
@@ -5381,13 +5341,13 @@ app.get("/api/reports/:id/export/pdf", async (req, res) => {
     doc.fontSize(12).text(`Turma: ${report.class_id || "Geral"}`);
     if (report.student_id) doc.text(`Aluno: ${report.student_id}`);
     doc.moveDown();
-    
+
     if (content.summary) {
       doc.fontSize(16).text("Resumo");
       doc.fontSize(11).text(content.summary);
       doc.moveDown();
     }
-    
+
     if (content.strengths && content.strengths.length > 0) {
       doc.fontSize(16).text("Pontos Fortes");
       content.strengths.forEach((s: string) => doc.fontSize(11).text(`- ${s}`));
@@ -5494,7 +5454,7 @@ app.get("/api/correction-vault/sync-notes", (req, res) => {
 app.post("/api/correction-vault/sync-notes", async (req, res) => {
   try {
     const { studentId, notes } = req.body;
-    
+
     if (notes && typeof notes === "object" && !Array.isArray(notes)) {
       Object.assign(inMemoryPedagogicalNotes, notes);
       if (pool) {
@@ -5516,11 +5476,11 @@ app.post("/api/correction-vault/sync-notes", async (req, res) => {
         ).catch(() => {});
       }
     }
-    
-    res.json({ 
-      success: true, 
-      message: "Observações pedagógicas sincronizadas com sucesso!", 
-      count: Object.keys(inMemoryPedagogicalNotes).length 
+
+    res.json({
+      success: true,
+      message: "Observações pedagógicas sincronizadas com sucesso!",
+      count: Object.keys(inMemoryPedagogicalNotes).length
     });
   } catch (error: any) {
     console.warn("Aviso ao sincronizar notas do cofre de correções:", error?.message);
@@ -5669,7 +5629,7 @@ app.post("/api/academic-automation/generate-summary", async (req, res) => {
       }
     }
 
-    const prompt = `Você é o assistente de IA pedagógica (${modelName}) do CodeCheck AI. 
+    const prompt = `Você é o assistente de IA pedagógica (${modelName}) do CodeCheck AI.
 Gere um resumo executivo diário detalhado e profissional sobre o desempenho das turmas de programação.
 Dados atuais: Total de alunos ativos: ${studentCount}, Média geral de acurácia: ${avgGrade}, Taxa de estouro de SLA: ${slaBreachRate}.
 O resumo deve conter:
@@ -5691,7 +5651,7 @@ Responda em Markdown claro e estruturado.`;
     recordAiPedagogicalLatency(duration);
     console.error("Error generating academic automation summary:", error);
     const fallbackSummary = `📊 **Resumo Executivo Diário (Gerado por ${modelName})**:\n• **Engajamento Geral**: 89% dos discentes ativos nas últimas 24h.\n• **Gargalo Identificado**: Módulo de Ponteiros Duplos apresentou taxa de estouro de SLA de 24% na Turma B.\n• **Destaque Positivo**: Turma A concluiu o desafio de Algoritmos de Ordenação com 95% de acurácia.\n• **Recomendação da IA**: Ajustar o SLA de Árvores Binárias de 60 para 90 minutos para alinhar com o ritmo real de raciocínio.`;
-    
+
     pedagogicalAiCache.put(cacheKey, { result: fallbackSummary, timestamp: Date.now() });
 
     return res.json({
@@ -5749,7 +5709,7 @@ app.post("/api/academic-automation/generate-lesson-plan", async (req, res) => {
   const modelName = process.env.AI_PEDAGOGICAL_MODEL || "gemma3:4b";
   const startTime = Date.now();
   try {
-    const prompt = `Você é o especialista pedagógico sênior de IA (${modelName}) do CodeCheck AI. 
+    const prompt = `Você é o especialista pedagógico sênior de IA (${modelName}) do CodeCheck AI.
 Com base nas evidências de submissão das turmas (taxa de estouro de SLA, erros de linting mais frequentes e acurácia em estruturas de dados), elabore um plano de aula corretivo e baseado em evidências detalhado.
 O plano deve conter:
 1. Tópico Foco e Justificativa Baseada em Evidências (ex: gargalos em árvores binárias ou ponteiros).
@@ -5796,9 +5756,9 @@ app.post("/api/backup/simulate-small", async (req, res) => {
     globalBackupStatus.alertDispatched = true;
     globalBackupStatus.lastExecutionTime = new Date().toISOString();
     globalBackupStatus.lastFilename = "backup_codecheck_simulated_small.json";
-    
+
     console.log("[BACKUP CRITICAL SIMULATION] Arquivo menor que 1KB detectado. Alerta enviado por e-mail para djalmabatistajunior@gmail.com.");
-    
+
     res.json({
       success: true,
       message: "Simulação de backup pequeno (< 1KB) aplicada com sucesso. Alerta Crítico disparado.",
@@ -6052,7 +6012,7 @@ app.get("/api/codecheck/lesson-plans", async (req, res) => {
 // POST: Criar ou Editar Plano de Aula (Módulo 6)
 app.post("/api/codecheck/lesson-plans", async (req, res) => {
   const { id, teacher_id, topic, class_id, curricular_unit, date, duration, objectives, competencies, script, methodology, practical_activity, evaluation, resources, criteria, recovery, homework } = req.body;
-  
+
   const targetId = id || crypto.randomUUID();
   const planData = {
     id: targetId,
@@ -6161,7 +6121,7 @@ app.get("/api/diary/plan", async (req, res) => {
 // POST: /api/diary/plan (Alias)
 app.post("/api/diary/plan", async (req, res) => {
   const { id, teacher_id, topic, class_id, curricular_unit, date, duration, objectives, competencies, script, methodology, practical_activity, evaluation, resources, criteria, recovery, homework } = req.body;
-  
+
   const targetId = id || crypto.randomUUID();
   const planData = {
     id: targetId,
@@ -6397,7 +6357,7 @@ app.post("/api/codecheck/module07/rules", async (req, res) => {
 
 app.get("/api/codecheck/module07/sandbox-metrics", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_PEDAGOGICAL_AUTOMATION) return res.status(403).json({ error: "Desativado" });
-  
+
   const { activityId } = req.query;
 
   if (activityId === "condicionais") {
@@ -6474,11 +6434,11 @@ app.get("/api/codecheck/module08/overview", async (req, res) => {
 
 app.get("/api/class-comparison-analytics", async (req, res) => {
   let metrics: any[] = [];
-  
+
   if (pool) {
     try {
       const q = await pool.query(`
-        SELECT 
+        SELECT
           COALESCE(s.class_name, 'Sem Turma') as class_name,
           COALESCE(AVG(r.final_score), 0)::int as average_grade,
           COUNT(*)::int as total_submissions
@@ -6492,7 +6452,7 @@ app.get("/api/class-comparison-analytics", async (req, res) => {
       console.error("Error in class comparison endpoint:", e);
     }
   }
-  
+
   // Fallback for demo if no data or no pool
   if (metrics.length < 2) {
     metrics = [
@@ -6517,7 +6477,7 @@ app.get("/api/teacher-analytics", async (req, res) => {
     "71-90": 12,
     "91-100": 8
   };
-  
+
   let skillAverages = {
     variables: 95,
     conditionals: 82,
@@ -6551,9 +6511,9 @@ app.get("/api/teacher-analytics", async (req, res) => {
         totalLogs = q.rows[0].count;
         averageGrade = q.rows[0].avg_grade;
       }
-      
+
       const distQ = await pool.query(`
-        SELECT 
+        SELECT
           SUM(CASE WHEN final_score <= 30 THEN 1 ELSE 0 END)::int as low,
           SUM(CASE WHEN final_score > 30 AND final_score <= 50 THEN 1 ELSE 0 END)::int as med_low,
           SUM(CASE WHEN final_score > 50 AND final_score <= 70 THEN 1 ELSE 0 END)::int as med,
@@ -6674,10 +6634,10 @@ const handleTranscribeImage = async (req: express.Request, res: express.Response
 
     // 3. Perform OCR
     const ocrResult = await OCRService.extractTextFromImage(base64Image);
-    
+
     if (ocrResult.error || !ocrResult.text) {
-       return res.status(200).json({ 
-         success: false, 
+       return res.status(200).json({
+         success: false,
          error: ocrResult.error || "Não foi possível extrair texto da imagem.",
          message: "Envie uma imagem mais nítida ou digite o código manualmente."
        });
@@ -6686,9 +6646,9 @@ const handleTranscribeImage = async (req: express.Request, res: express.Response
     const transcribedCode = ocrResult.text;
 
     // 4. Perform AI metadata analysis if OCRService enabled AI analysis
-    const analysisPrompt = `Analise o seguinte código extraído de uma imagem e retorne o nome do aluno se houver um cabeçalho ou comentário, e uma nota de confiança sobre a transcrição. 
+    const analysisPrompt = `Analise o seguinte código extraído de uma imagem e retorne o nome do aluno se houver um cabeçalho ou comentário, e uma nota de confiança sobre a transcrição.
     Retorne em JSON: { "studentName": "nome", "visualOcrNotes": "notas" }`;
-    
+
     let metaData: any = {};
     let aiSuccess = false;
 
@@ -6749,7 +6709,7 @@ const handleTranscribeImage = async (req: express.Request, res: express.Response
     }
   } catch (err: any) {
     console.error("Erro na transcrição de imagem:", err);
-    res.json({ 
+    res.json({
       success: true,
       message: "IA indisponível. Foi usado fallback local.",
       data: {},
@@ -6776,11 +6736,11 @@ const handleStandardizedOcr = async (req: express.Request, res: express.Response
   try {
     console.log("[OCR URL]", req.originalUrl);
     const ocrResult = await OCRService.extractTextFromImage(image);
-    
+
     if (ocrResult.error) {
-       return res.status(500).json({ 
-         success: false, 
-         error: ocrResult.error 
+       return res.status(500).json({
+         success: false,
+         error: ocrResult.error
        });
     }
 
@@ -6819,7 +6779,7 @@ app.get("/api/ocr/status", (req, res) => {
 // ==========================================
 
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter
@@ -6830,11 +6790,11 @@ app.post("/api/ocr/extract", upload, async (req: any, res: any) => {
   try {
     const file = req.file;
     if (!file) return res.status(400).json({ detail: "Arquivo não enviado." });
-    
+
     // OCRService extractTextFromImage expects a base64 string
     const base64Image = file.buffer.toString('base64');
     const { text: extractedText, aiAnalysisAvailable, error: ocrError } = await OCRService.extractTextFromImage(base64Image);
-    
+
     if (ocrError) {
       return res.status(500).json({ detail: ocrError });
     }
@@ -6892,7 +6852,7 @@ app.post("/api/vision/analyze-assessment", async (req, res) => {
     const { image, exerciseTypeHint } = req.body;
     if (!image) return res.status(400).json({ success: false, error: "Imagem não fornecida." });
 
-    const prompt = `Analise esta imagem de avaliação acadêmica (tipo sugerido: ${exerciseTypeHint || 'Prova'}). 
+    const prompt = `Analise esta imagem de avaliação acadêmica (tipo sugerido: ${exerciseTypeHint || 'Prova'}).
     Detecte automaticamente o tipo real de exercício entre "Prova", "Simulado" ou "Exercício", extraia o nome do aluno se presente, extraia o texto/código fonte manuscrito ou impresso, e gere uma rubrica de correção personalizada e otimizada.
     Retorne estritamente em formato JSON com as chaves:
     {
@@ -6914,16 +6874,16 @@ app.post("/api/vision/analyze-assessment", async (req, res) => {
           studentName: { type: "string" },
           extractedText: { type: "string" },
           optimizedPrompt: { type: "string" },
-          rubric: { 
-            type: "array", 
-            items: { 
-              type: "object", 
-              properties: { 
-                criterion: { type: "string" }, 
-                weight: { type: "string" }, 
-                description: { type: "string" } 
-              } 
-            } 
+          rubric: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                criterion: { type: "string" },
+                weight: { type: "string" },
+                description: { type: "string" }
+              }
+            }
           }
         }
       }, { mimeType: "image/png", base64: image });
@@ -7042,7 +7002,7 @@ app.post("/api/vision/fine-tune-ocr", async (req, res) => {
 app.post("/api/ocr/confirm", async (req, res) => {
   try {
     const { ocr_id, edited_text, language, test_cases } = req.body;
-    
+
     const result = await CodeAnalysisService.correctCode({
       language,
       code: edited_text,
@@ -7353,7 +7313,7 @@ app.get("/api/sla/overdue-students", async (req, res) => {
 app.post("/api/sla/trigger-automated-reminders", async (req, res) => {
   try {
     const { frequency, method, classId, templateOverride, ccTeacher } = req.body;
-    
+
     const activeFreq = frequency || globalSlaScheduleConfig.frequency;
     const activeMethod = method || globalSlaScheduleConfig.deliveryMethod;
     const activeTemplate = templateOverride || globalSlaScheduleConfig.emailTemplate;
@@ -7833,7 +7793,7 @@ app.get("/api/sla/violations-history", (req, res) => {
 
     if (search) {
       const q = String(search).toLowerCase();
-      list = list.filter(v => 
+      list = list.filter(v =>
         v.student_name.toLowerCase().includes(q) ||
         v.enrollment_code.toLowerCase().includes(q) ||
         v.activity_title.toLowerCase().includes(q) ||
@@ -7998,7 +7958,7 @@ app.post("/api/batch/upload", upload, async (req: any, res: any) => {
 
 app.post("/api/batch/github", async (req: any, res: any) => {
   const { githubUrl, title, description, language } = req.body;
-  
+
   if (!githubUrl) return res.status(400).json({ error: "URL do GitHub é obrigatória." });
   if (!title) return res.status(400).json({ error: "Título da atividade é obrigatório." });
 
@@ -8042,7 +8002,7 @@ app.post("/api/projects/review", async (req, res) => {
       try {
         await pool.query(`
           INSERT INTO project_reviews (
-            id, project_name, language, framework, score, classification, 
+            id, project_name, language, framework, score, classification,
             strengths, weaknesses, recommendations, security_warnings, pedagogical_feedback
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT (id) DO UPDATE SET
@@ -8195,7 +8155,7 @@ async function processGitHubCorrection(batchId: string, githubUrl: string, defau
   } catch (err: any) {
     console.error("[GitHub Import Error]", err);
     if (pool) {
-      await pool.query("UPDATE d_batch_correction SET status = 'failed', description = $1 WHERE id = $2", 
+      await pool.query("UPDATE d_batch_correction SET status = 'failed', description = $1 WHERE id = $2",
         [`Erro ao importar repositório: ${err.message}`, batchId]);
     }
   }
@@ -8270,7 +8230,7 @@ class ProcessadorAcademico:
         """Calcula a média ponderada/simples das notas e valida valores."""
         if not self.notas:
             return 0.0
-        
+
         soma = 0.0
         for n in self.notas:
             if n < 0 or n > 10:
@@ -8304,10 +8264,10 @@ def calculate_grades_and_status(list_of_scores):
     # Initialize values
     if not list_of_scores:
         return 0, "No data"
-    
+
     total_score = sum(list_of_scores)
     average = total_score / len(list_of_scores)
-    
+
     # Classify the outcome
     if average >= 7.0:
         outcome = "Approved"
@@ -8315,7 +8275,7 @@ def calculate_grades_and_status(list_of_scores):
         outcome = "Recovery"
     else:
         outcome = "Failed"
-        
+
     return average, outcome
 ` }, // Alta probabilidade de uso de IA
     { name: "Eduardo Oliveira", lang: defaultLanguage, code: `
@@ -8526,7 +8486,7 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
       try {
         const content = entry.getData().toString("utf8");
         const filename = path.basename(entry.entryName);
-        
+
         let studentName = "Desconhecido";
         const parts = entry.entryName.split("/");
         if (parts.length > 1) {
@@ -8550,7 +8510,7 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
         const studentName = student.studentName;
 
         const ext = path.extname(filename).toLowerCase();
-        const detectedLanguage = ext === ".py" ? "python" : 
+        const detectedLanguage = ext === ".py" ? "python" :
                                ext === ".js" ? "javascript" :
                                ext === ".ts" ? "typescript" :
                                ext === ".java" ? "java" :
@@ -8632,7 +8592,7 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
         // Pedagogical Feedback (Module 8)
         const plagInfo = plagiarismResults[studentName] || { similarity_score: 0, suspicious_passages: [], plagiarized_with_student: null };
         const finalScore = Math.round(
-          (result.final_score * 0.4) + 
+          (result.final_score * 0.4) +
           ((legibilidade + modularizacao + organizacao + poo + tratamentoErros + documentacao + seguranca + performance) / 8 * 0.6)
         );
 
@@ -8718,8 +8678,8 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
         if (pool) {
           await pool.query(`
             INSERT INTO d_batch_correction_item (
-              id, batch_id, student_name, filename, filepath, detected_language, code_content, 
-              score, status, feedback, strengths, weaknesses, errors_found, 
+              id, batch_id, student_name, filename, filepath, detected_language, code_content,
+              score, status, feedback, strengths, weaknesses, errors_found,
               execution_result, ai_result
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           `, [
@@ -8742,15 +8702,15 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
                 id, teacher_id, title, description, source_type, source_url, language, framework, status, score
               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             `, [
-              projectReviewId, 
-              "teacher_portal", 
-              `${studentName} - ${batchTitle}`, 
-              `Projeto do aluno: ${studentName}`, 
-              sourceType, 
-              sourceUrl, 
-              detectedLanguage, 
-              (frameworks && frameworks[0]) || "Nenhum", 
-              "completed", 
+              projectReviewId,
+              "teacher_portal",
+              `${studentName} - ${batchTitle}`,
+              `Projeto do aluno: ${studentName}`,
+              sourceType,
+              sourceUrl,
+              detectedLanguage,
+              (frameworks && frameworks[0]) || "Nenhum",
+              "completed",
               finalScore
             ]);
 
@@ -8914,8 +8874,8 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
 
           // Update batch progress in real-time
           await pool.query(`
-            UPDATE d_batch_correction 
-            SET processed_files = $1, average_score = $2 
+            UPDATE d_batch_correction
+            SET processed_files = $1, average_score = $2
             WHERE id = $3
           `, [processedFiles, scoresTotal / processedFiles, batchId]);
         }
@@ -8935,12 +8895,12 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
 
     if (pool) {
       await pool.query(`
-        UPDATE d_batch_correction 
-        SET status = $1, class_summary = $2, common_errors = $3, 
+        UPDATE d_batch_correction
+        SET status = $1, class_summary = $2, common_errors = $3,
             critical_topics = $4, teacher_recommendations = $5, completed_at = CURRENT_TIMESTAMP
         WHERE id = $6
       `, [
-        "completed", classSummary.summary, classSummary.common_errors, 
+        "completed", classSummary.summary, classSummary.common_errors,
         classSummary.critical_topics, classSummary.recommendations, batchId
       ]);
     }
@@ -8953,7 +8913,7 @@ async function processBatchCorrection(batchId: string, zipBuffer: Buffer, defaul
   }
 }
 
-async function generateClassBatchSummary(items: any[]) {  
+async function generateClassBatchSummary(items: any[]) {
   const dataForAI = items.map(i => ({
     aluno: i.studentName,
     nota: i.score,
@@ -8985,7 +8945,7 @@ async function generateClassBatchSummary(items: any[]) {
     // Elegant pedagogical fallback when AI is unavailable or offline
     const count = items.length;
     const avg = count > 0 ? (items.reduce((sum, item) => sum + item.score, 0) / count).toFixed(1) : "0";
-    
+
     return {
       summary: `A turma completou as correções de código com uma média geral de ${avg}/100. Foram identificados pontos de melhoria recorrentes na modularização de funções e tratamento defensivo de erros.`,
       common_errors: ["Ausência de tratamento preventivo de exceções", "Modularização insuficiente em blocos independentes"],
@@ -9097,10 +9057,10 @@ app.get("/api/batch/:id/export/csv", async (req, res) => {
 
 app.get("/api/batch/:id/export/pdf", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
-  
+
   const batchQ = await pool.query("SELECT * FROM d_batch_correction WHERE id = $1", [req.params.id]);
   const itemsQ = await pool.query("SELECT * FROM d_batch_correction_item WHERE batch_id = $1", [req.params.id]);
-  
+
   if (batchQ.rows.length === 0) return res.status(404).send("Batch not found");
   const batch = batchQ.rows[0];
 
@@ -9139,9 +9099,9 @@ const analytics = pool ? new EducationalAnalyticsService(pool) : null;
 
 app.post("/api/similarity/analyze", async (req: any, res: any) => {
   const { batch_id, activity_id, language, threshold = 0.75 } = req.body;
-  
+
   if (!pool) return res.status(503).json({ error: "DB not connected" });
-  
+
   const analysisId = crypto.randomUUID();
 
   // Buscar códigos para comparar
@@ -9172,7 +9132,7 @@ app.post("/api/similarity/analyze", async (req: any, res: any) => {
         for (let j = i + 1; j < items.length; j++) {
             const itemA = items[i];
             const itemB = items[j];
-            
+
             const result = SimilarityService.analyzePair(itemA.code_content, itemB.code_content, language || "python");
             pairsAnalyzed++;
             (summary as any)[result.level]++;
@@ -9181,11 +9141,11 @@ app.post("/api/similarity/analyze", async (req: any, res: any) => {
                 highSimilarityCount++;
                 await pool.query(`
                     INSERT INTO d_similarity_pair (
-                        id, analysis_id, student_a_name, student_b_name, file_a, file_b, 
+                        id, analysis_id, student_a_name, student_b_name, file_a, file_b,
                         code_a, code_b, similarity_score, level, method_scores, explanation
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 `, [
-                    crypto.randomUUID(), analysisId, itemA.student_name, itemB.student_name, 
+                    crypto.randomUUID(), analysisId, itemA.student_name, itemB.student_name,
                     itemA.filename, itemB.filename, itemA.code_content, itemB.code_content,
                     result.score, result.level, JSON.stringify(result.method_scores), result.explanation
                 ]);
@@ -9194,8 +9154,8 @@ app.post("/api/similarity/analyze", async (req: any, res: any) => {
     }
 
     await pool.query(`
-      UPDATE d_similarity_analysis 
-      SET status = 'completed', pairs_analyzed = $1, high_similarity_count = $2, 
+      UPDATE d_similarity_analysis
+      SET status = 'completed', pairs_analyzed = $1, high_similarity_count = $2,
           summary = $3, completed_at = CURRENT_TIMESTAMP
       WHERE id = $4
     `, [pairsAnalyzed, highSimilarityCount, JSON.stringify(summary), analysisId]);
@@ -9230,7 +9190,7 @@ app.get("/api/similarity", async (req, res) => {
 app.get("/api/analytics/overview", async (req, res) => {
   if (!pool) return res.status(503).json({ error: "DB not connected" });
   const stats = await pool.query(`
-    SELECT 
+    SELECT
       (SELECT COUNT(*) FROM d_correction_submission) as total_submissions,
       (SELECT COALESCE(AVG(final_score), 0) FROM d_correction_result) as average_score,
       (SELECT COUNT(*) FROM d_student_learning_profile WHERE attention_level != 'normal') as students_at_risk
@@ -9252,7 +9212,7 @@ app.get("/api/analytics/students", async (req, res) => {
 
 app.post("/api/analytics/recalculate", async (req, res) => {
   if (!pool || !analytics) return res.status(503).json({ error: "DB not connected" });
-  
+
   const students = await pool.query("SELECT DISTINCT student_name FROM d_correction_submission");
   const classes = await pool.query("SELECT DISTINCT class_name FROM d_correction_submission");
 
@@ -9367,7 +9327,7 @@ app.post("/api/question-bank", async (req, res) => {
 app.put("/api/questions/:id", async (req, res) => {
   const { title, description, language, difficulty, starter_code, test_cases, rubric } = req.body;
   const id = req.params.id;
-  
+
   const idx = questionsMemoryDb.findIndex(q => q.id === id);
   if (idx !== -1) {
     questionsMemoryDb[idx] = {
@@ -9385,7 +9345,7 @@ app.put("/api/questions/:id", async (req, res) => {
   if (pool) {
     try {
       await pool.query(`
-        UPDATE questions 
+        UPDATE questions
         SET title = COALESCE($1, title),
             description = COALESCE($2, description),
             language = COALESCE($3, language),
@@ -9425,7 +9385,7 @@ app.delete("/api/questions/:id", async (req, res) => {
 app.put("/api/question-bank/:id", async (req, res) => {
   const { title, description, language, difficulty, starter_code, test_cases, rubric } = req.body;
   const id = req.params.id;
-  
+
   const idx = questionsMemoryDb.findIndex(q => q.id === id);
   if (idx !== -1) {
     questionsMemoryDb[idx] = {
@@ -9443,7 +9403,7 @@ app.put("/api/question-bank/:id", async (req, res) => {
   if (pool) {
     try {
       await pool.query(`
-        UPDATE questions 
+        UPDATE questions
         SET title = COALESCE($1, title),
             description = COALESCE($2, description),
             language = COALESCE($3, language),
@@ -9484,7 +9444,7 @@ app.delete("/api/question-bank/:id", async (req, res) => {
 function generateLocalQuestionsFallback(topic: string, language: string, difficulty: string, quantity: number) {
   const lowercaseTopic = (topic || "").toLowerCase();
   const lang = (language || "javascript").toLowerCase();
-  
+
   const templates = [
     {
       title: `Desafio de ${topic || "Algoritmo"} #1`,
@@ -9544,7 +9504,7 @@ function generateLocalQuestionsFallback(topic: string, language: string, difficu
 
 app.post("/api/questions/generate", async (req, res) => {
   const { topic, language, difficulty, question_type, quantity = 3 } = req.body;
-  
+
   if (!topic || !language || !difficulty) {
     return res.status(400).json({
       success: false,
@@ -9556,7 +9516,7 @@ app.post("/api/questions/generate", async (req, res) => {
   try {
     const prompt = `Gere ${quantity} questões de programação sobre o tema "${topic}" na linguagem "${language}".
     Nível de dificuldade: ${difficulty}. Tipo de questão: ${question_type || "prática"}.
-    
+
     Responda APENAS com um JSON no formato:
     {
       "questions": [
@@ -9583,7 +9543,7 @@ app.post("/api/questions/generate", async (req, res) => {
     try {
       const dataText = await AIGateway.executeTask<string>(AITask.QUESTION_GENERATION, prompt);
       const parsedData = safeParseAI(dataText);
-      
+
       if (parsedData && Array.isArray(parsedData.questions) && parsedData.questions.length > 0) {
         questionsData = parsedData.questions;
         aiAvailable = true;
@@ -9637,7 +9597,7 @@ app.post("/api/questions/generate", async (req, res) => {
         test_cases: q.test_cases || [],
         rubric: q.rubric || { syntax_weight: 30, logic_weight: 40, tests_weight: 30 }
       };
-      
+
       if (pool) {
         pool.query(`
           INSERT INTO questions (id, title, description, language, difficulty, starter_code, test_cases, rubric)
@@ -9646,7 +9606,7 @@ app.post("/api/questions/generate", async (req, res) => {
       } else {
         questionsMemoryDb.unshift(mappedQ);
       }
-      
+
       return mappedQ;
     });
 
@@ -9982,7 +9942,7 @@ app.post(["/corrections/run", "/api/corrections/run"], async (req, res) => {
 
   try {
     const tests = Array.isArray(test_cases) ? test_cases : [];
-    
+
     // Orchestrate correction through CorrectionService (Engine 2.0)
     const serviceResult = await CorrectionService.run(language, code, tests, rubric, currentLintingSettings, FEATURE_FLAGS.ENABLE_SANDBOX_EXECUTOR, providerConfig);
 
@@ -10071,7 +10031,7 @@ ${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length 
       try {
         const corrId = crypto.randomUUID();
         finalCorrId = corrId;
-        
+
         // Insert into legacy d_corrections
         await pool.query(
           `INSERT INTO d_corrections (id, teacher_id, class_id, student_id, activity_id, code_content, language, score, feedback, correction_type, created_at)
@@ -10093,9 +10053,9 @@ ${serviceResult.feedback.next_steps && serviceResult.feedback.next_steps.length 
         // Insert into new correction_results table
         await pool.query(
           `INSERT INTO correction_results (
-             id, student_id, class_id, activity_id, student_name, class_name, 
-             language, submitted_code, score, max_score, status, feedback, 
-             ai_feedback, execution_output, execution_error, test_results, 
+             id, student_id, class_id, activity_id, student_name, class_name,
+             language, submitted_code, score, max_score, status, feedback,
+             ai_feedback, execution_output, execution_error, test_results,
              rubric_result, metadata, corrected_by, corrected_at, created_at
            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())`,
           [
@@ -10291,7 +10251,7 @@ app.get("/api/dashboard/teacher", async (req, res) => {
         const cRes = await pool.query("SELECT COUNT(*) as count FROM d_class_group");
         const sRes = await pool.query("SELECT COUNT(*) as count FROM d_student_record");
         const subRes = await pool.query("SELECT COUNT(*) as count, AVG(final_score) as avg_score FROM d_correction_result");
-        
+
         if (cRes.rows[0]?.count) totalClasses = Math.max(totalClasses, parseInt(cRes.rows[0].count, 10));
         if (sRes.rows[0]?.count) totalStudents = Math.max(totalStudents, parseInt(sRes.rows[0].count, 10));
         if (subRes.rows[0]?.count) totalCorrections = parseInt(subRes.rows[0].count, 10);
@@ -10479,22 +10439,22 @@ app.get("/api/submissions", async (req, res) => {
         const unifiedFeedbackString = `
 ### RESUMO DA CORREÇÃO
 ${structuralFeedback.summary || "Nenhuma descrição fornecida."}
- 
+
 ### NOTA DA CORREÇÃO
 - **Nota Final**: **${r.final_score}/100**
- 
+
 ### PONTOS FORTES
 ${structuralFeedback.strengths.length > 0 ? structuralFeedback.strengths.map((s: string) => `- ${s}`).join("\n") : "- Nenhuma observação de ponto forte."}
- 
+
 ### LISTA DE ERROS DE SISTEMA E COMPILAÇÃO
 ${structuralFeedback.errors.length > 0 ? structuralFeedback.errors.map((e: string) => `- ${e}`).join("\n") : "- Nenhum erro impeditivo de compilação ou vulnerabilidade barrou a execução do seu código."}
- 
+
 ### PONTOS DE MELHORIA
 ${structuralFeedback.improvements.length > 0 ? structuralFeedback.improvements.map((i: string) => `- ${i}`).join("\n") : "- Sem pontos de melhorias drásticas necessárias."}
- 
+
 ### CONCEITOS RECOMENDADOS PARA REVISÃO
 ${structuralFeedback.concepts_to_review.length > 0 ? structuralFeedback.concepts_to_review.map((c: string) => `- ${c}`).join("\n") : "- Nenhum tópico didático indicado para reforço imediato."}
- 
+
 ### PRÓXIMOS PASSOS PEDAGÓGICOS
 ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((step: string) => `- ${step}`).join("\n") : "- Sem recomendações adicionais de próximos passos."}
 `.trim();
@@ -10727,7 +10687,7 @@ app.post("/api/feature-flags", (req, res) => {
     FEATURE_FLAGS.ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS = ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS;
     process.env.ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS = ENABLE_TEACHER_PRODUCTIVITY_ANALYTICS ? "true" : "false";
   }
-  
+
   // Smart Class Diary Feature Flags (Fase 10)
   const { ENABLE_SMART_CLASS_DIARY, ENABLE_CLASS_NOTES, ENABLE_CLASS_LOGS, ENABLE_ATTENDANCE_TRACKING, ENABLE_AUTO_CLASS_SUMMARY, ENABLE_CLASS_EXPORTS } = req.body;
   if (typeof ENABLE_SMART_CLASS_DIARY === "boolean") {
@@ -10756,13 +10716,13 @@ app.post("/api/feature-flags", (req, res) => {
   }
 
   // Gestor de Competências (Fase 11)
-  const { 
-    ENABLE_COMPETENCY_MANAGER, 
-    ENABLE_PEDAGOGICAL_OBSERVATORY, 
-    ENABLE_COMPETENCY_ANALYTICS, 
-    ENABLE_COMPETENCY_HEATMAPS, 
-    ENABLE_COMPETENCY_ALERTS, 
-    ENABLE_COMPETENCY_REPORTS 
+  const {
+    ENABLE_COMPETENCY_MANAGER,
+    ENABLE_PEDAGOGICAL_OBSERVATORY,
+    ENABLE_COMPETENCY_ANALYTICS,
+    ENABLE_COMPETENCY_HEATMAPS,
+    ENABLE_COMPETENCY_ALERTS,
+    ENABLE_COMPETENCY_REPORTS
   } = req.body;
   if (typeof ENABLE_COMPETENCY_MANAGER === "boolean") {
     FEATURE_FLAGS.ENABLE_COMPETENCY_MANAGER = ENABLE_COMPETENCY_MANAGER;
@@ -10788,7 +10748,7 @@ app.post("/api/feature-flags", (req, res) => {
     FEATURE_FLAGS.ENABLE_COMPETENCY_REPORTS = ENABLE_COMPETENCY_REPORTS;
     process.env.ENABLE_COMPETENCY_REPORTS = ENABLE_COMPETENCY_REPORTS ? "true" : "false";
   }
-  
+
   logAudit("admin_portal", "UPDATE_FEATURE_FLAGS", JSON.stringify(FEATURE_FLAGS));
   res.json({ success: true, flags: FEATURE_FLAGS });
 });
@@ -10845,7 +10805,7 @@ app.get("/api/settings/linting", async (req, res) => {
 
 app.post("/api/settings/linting", async (req, res) => {
   const { requireComments, requireIndentation, maxLinesLimit, requireNoSingleLetterVars, requireFunctions } = req.body;
-  
+
   if (typeof requireComments === "boolean") currentLintingSettings.requireComments = requireComments;
   if (typeof requireIndentation === "boolean") currentLintingSettings.requireIndentation = requireIndentation;
   if (typeof maxLinesLimit === "number") currentLintingSettings.maxLinesLimit = maxLinesLimit;
@@ -10891,7 +10851,7 @@ app.get("/api/class-error-analytics", async (req, res) => {
         JOIN d_correction_result r ON s.id = r.submission_id
         ORDER BY s.created_at DESC
       `);
-      
+
       const rubricsQuery = await pool.query(`SELECT * FROM d_rubric_result`);
       const rubricsByResult: Record<string, any[]> = {};
       for (const row of rubricsQuery.rows) {
@@ -10953,7 +10913,7 @@ app.get("/api/class-error-analytics", async (req, res) => {
       else if (lower.includes("indentationerror") || lower.includes("inconsistência de indentação")) errType = "Indentation Error";
       else if (lower.includes("timeout")) errType = "Execution Timeout";
       else if (lower.includes("vulnerabilidade") || lower.includes("bloqueado")) errType = "Security Block";
-      
+
       errorCounts[errType] = (errorCounts[errType] || 0) + 1;
     }
   }
@@ -11298,7 +11258,7 @@ app.get("/api/student-evolution", async (req, res) => {
 
   const recommendations: string[] = [];
   const averageFinalGrade = studentSubs.length > 0 ? (studentSubs.reduce((a,b) => a + b.final_score, 0) / studentSubs.length) : 0;
-  
+
   if (averageFinalGrade < 60) {
     recommendations.push("Revise sintaxe básica da linguagem de escolha e pratique exercícios de apoio mais curtos no SENAI.");
   }
@@ -11368,7 +11328,7 @@ const inMemoryAttendanceRecords = [
   { id: "a3", session_id: "s1", student_name: "Carlos Eduardo", status: "falta", justification: "Atestado médico" },
   { id: "a4", session_id: "s1", student_name: "Douglas Lima", status: "presente", justification: "" },
   { id: "a5", session_id: "s1", student_name: "Elena G", status: "atraso", justification: "Trânsito de ônibus urbano" },
-  
+
   { id: "a6", session_id: "s2", student_name: "Ana Silva", status: "presente", justification: "" },
   { id: "a7", session_id: "s2", student_name: "Bruno Souza", status: "presente", justification: "" },
   { id: "a8", session_id: "s2", student_name: "Carlos Eduardo", status: "presente", justification: "" },
@@ -11482,8 +11442,8 @@ app.get("/api/codecheck/diary/sessions", async (req, res) => {
   }
   if (search) {
     const sTerm = String(search).toLowerCase();
-    filtered = filtered.filter(s => 
-      (s.lesson_topic && s.lesson_topic.toLowerCase().includes(sTerm)) || 
+    filtered = filtered.filter(s =>
+      (s.lesson_topic && s.lesson_topic.toLowerCase().includes(sTerm)) ||
       (s.content_taught && s.content_taught.toLowerCase().includes(sTerm)) ||
       (s.curricular_unit && s.curricular_unit.toLowerCase().includes(sTerm))
     );
@@ -11519,7 +11479,7 @@ app.post("/api/codecheck/diary/sessions", async (req, res) => {
   if (pool) {
     try {
       await pool.query(
-        `INSERT INTO class_sessions (id, date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, periods) 
+        `INSERT INTO class_sessions (id, date, class_name, curricular_unit, duration_hours, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, periods)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          ON CONFLICT (id) DO UPDATE SET date=$2, class_name=$3, curricular_unit=$4, duration_hours=$5, lesson_topic=$6, content_taught=$7, methodology=$8, resources_used=$9, notes=$10, competencies=$11, status=$12, periods=$13`,
         [id, newSession.date, newSession.class_name, newSession.curricular_unit, newSession.duration_hours, newSession.lesson_topic, newSession.content_taught, newSession.methodology, newSession.resources_used, newSession.notes, newSession.competencies, newSession.status, newSession.periods]
@@ -11567,7 +11527,7 @@ app.put("/api/codecheck/diary/sessions/:id", async (req, res) => {
   if (pool) {
     try {
       await pool.query(
-        `UPDATE class_sessions 
+        `UPDATE class_sessions
          SET date=$1, class_name=$2, curricular_unit=$3, duration_hours=$4, lesson_topic=$5, content_taught=$6, methodology=$7, resources_used=$8, notes=$9, competencies=$10, status=$11, periods=$12
          WHERE id=$13`,
         [date, class_name, curricular_unit, parseInt(duration_hours) || 2, lesson_topic, content_taught, methodology, resources_used, notes, competencies, status, periods, id]
@@ -11788,7 +11748,7 @@ app.post("/api/codecheck/diary/attendance", async (req, res) => {
       for (const rec of records) {
         const id = crypto.randomUUID();
         await pool.query(
-          `INSERT INTO attendance_records (id, session_id, student_name, status, justification) 
+          `INSERT INTO attendance_records (id, session_id, student_name, status, justification)
            VALUES ($1, $2, $3, $4, $5)`,
           [id, session_id, rec.student_name, rec.status, rec.justification || ""]
         );
@@ -11877,7 +11837,7 @@ app.post("/api/codecheck/diary/observations", async (req, res) => {
   if (pool) {
     try {
       await pool.query(
-        `INSERT INTO class_observations (id, session_id, target_type, target_name, behavior, participation, difficulties, progress, comments) 
+        `INSERT INTO class_observations (id, session_id, target_type, target_name, behavior, participation, difficulties, progress, comments)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [id, newObs.session_id, newObs.target_type, newObs.target_name, newObs.behavior, newObs.participation, newObs.difficulties, newObs.progress, newObs.comments]
       );
@@ -12135,14 +12095,14 @@ app.get("/api/codecheck/diary/time-slots", async (req, res) => {
 
 app.post("/api/codecheck/diary/time-slots", async (req, res) => {
   if (!FEATURE_FLAGS.ENABLE_SMART_CLASS_DIARY) return res.status(403).json({ error: "Desativado" });
-  const { slots } = req.body; 
+  const { slots } = req.body;
   if (pool) {
     try {
       for (const slot of slots) {
         await pool.query(
-          `INSERT INTO class_time_slots (period_number, start_time, end_time) 
-           VALUES ($1, $2, $3) 
-           ON CONFLICT (period_number) 
+          `INSERT INTO class_time_slots (period_number, start_time, end_time)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (period_number)
            DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
           [slot.period_number, slot.start_time, slot.end_time]
         );
@@ -12205,7 +12165,7 @@ app.post("/api/competencies", async (req, res) => {
   if (pool) {
     try {
       await pool.query(
-        `INSERT INTO competencies (id, code, name, description, area, curricular_unit, level, prerequisites, recommended_hours) 
+        `INSERT INTO competencies (id, code, name, description, area, curricular_unit, level, prerequisites, recommended_hours)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [newId, code, name, description || "", area || "", curricular_unit || "", level || "Básico", prerequisites || "Nenhum", recHours]
       );
@@ -12285,7 +12245,7 @@ app.get("/api/competencies/mapping", async (req, res) => {
   if (pool) {
     try {
       const q = await pool.query(`
-        SELECT ac.*, c.code, c.name, c.area 
+        SELECT ac.*, c.code, c.name, c.area
         FROM activity_competencies ac
         JOIN competencies c ON ac.competency_id = c.id
       `);
@@ -12372,7 +12332,7 @@ app.get("/api/competencies/evolution", async (req, res) => {
         GROUP BY date
         ORDER BY date ASC
       `, [className]);
-      
+
       if (q.rows.length > 0) {
         return res.json(q.rows);
       }
@@ -12581,7 +12541,7 @@ app.post("/api/competencies/reports", async (req, res) => {
   if (pool) {
     try {
       await pool.query(
-        `INSERT INTO competency_reports (id, type_report, format, student_name, class_name, content) 
+        `INSERT INTO competency_reports (id, type_report, format, student_name, class_name, content)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [id, type_report, format || "PDF", student_name || null, class_name || null, content]
       );
@@ -12613,21 +12573,21 @@ app.get("/api/competencies/audits", async (req, res) => {
 
 app.post("/api/competencies/recommend", async (req, res) => {
   const { student_name, class_name, critical_competencies } = req.body;
-  
+
   const target = student_name ? `o aluno(a) ${student_name}` : `a turma ${class_name || "Turma A"}`;
-  const compsText = (critical_competencies && critical_competencies.length > 0) 
-    ? critical_competencies.join(", ") 
+  const compsText = (critical_competencies && critical_competencies.length > 0)
+    ? critical_competencies.join(", ")
     : "Lógica de Programação e Estruturas de Loops";
 
-  const prompt = `Atue como um Especialista Pedagógico e mentor técnico do SENAI/Educação Profissional. 
+  const prompt = `Atue como um Especialista Pedagógico e mentor técnico do SENAI/Educação Profissional.
   Gere recomendações de intervenção detalhadas e ricas com IA para ${target} que apresenta dificuldades nas seguintes competências críticas: ${compsText}.
-  
+
   Retorne um objeto estritamente formatado em JSON contendo as chaves:
   - "summary": Um breve parecer pedagógico consolidado
   - "activities": Lista de até 3 exercícios práticos, desafios ou treinos curtos recomendados de código para resolver essa lacuna
   - "revision_lessons": Tópicos de revisão conceitual para re-explicar em laboratório
   - "learning_paths": Um trajeto sugerido de estudos autônomos ou trilhas com estimativa de tempo acumulado em horas
-  
+
   Retorne apenas o JSON puro, sem marcação markdown ou blocos de comentários de código.`;
 
   try {
@@ -12661,11 +12621,11 @@ app.post("/api/competencies/recommend", async (req, res) => {
 
 app.get("/api/cloud-sync/status", async (req, res) => {
   const isConnected = !!pool;
-  const dbUrl = process.env.DATABASE_URL || 
-    process.env.POSTGRES_URL || 
-    process.env.POSTGRES_PRISMA_URL || 
-    process.env.POSTGRES_URL_NON_POOLING || 
-    process.env.SUPABASE_DB_URL || 
+  const dbUrl = process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.SUPABASE_DB_URL ||
     process.env.NEON_DATABASE_URL || "";
 
   let maskedHost = "Nenhum (Modo Cache Local)";
@@ -12795,8 +12755,8 @@ app.post("/api/cloud-sync/import-dump", async (req, res) => {
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
               ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, course = EXCLUDED.course, updated_at = NOW()
             `, [
-              c.id, c.teacher_id || "teacher_portal", c.name, c.course || "Desenvolvimento de Sistemas", 
-              c.module || "Módulo 1", c.semester || "1º Semestre", c.shift || "Noturno", c.year || 2026, 
+              c.id, c.teacher_id || "teacher_portal", c.name, c.course || "Desenvolvimento de Sistemas",
+              c.module || "Módulo 1", c.semester || "1º Semestre", c.shift || "Noturno", c.year || 2026,
               c.description || "", c.status || "active"
             ]);
             importedCounts.classes++;
@@ -12813,8 +12773,8 @@ app.post("/api/cloud-sync/import-dump", async (req, res) => {
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
               ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, updated_at = NOW()
             `, [
-              s.id, s.teacher_id || "teacher_portal", s.class_id || null, s.name, 
-              s.enrollment_code || `MAT-${Date.now().toString().slice(-4)}`, s.email || null, 
+              s.id, s.teacher_id || "teacher_portal", s.class_id || null, s.name,
+              s.enrollment_code || `MAT-${Date.now().toString().slice(-4)}`, s.email || null,
               s.notes || "", s.status || "active"
             ]);
             importedCounts.students++;
@@ -12896,13 +12856,22 @@ app.post("/api/cloud-sync/seed-cloud", async (req, res) => {
 // registerAddonEndpoints(app, pool);
 
 // Start listening and serve frontend UI
-async function main() {
-  await initDatabase();
-  try {
-    await initializeDatabase(pool);
-  } catch (err) {
-    console.error("[CRITICAL] Failed to run initializeDatabase during main start:", err);
+let databaseInitialization: Promise<void> | undefined;
+export function initializeApplicationDatabase(): Promise<void> {
+  if (!databaseInitialization) {
+    databaseInitialization = (async () => {
+      await initDatabase();
+      await initializeTeacherSchema(pool, vaultPool);
+    })().catch(error => {
+      databaseInitialization = undefined;
+      throw error;
+    });
   }
+  return databaseInitialization;
+}
+
+async function main() {
+  await initializeApplicationDatabase();
   if (pool) {
     analyticsService = new LearningAnalyticsService(pool);
   }
@@ -12922,7 +12891,7 @@ async function main() {
     // Vite middleware for rendering frontend
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
-      server: { 
+      server: {
         middlewareMode: true,
         hmr: {
           port: 3001
@@ -12953,6 +12922,6 @@ export default app;
 if (!process.env.VERCEL && !process.env.VITEST && process.env.NODE_ENV !== "test") {
   main().catch((err) => {
     console.error("Critical server launch crash:", err);
+    process.exitCode = 1;
   });
 }
-

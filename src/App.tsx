@@ -132,22 +132,22 @@ const ViewLoadingFallback: React.FC = () => (
     <span className="text-xs font-mono text-slate-400 tracking-wider">Carregando módulo sob demanda...</span>
   </div>
 );
-import { 
-  exportUrgentAttentionInterventionPDF, 
-  openUrgentAttentionPrintPreview, 
-  openCorrectiveLessonPlanPrintPreview, 
-  safeAutoTable 
+import {
+  exportUrgentAttentionInterventionPDF,
+  openUrgentAttentionPrintPreview,
+  openCorrectiveLessonPlanPrintPreview,
+  safeAutoTable
 } from "./utils/pdfExport";
-import { 
-  Play, 
-  Terminal, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Trash2, 
-  Plus, 
-  Clock, 
-  Activity, 
-  Layers, 
+import {
+  Play,
+  Terminal,
+  AlertTriangle,
+  CheckCircle2,
+  Trash2,
+  Plus,
+  Clock,
+  Activity,
+  Layers,
   Award,
   ChevronRight,
   Code2,
@@ -473,7 +473,7 @@ export default function App() {
   }, [code]);
 
   const [testCases, setTestCases] = useState<TestCase[]>(INITIAL_TEST_CASES);
-  
+
   // Correction responses
   const [correcting, setCorrecting] = useState<boolean>(false);
   const [currentStage, setCurrentStage] = useState<string>("idle");
@@ -1042,7 +1042,7 @@ export default function App() {
     localStorage.setItem("pedagogicalNotes", JSON.stringify(pedagogicalNotes));
   }, [pedagogicalNotes]);
   const [loadingCorrectionVault, setLoadingCorrectionVault] = useState<boolean>(false);
-  
+
   const handleExportStudentReport = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -1055,12 +1055,12 @@ export default function App() {
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255);
     doc.text(`SENAI • Relatório de Desempenho Individual: ${selectedStudent}`, 14, 12);
-    
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(203, 213, 225);
     doc.text(`Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} • CodeCheck AI Academic Engine`, 14, 18);
-    
+
     // Performance Box
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(14, 30, pageWidth - 28, 20, 2, 2, "F");
@@ -1077,7 +1077,7 @@ export default function App() {
     doc.setTextColor(71, 85, 105);
     doc.text(`Média Consolidada: ${studentEvolutionData?.overall_average ?? 65}%`, 20, 44);
     doc.text(`Total de Submissões: ${studentEvolutionData?.attempts_count ?? 1}`, pageWidth / 2 + 10, 44);
-    
+
     // Competencies
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
@@ -1100,14 +1100,14 @@ export default function App() {
       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
       alternateRowStyles: { fillColor: [248, 250, 252] }
     });
-    
+
     // Feedback History
     doc.addPage();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(15, 23, 42);
     doc.text("Histórico de Feedback e Observações Pedagógicas", 14, 16);
-    
+
     const vaultRows = correctionVaultItems.map((corr, idx) => [
       `${idx + 1}. ${corr.question_title || "Atividade Prática"}`,
       `${corr.score}/100`,
@@ -1146,7 +1146,7 @@ export default function App() {
       doc.setTextColor(148, 163, 184);
       doc.text(`Página ${p} de ${totalPages} • CodeCheck AI SENAI`, pageWidth / 2, pageHeight - 8, { align: "center" });
     }
-    
+
     doc.save(`relatorio_${selectedStudent.replace(/\s+/g, '_')}.pdf`);
     toast.success(`Relatório individual de ${selectedStudent} baixado em PDF!`);
   };
@@ -1176,18 +1176,18 @@ export default function App() {
     doc.setFontSize(8.5);
     doc.setTextColor(203, 213, 225);
     doc.text(`Turmas: ${classA} vs ${classB} • Emissão: ${new Date().toLocaleDateString('pt-BR')}`, 14, 18);
-    
+
     if (dataA && dataB) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.setTextColor(15, 23, 42);
       doc.text("Dados Comparativos de Aproveitamento", 14, 34);
-      
+
       const compData = [
         [dataA.class_name, `${dataA.average_grade || 0}%`, String(dataA.total_submissions || 0)],
         [dataB.class_name, `${dataB.average_grade || 0}%`, String(dataB.total_submissions || 0)],
       ];
-      
+
       safeAutoTable(doc, {
         startY: 38,
         head: [["Turma", "Média Geral", "Total Submissões"]],
@@ -1196,10 +1196,10 @@ export default function App() {
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
         alternateRowStyles: { fillColor: [248, 250, 252] }
       });
-      
+
       const diff = Math.abs((dataA.average_grade || 0) - (dataB.average_grade || 0));
       const leader = (dataA.average_grade || 0) > (dataB.average_grade || 0) ? classA : classB;
-      
+
       const finalY = (doc as any).lastAutoTable?.finalY || 80;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
@@ -1227,7 +1227,7 @@ export default function App() {
           console.warn("Chart render skipped in comparative PDF:", err);
         }
     }
-    
+
     // Page Numbers
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
@@ -1327,7 +1327,7 @@ export default function App() {
     try {
       const resA = await fetch(apiUrl(`/api/analytics/class-average?name=${encodeURIComponent(classA)}`));
       const dataA = await resA.json();
-      
+
       const resB = await fetch(apiUrl(`/api/analytics/class-average?name=${encodeURIComponent(classB)}`));
       const dataB = await resB.json();
 
@@ -1498,7 +1498,7 @@ export default function App() {
       fetchQuestions();
       fetchSandboxStatus();
     }
-    
+
     // Fetch fresh feature flags and linting settings
     fetch(apiUrl("/api/feature-flags"))
       .then(res => safeJsonResponse(res))
@@ -1750,7 +1750,7 @@ export default function App() {
         const data = await response.json();
         if (data.success) {
           const extractedText = (data.text || data.transcribedCode || '').trim();
-          
+
           // Validação de densidade de texto do OCR (mínimo 5 caracteres significativos)
           if (extractedText.length < 5) {
             alert("Imagem ilegível: Pouco ou nenhum texto foi detectado na imagem. Por favor, certifique-se de que a imagem está nítida, bem iluminada e que o código está legível.");
@@ -1758,7 +1758,7 @@ export default function App() {
           }
 
           setCode(extractedText);
-          
+
           if (data.ai_analysis_available === false) {
              setVisualOcrNotes('Texto extraído com sucesso. A análise com IA está temporariamente indisponível.');
              setStudentName('');
@@ -1766,7 +1766,7 @@ export default function App() {
              setVisualOcrNotes(data.visualOcrNotes);
              setStudentName(data.studentName);
           }
-          
+
           setEditorInputMode("text"); // auto-switch to view editor
           setOcrLoadedBanner(true);
           setTimeout(() => setOcrLoadedBanner(false), 8000);
@@ -1801,8 +1801,19 @@ export default function App() {
   const [submissionsPollActive, setSubmissionsPollActive] = useState<boolean>(true);
   const [submissionRetryCount, setSubmissionRetryCount] = useState<number>(0);
 
+  useEffect(() => {
+    setSubmissionRetryCount(0);
+    setSubmissionsError(null);
+    setSubmissionsPollActive(true);
+    if (!user) {
+      setSubmissions([]);
+      setCorrectorClasses([]);
+    }
+  }, [user?.id]);
+
   // Fetch histories on mount/tab swap
   const fetchSubmissions = async () => {
+    if (!user || isLoading) return;
     // 1. Não buscar se o módulo não estiver ativo
     const isModuleActive = featureFlags?.ENABLE_RUBRIC_CORRECTION !== false;
     if (!isModuleActive) {
@@ -1882,16 +1893,18 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!user || isLoading) return;
     if (!submissionsPollActive) return;
     fetchSubmissions();
     const interval = setInterval(() => {
       fetchSubmissions();
     }, 20000);
     return () => clearInterval(interval);
-  }, [submissionsPollActive, featureFlags?.ENABLE_RUBRIC_CORRECTION]);
+  }, [submissionsPollActive, featureFlags?.ENABLE_RUBRIC_CORRECTION, user, isLoading]);
 
   // Fetch classes on mount and when entering class/grade management tabs
   useEffect(() => {
+    if (!user || isLoading) return;
     const fetchCorrectorClasses = () => {
       fetch(apiUrl("/api/classes"))
         .then(res => safeJsonResponse(res))
@@ -1917,7 +1930,7 @@ export default function App() {
           let localDemos: any[] = [];
           try {
             const raw = localStorage.getItem("codecheck_demo_classes");
-            if (raw) localDemos = JSON.parse(raw);
+            if (raw && user?.role === "DEMO") localDemos = JSON.parse(raw);
           } catch {}
 
           const mergedMap = new Map();
@@ -1942,7 +1955,7 @@ export default function App() {
           let localDemos: any[] = [];
           try {
             const raw = localStorage.getItem("codecheck_demo_classes");
-            if (raw) localDemos = JSON.parse(raw);
+            if (raw && user?.role === "DEMO") localDemos = JSON.parse(raw);
           } catch {}
           if (localDemos.length > 0) {
             setCorrectorClasses(localDemos);
@@ -1957,7 +1970,7 @@ export default function App() {
     fetchCorrectorClasses();
     window.addEventListener("codecheck_classes_updated", fetchCorrectorClasses);
     return () => window.removeEventListener("codecheck_classes_updated", fetchCorrectorClasses);
-  }, [currentTab, user]);
+  }, [currentTab, user, isLoading]);
 
   // Synchronously fetch students and activities for the selected corrector class
   useEffect(() => {
@@ -2079,7 +2092,7 @@ export default function App() {
       toast.error("Selecione uma turma antes de salvar a correção.");
       return;
     }
-    
+
     if (!selectedCorrectorStudent) {
       toast.error("Selecione um aluno antes de salvar a correção.");
       return;
@@ -2140,7 +2153,7 @@ export default function App() {
       if (response.ok) {
         setCurrentStage("completed");
         const evalResult = await response.json();
-        
+
         // Save the result to the profile
         const resolvedStudentKey = resolveStudentKey(currentStudent) || selectedCorrectorStudent;
 
@@ -2308,18 +2321,18 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[#030712] overflow-hidden text-slate-100 font-sans antialiased">
       {/* Visual Sidebar Layout */}
-      <Sidebar 
-        currentTab={currentTab} 
-        setTab={setTab} 
-        dbConnected={dbConnected} 
-        featureFlags={featureFlags} 
-        onOpenExportModal={() => setShowExportModal(true)} 
+      <Sidebar
+        currentTab={currentTab}
+        setTab={setTab}
+        dbConnected={dbConnected}
+        featureFlags={featureFlags}
+        onOpenExportModal={() => setShowExportModal(true)}
         onOpenCommandPalette={() => setShowCommandPalette(true)}
       />
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#070a1a]">
-        
+
         {/* PUBLIC DEMO MODE ISOLATION BANNER */}
         {isDemoMode && (
           <div className="bg-amber-500/10 border-b border-amber-500/30 px-6 py-2 text-amber-300 text-xs font-mono flex items-center justify-between z-50 shrink-0">
@@ -2401,7 +2414,7 @@ export default function App() {
                     <div className="py-2">
                       <span className="px-3 text-[10px] font-mono text-emerald-400 uppercase font-bold">Estudantes</span>
                       {matchedStudents.map((std, idx) => (
-                        <div 
+                        <div
                           key={idx}
                           onClick={() => {
                             setGlobalSearchQuery(std);
@@ -2422,7 +2435,7 @@ export default function App() {
                     <div className="py-2 border-t border-slate-800/60">
                       <span className="px-3 text-[10px] font-mono text-indigo-400 uppercase font-bold">Turmas</span>
                       {matchedTurmas.map((t, idx) => (
-                        <div 
+                        <div
                           key={idx}
                           onClick={() => {
                             setGlobalSearchQuery(t);
@@ -2443,7 +2456,7 @@ export default function App() {
                     <div className="py-2 border-t border-slate-800/60">
                       <span className="px-3 text-[10px] font-mono text-amber-400 uppercase font-bold">Submissões</span>
                       {matchedSubmissions.map((s, idx) => (
-                        <div 
+                        <div
                           key={idx}
                           onClick={() => {
                             setGlobalSearchOpen(false);
@@ -2482,7 +2495,7 @@ export default function App() {
             </button>
 
             {/* Modo Produtividade Toggle */}
-            <button 
+            <button
               onClick={() => {
                 const newVal = !productivityFocused;
                 setProductivityFocused(newVal);
@@ -2509,7 +2522,7 @@ export default function App() {
             </button>
 
             {/* Notification triggers */}
-            <button 
+            <button
               onClick={() => setNotificationOpen(!notificationOpen)}
               className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900/80 hover:text-white transition-all text-slate-400 relative"
             >
@@ -2545,7 +2558,7 @@ export default function App() {
           {notificationOpen && (
             <>
               {/* overlay mask */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -2554,7 +2567,7 @@ export default function App() {
               />
 
               {/* panel slider from right */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: 360 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 360 }}
@@ -2567,7 +2580,7 @@ export default function App() {
                       <Bell className="w-5 h-5 text-emerald-400" />
                       <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">Central de Notificações</h3>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setNotificationOpen(false)}
                       className="text-xs font-mono font-bold text-slate-500 hover:text-white uppercase transition-colors"
                     >
@@ -2612,7 +2625,7 @@ export default function App() {
                 </div>
 
                 <div className="border-t border-slate-800/80 pt-4 flex flex-col gap-2">
-                  <button 
+                  <button
                     onClick={() => setNotificationOpen(false)}
                     className="w-full bg-slate-900 hover:bg-slate-800 transition)all border border-slate-800 py-2.5 rounded-xl font-mono text-xs font-bold text-slate-300 hover:text-white"
                   >
@@ -2742,7 +2755,7 @@ export default function App() {
             <StudentsManagerView onNavigateTab={setTab} />
           )}
           {currentTab === "notas" && (
-            <GradesManagerView 
+            <GradesManagerView
               classes={correctorClasses}
               selectedClass={selectedCorrectorClass}
               setSelectedClass={setSelectedCorrectorClass}
@@ -2777,7 +2790,7 @@ export default function App() {
           {currentTab === "question_bank" && (
             <QuestionBankView />
           )}
-          
+
           {currentTab === "smart_labs" && (
             <SmartLabsView />
           )}
@@ -3008,7 +3021,7 @@ export default function App() {
 
           {currentTab === "corrector" && (
             <div className="max-w-6xl mx-auto flex flex-col gap-6">
-              
+
               {/* Header description */}
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
@@ -3017,7 +3030,7 @@ export default function App() {
                     Insira o código-fonte, selecione a linguagem-alvo correspondente e estipule os casos de verificação de entrada e saída esperados.
                   </p>
                 </div>
-                
+
                 {/* Sandbox Monitor - Professional UI */}
                 <div className="bg-[#0f172a] border border-[#1e295b]/30 rounded-xl px-4 py-2.5 flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
                   <div className="flex flex-col">
@@ -3027,9 +3040,9 @@ export default function App() {
                        <span className="text-xs font-bold text-slate-200 capitalize">{sandboxStatus?.status || 'Processando...'}</span>
                     </div>
                   </div>
-                  
+
                   <div className="h-8 w-px bg-slate-800/50" />
-                  
+
                   <div className="flex flex-col">
                     <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest">Isolamento</span>
                     <span className="text-xs font-bold text-emerald-400 font-mono">SUBPROCESS_JAIL</span>
@@ -3051,10 +3064,10 @@ export default function App() {
 
               {/* Grid content */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
+
                 {/* Left panel edit */}
                 <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-                  
+
                   {/* Select options */}
                   <div className="p-5 rounded-2xl bg-[#0f172a] border border-[#1e295b]/30">
                     <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">
@@ -3104,19 +3117,19 @@ export default function App() {
                     {selectedCorrectorClass && (
                       <div className="mt-3">
                         <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Aluno(a)</label>
-                        <select 
-                          value={selectedCorrectorStudent} 
-                          onChange={e => { 
+                        <select
+                          value={selectedCorrectorStudent}
+                          onChange={e => {
                             const val = e.target.value;
-                            setSelectedCorrectorStudent(val); 
+                            setSelectedCorrectorStudent(val);
                             const st = correctorStudents.find(student => student.id === val);
                             if (st) {
                               setStudentName(st.name);
                             } else {
                               setStudentName(null);
                             }
-                            setShowCorrectorStudentWarning(false); 
-                          }} 
+                            setShowCorrectorStudentWarning(false);
+                          }}
                           className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer"
                         >
                           <option value="">Selecione o Aluno...</option>
@@ -3127,9 +3140,9 @@ export default function App() {
                     {selectedCorrectorClass && (
                       <div className="mt-3">
                         <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Atividade Vinculada</label>
-                        <select 
-                          value={selectedCorrectorActivity} 
-                          onChange={e => { 
+                        <select
+                          value={selectedCorrectorActivity}
+                          onChange={e => {
                             const actId = e.target.value;
                             setSelectedCorrectorActivity(actId);
                             const actObj = correctorActivities.find(a => a.id === actId);
@@ -3138,7 +3151,7 @@ export default function App() {
                                 setLanguage(actObj.language);
                               }
                             }
-                          }} 
+                          }}
                           className="w-full bg-[#070a1a] border border-[#1e295b]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-emerald-500 text-slate-200 transition-all cursor-pointer"
                         >
                           <option value="">Instrução Livre (Sem atividade específica)</option>
@@ -3175,17 +3188,17 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col gap-3">
-                      
+
                       {/* Syntax Weight */}
                       <div className="flex flex-col gap-1">
                         <div className="flex justify-between text-xs font-mono text-slate-300">
                           <span>Sintaxe & Compilação:</span>
                           <span className="font-bold text-white">{rubricWeights.syntax_weight}%</span>
                         </div>
-                        <input 
-                          type="range" 
-                          min={0} 
-                          max={100} 
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
                           className="w-full accent-emerald-500 h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer"
                           value={rubricWeights.syntax_weight}
                           onChange={(e) => {
@@ -3206,10 +3219,10 @@ export default function App() {
                           <span>Casos de Testes:</span>
                           <span className="font-bold text-white">{rubricWeights.tests_weight}%</span>
                         </div>
-                        <input 
-                          type="range" 
-                          min={0} 
-                          max={100} 
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
                           className="w-full accent-emerald-500 h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer"
                           value={rubricWeights.tests_weight}
                           onChange={(e) => {
@@ -3230,10 +3243,10 @@ export default function App() {
                           <span>Qualidade & DRY:</span>
                           <span className="font-bold text-white">{rubricWeights.quality_weight}%</span>
                         </div>
-                        <input 
-                          type="range" 
-                          min={0} 
-                          max={100} 
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
                           className="w-full accent-emerald-500 h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer"
                           value={rubricWeights.quality_weight}
                           onChange={(e) => {
@@ -3267,8 +3280,8 @@ export default function App() {
                           <span className="text-xs font-mono font-bold tracking-wide uppercase text-slate-300">Editor de Código</span>
                         </div>
                         <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                          autosaveStatus === "saving" 
-                            ? "bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse" 
+                          autosaveStatus === "saving"
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse"
                             : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                         }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${autosaveStatus === "saving" ? "bg-amber-400 animate-ping" : "bg-emerald-400"}`} />
@@ -3366,7 +3379,7 @@ export default function App() {
                           <Sparkles className="w-4 h-4 animate-bounce shrink-0" />
                           <span>Código extraído com sucesso da imagem pela IA! Veja ou ajuste no editor abaixo.</span>
                         </span>
-                        <button 
+                        <button
                           onClick={() => setOcrLoadedBanner(false)}
                           className="hover:text-white font-mono"
                         >
@@ -3464,8 +3477,8 @@ export default function App() {
                             onDrop={handleDrop}
                             onClick={triggerFileSelect}
                             className={`w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-all cursor-pointer group select-none min-h-[260px] ${
-                              isDragging 
-                                ? "border-emerald-400 bg-emerald-500/5 shadow-inner" 
+                              isDragging
+                                ? "border-emerald-400 bg-emerald-500/5 shadow-inner"
                                 : "border-[#1e295b]/60 hover:border-emerald-500/50 bg-[#0b0f24]/50"
                             }`}
                           >
@@ -3542,7 +3555,7 @@ export default function App() {
                                   </>
                                 )}
                               </button>
-                              
+
                               <button
                                 onClick={() => { setSelectedImage(null); setRoiImage(null); }}
                                 className="text-xs text-slate-500 hover:text-slate-300 text-center font-semibold transition-colors mt-1"
@@ -3661,10 +3674,10 @@ export default function App() {
 
                 {/* Right panel result outputs */}
                 <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-                  
+
                   {/* Title */}
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 min-h-[400px] flex flex-col justify-between">
-                    
+
                     <div>
                       <div className="flex items-center gap-2 border-b border-[#1e295b]/30 pb-4 mb-5">
                         <Terminal className="w-5 h-5 text-emerald-400" />
@@ -3673,7 +3686,7 @@ export default function App() {
 
                       {result ? (
                         <div className="flex flex-col gap-5">
-                          
+
                           {/* Score widget */}
                           <div className="p-5 rounded-xl bg-[#030712] border border-[#1e295b]/30 flex items-center gap-4">
                             <div className="w-16 h-16 rounded-full border-4 border-emerald-500/30 flex items-center justify-center bg-emerald-500/5 relative shrink-0">
@@ -3752,7 +3765,7 @@ export default function App() {
                                       <span className="font-mono font-bold text-slate-200">{skill.val}%</span>
                                     </div>
                                     <div className="w-full h-1.5 bg-[#172554] rounded-full overflow-hidden">
-                                      <div 
+                                      <div
                                         className={`h-full rounded-full ${
                                           skill.val >= 70 ? "bg-gradient-to-r from-emerald-500 to-teal-400" : skill.val >= 40 ? "bg-amber-400" : "bg-rose-500"
                                         }`}
@@ -3768,8 +3781,8 @@ export default function App() {
                           {/* PRIORITY 6: IA Code Generation Probability Shield */}
                           {result.ai_detection && (
                             <div className={`p-4 rounded-xl border ${
-                              result.ai_detection.probability === "HIGH" 
-                                ? "bg-amber-500/10 border-amber-500/20 text-amber-400" 
+                              result.ai_detection.probability === "HIGH"
+                                ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
                                 : result.ai_detection.probability === "MEDIUM"
                                   ? "bg-amber-500/5 border-amber-500/15 text-slate-300"
                                   : "bg-emerald-500/5 border-emerald-500/15 text-slate-300"
@@ -3780,8 +3793,8 @@ export default function App() {
                                   Detecção de código sintético por IA
                                 </span>
                                 <span className={`px-2 py-0.5 rounded font-bold text-[9px] ${
-                                  result.ai_detection.probability === "HIGH" 
-                                    ? "bg-amber-500/20 text-amber-300" 
+                                  result.ai_detection.probability === "HIGH"
+                                    ? "bg-amber-500/20 text-amber-300"
                                     : result.ai_detection.probability === "MEDIUM"
                                       ? "bg-amber-500/10 text-amber-200"
                                       : "bg-emerald-500/20 text-emerald-400"
@@ -3868,7 +3881,7 @@ export default function App() {
                               <p className="text-xs leading-relaxed text-slate-300">
                                 {aiFb.summary || aiFb.resumo_desempenho}
                               </p>
-                              
+
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
                                   <span className="text-[10px] uppercase font-mono font-bold text-emerald-400 block mb-1">Pontos Fortes</span>
@@ -3923,7 +3936,7 @@ export default function App() {
                               </span>
                               <span className="text-emerald-400 font-mono font-bold animate-pulse text-[11px]">SANDBOX SECURE RUN</span>
                             </div>
-                            
+
                             {/* Linear progress loading indicator */}
                             <div className="w-full h-1.5 bg-[#030712] rounded-full mt-3.5 overflow-hidden border border-[#1e295b]/30">
                               <div className="h-full bg-gradient-to-r from-teal-500 via-emerald-400 to-[#10b981] animate-pulse w-full rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
@@ -3932,12 +3945,12 @@ export default function App() {
 
                           {/* Individual processing pipeline step items */}
                           <div className="flex flex-col gap-4">
-                            
+
                             {/* Stage 1: Security Audit */}
-                            <motion.div 
+                            <motion.div
                               initial={{ opacity: 0, x: -20 }}
-                              animate={{ 
-                                opacity: 1, 
+                              animate={{
+                                opacity: 1,
                                 x: 0,
                                 scale: currentStage === "security" ? 1.02 : 1,
                                 borderColor: currentStage === "security" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
@@ -3948,10 +3961,10 @@ export default function App() {
                             >
                               <div className="mt-0.5 relative">
                                 {currentStage === "security" ? (
-                                  <motion.div 
+                                  <motion.div
                                     animate={{ rotate: 360 }}
                                     transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0"
                                   />
                                 ) : (
                                   <motion.div
@@ -3968,7 +3981,7 @@ export default function App() {
                                   1. AUDITORIA PREVENTIVA DE SEGURANÇA IMEDIATA
                                 </h4>
                                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                                  {currentStage === "security" 
+                                  {currentStage === "security"
                                     ? "Examinando script em busca de chamadas de system, hacks, loops infinitos de escape ou memory exhaustion..."
                                     : "Validação estática de ameaça concluída sob isolamento rigoroso de sandbox de container."}
                                 </p>
@@ -3976,10 +3989,10 @@ export default function App() {
                             </motion.div>
 
                             {/* Stage 2: Unit test cases suite execution */}
-                            <motion.div 
+                            <motion.div
                               initial={{ opacity: 0, x: -20 }}
-                              animate={{ 
-                                opacity: 1, 
+                              animate={{
+                                opacity: 1,
                                 x: 0,
                                 scale: currentStage === "tests" ? 1.02 : 1,
                                 borderColor: currentStage === "tests" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
@@ -3993,10 +4006,10 @@ export default function App() {
                                 {currentStage === "security" ? (
                                   <Clock className="w-5 h-5 text-slate-600 shrink-0" />
                                 ) : currentStage === "tests" ? (
-                                  <motion.div 
+                                  <motion.div
                                     animate={{ rotate: 360 }}
                                     transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0"
                                   />
                                 ) : (
                                   <motion.div
@@ -4013,18 +4026,18 @@ export default function App() {
                                   2. EXECUÇÃO DOS CASOS DE TESTES UNITÁRIOS ({testCases.length} INSTÂNCIAS)
                                 </h4>
                                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                                  {currentStage === "security" 
-                                    ? "No aguardo da liberação estática..." 
+                                  {currentStage === "security"
+                                    ? "No aguardo da liberação estática..."
                                     : currentStage === "tests"
                                       ? "Injetando entradas no terminal redirecionado de stdin d_correction. Medindo tempos de resposta..."
                                       : "Simulações de pipeline de testes executadas sob tolerância float/espaço."}
                                 </p>
-                                
+
                                 {currentStage === "tests" && (
                                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                                     {testCases.map((_, i) => (
-                                      <motion.span 
-                                        key={i} 
+                                      <motion.span
+                                        key={i}
                                         initial={{ opacity: 0, scale: 0.8 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         transition={{ delay: i * 0.1 }}
@@ -4040,10 +4053,10 @@ export default function App() {
                             </motion.div>
 
                             {/* Stage 3: Static rules analyzer */}
-                            <motion.div 
+                            <motion.div
                               initial={{ opacity: 0, x: -20 }}
-                              animate={{ 
-                                opacity: 1, 
+                              animate={{
+                                opacity: 1,
                                 x: 0,
                                 scale: currentStage === "quality" ? 1.02 : 1,
                                 borderColor: currentStage === "quality" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
@@ -4057,10 +4070,10 @@ export default function App() {
                                 {["security", "tests"].includes(currentStage) ? (
                                   <Clock className="w-5 h-5 text-slate-600 shrink-0" />
                                 ) : currentStage === "quality" ? (
-                                  <motion.div 
+                                  <motion.div
                                     animate={{ rotate: 360 }}
                                     transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0"
                                   />
                                 ) : (
                                   <motion.div
@@ -4087,10 +4100,10 @@ export default function App() {
                             </motion.div>
 
                             {/* Stage 4: Generative Pedagogical Feedback synthesis with Gemini AI */}
-                            <motion.div 
+                            <motion.div
                               initial={{ opacity: 0, x: -20 }}
-                              animate={{ 
-                                opacity: 1, 
+                              animate={{
+                                opacity: 1,
                                 x: 0,
                                 scale: currentStage === "feedback" ? 1.02 : 1,
                                 borderColor: currentStage === "feedback" ? "rgba(16, 185, 129, 0.4)" : "rgba(30, 41, 91, 0.1)"
@@ -4104,10 +4117,10 @@ export default function App() {
                                 {["security", "tests", "quality"].includes(currentStage) ? (
                                   <Clock className="w-5 h-5 text-slate-600 shrink-0" />
                                 ) : (
-                                  <motion.div 
+                                  <motion.div
                                     animate={{ rotate: 360 }}
                                     transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0" 
+                                    className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent shrink-0"
                                   />
                                 )}
                               </div>
@@ -4139,7 +4152,7 @@ export default function App() {
                     </div>
 
                   </div>
-                  
+
                 </div>
 
               </div>
@@ -4149,7 +4162,7 @@ export default function App() {
 
           {currentTab === "history" && (
             <div className="max-w-6xl mx-auto flex flex-col gap-6">
-              
+
               <div>
                 <h2 className="text-2xl font-bold tracking-tight text-white font-display">Histórico Geral de Submissões</h2>
                 <p className="text-sm text-slate-400 mt-1">
@@ -4161,14 +4174,14 @@ export default function App() {
                 <div className="px-6 py-4 border-b border-[#1e295b]/30 bg-[#161f36] flex justify-between items-center">
                   <span className="text-xs font-mono font-bold uppercase tracking-wide text-slate-300">Últimos Lançamentos</span>
                   <div className="flex gap-4 items-center">
-                    <button 
+                    <button
                       onClick={exportSubmissionsCSV}
                       className="text-xs font-mono text-indigo-400 hover:underline font-semibold flex items-center gap-1"
                     >
                       <Download className="w-3.5 h-3.5" />
                       EXPORTAR CSV
                     </button>
-                    <button 
+                    <button
                       onClick={fetchSubmissions}
                       className="text-xs font-mono text-emerald-400 hover:underline font-semibold"
                     >
@@ -4181,7 +4194,7 @@ export default function App() {
                   <div className="divide-y divide-[#1e295b]/20">
                     {submissions.map((val, idx) => (
                       <div key={idx} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#111936]/30 transition-all">
-                        
+
                         <div className="flex items-start gap-4">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                             val.submission.status === "success" ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" : "bg-rose-500/10 border border-rose-500/20 text-rose-400"
@@ -4200,12 +4213,12 @@ export default function App() {
                                 </span>
                               )}
                             </div>
-                            
+
                             {/* Short preview of code */}
                             <pre className="font-mono text-[11px] text-slate-500 max-w-lg truncate mt-1 bg-[#030712]/40 px-2 py-1 rounded">
                               {val.submission.code}
                             </pre>
-                            
+
                             <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono mt-2">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3.5 h-3.5" />
@@ -4256,7 +4269,7 @@ export default function App() {
             <ActivityBankView featureFlags={featureFlags} />
           ) : currentTab === "questions" && (
             <div className="max-w-6xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
-              
+
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-bold tracking-tight text-white font-display">Banco de Questões Inteligentes</h2>
@@ -4274,11 +4287,11 @@ export default function App() {
               {isCreatingQuestion ? (
                 <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 max-w-2xl mx-auto w-full flex flex-col gap-4">
                   <h3 className="font-bold text-white border-b border-[#1e295b]/20 pb-2">Cadastrar Novo Desafio Prático</h3>
-                  
+
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Título da Questão</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Ex: Validador de Senhas Seguras (SAEP)"
                       className="px-3.5 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
                       value={newQuestionForm.title}
@@ -4288,7 +4301,7 @@ export default function App() {
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Descrição Detalhada (Instruções Didáticas)</label>
-                    <textarea 
+                    <textarea
                       placeholder="Descreva as instruções que o aluno irá ler..."
                       rows={3}
                       className="px-3.5 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
@@ -4300,7 +4313,7 @@ export default function App() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Linguagem-Alvo</label>
-                      <select 
+                      <select
                         className="px-3 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
                         value={newQuestionForm.language}
                         onChange={(e) => setNewQuestionForm({ ...newQuestionForm, language: e.target.value })}
@@ -4315,7 +4328,7 @@ export default function App() {
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Dificuldade</label>
-                      <select 
+                      <select
                         className="px-3 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
                         value={newQuestionForm.difficulty}
                         onChange={(e) => setNewQuestionForm({ ...newQuestionForm, difficulty: e.target.value as any })}
@@ -4328,8 +4341,8 @@ export default function App() {
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Prazo</label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         className="px-3 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
                         value={newQuestionForm.deadline}
                         onChange={(e) => setNewQuestionForm({ ...newQuestionForm, deadline: e.target.value })}
@@ -4339,7 +4352,7 @@ export default function App() {
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-400 font-mono uppercase tracking-wider">Template do Código Inicial (Starter Template)</label>
-                    <textarea 
+                    <textarea
                       placeholder="Insira o código base para o aluno..."
                       rows={3}
                       className="px-3.5 py-2 rounded-lg bg-[#030712] border border-[#1e295b]/30 text-sm font-mono text-slate-100 focus:outline-none focus:border-emerald-500 resize-none"
@@ -4351,9 +4364,9 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4 border-t border-[#1e295b]/20 pt-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-mono text-slate-400">Caso de Teste 1 (Input STDIN)</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: 5 10" 
+                      <input
+                        type="text"
+                        placeholder="Ex: 5 10"
                         className="px-3 py-1.5 rounded-md bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-200"
                         value={newQuestionForm.input_test_1}
                         onChange={(e) => setNewQuestionForm({ ...newQuestionForm, input_test_1: e.target.value })}
@@ -4361,9 +4374,9 @@ export default function App() {
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-mono text-slate-400">Caso de Teste 1 (Output STDOUT)</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: 15" 
+                      <input
+                        type="text"
+                        placeholder="Ex: 15"
                         className="px-3 py-1.5 rounded-md bg-[#030712] border border-[#1e295b]/30 text-xs text-slate-200"
                         value={newQuestionForm.output_test_1}
                         onChange={(e) => setNewQuestionForm({ ...newQuestionForm, output_test_1: e.target.value })}
@@ -4371,13 +4384,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     onClick={async () => {
                       if (!newQuestionForm.title || !newQuestionForm.description) {
                         alert("Preencha todos os campos obrigatórios.");
                         return;
                       }
-                      
+
                       const tcs = [];
                       if (newQuestionForm.input_test_1 || newQuestionForm.output_test_1) {
                         tcs.push({ input: newQuestionForm.input_test_1, expected_output: newQuestionForm.output_test_1 });
@@ -4434,7 +4447,7 @@ export default function App() {
                   {questions.length > 0 ? (
                     questions.map((q: any) => (
                       <div key={q.id} className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 hover:border-emerald-500/50 transition-all flex flex-col justify-between gap-5 group">
-                        
+
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-semibold">{q.language}</span>
@@ -4445,7 +4458,7 @@ export default function App() {
                               {q.difficulty}
                             </span>
                           </div>
-                          
+
                           <h3 className="font-bold text-white text-base leading-snug font-display mt-1">{q.title}</h3>
                           <p className="text-xs text-slate-400 leading-relaxed max-h-20 overflow-hidden text-ellipsis mt-1">{q.description}</p>
                         </div>
@@ -4504,7 +4517,7 @@ export default function App() {
 
           {currentTab === "health" && (
             <div className="max-w-4xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
-              
+
               <div>
                 <h2 className="text-2xl font-bold tracking-tight text-white font-display">Cockpit de Observabilidade e Diagnóstico</h2>
                 <p className="text-sm text-slate-400 mt-1">Estatísticas vitais da integridade da aplicação e parâmetros de isolamento das sandboxes.</p>
@@ -4519,7 +4532,7 @@ export default function App() {
                 <>
                   {/* Status matrix */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    
+
                     {/* Postgres Database Status */}
                     <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-5 flex flex-col gap-3 justify-between">
                       <div className="flex items-center justify-between">
@@ -4660,7 +4673,7 @@ export default function App() {
 
           {currentTab === "settings" && (
             <div className="max-w-4xl mx-auto flex flex-col gap-6 animate-fade-in text-slate-100">
-              
+
               <div>
                 <h2 className="text-2xl font-bold tracking-tight text-white font-display">Configurações do Professor</h2>
                 <p className="text-sm text-slate-400 mt-1">Definição de regras de linting de código, gerenciamento de feature flags e auditoria do sistema.</p>
@@ -4668,10 +4681,10 @@ export default function App() {
 
               {/* Grid Layout to split columns */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
+
                 {/* Left column: Linting and Feature Flags */}
                 <div className="lg:col-span-7 flex flex-col gap-6">
-                  
+
                   {/* Card: Linting Style Rules */}
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-5">
                     <div className="border-b border-[#1e295b]/20 pb-3">
@@ -4686,8 +4699,8 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Obrigatoriedade de Comentários</span>
                           <span className="text-[11px] text-slate-400 leading-relaxed">Exige a presença de comentários explicativos no código-fonte para aprovação.</span>
                         </div>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={lintSettings.requireComments}
                           onChange={(e) => setLintSettings({ ...lintSettings, requireComments: e.target.checked })}
                           className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
@@ -4700,8 +4713,8 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Verificar Indentação Correta</span>
                           <span className="text-[11px] text-slate-400 leading-relaxed">Garante uso consistente de espaços ou tabs sem blocos desalinhados.</span>
                         </div>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={lintSettings.requireIndentation}
                           onChange={(e) => setLintSettings({ ...lintSettings, requireIndentation: e.target.checked })}
                           className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
@@ -4714,8 +4727,8 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Restringir Variáveis de Letra Única</span>
                           <span className="text-[11px] text-slate-400 leading-relaxed">Impede o uso excessivo de variáveis curtas (ex: x, y, a) que dificultam a legibilidade.</span>
                         </div>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={lintSettings.requireNoSingleLetterVars}
                           onChange={(e) => setLintSettings({ ...lintSettings, requireNoSingleLetterVars: e.target.checked })}
                           className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
@@ -4728,8 +4741,8 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Exigir Estruturação por Funções</span>
                           <span className="text-[11px] text-slate-400 leading-relaxed">Exige a criação de funções isoladas e escopos limpos ao invés de código linear solto.</span>
                         </div>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={lintSettings.requireFunctions}
                           onChange={(e) => setLintSettings({ ...lintSettings, requireFunctions: e.target.checked })}
                           className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
@@ -4742,8 +4755,8 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Obrigatoriedade de JSDoc / Docstrings</span>
                           <span className="text-[11px] text-slate-400 leading-relaxed">Exige a presença de comentários JSDoc ou docstrings em todas as funções definidas no código.</span>
                         </div>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={lintSettings.requireJsDoc}
                           onChange={(e) => setLintSettings({ ...lintSettings, requireJsDoc: e.target.checked })}
                           className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20 mt-1"
@@ -4757,10 +4770,10 @@ export default function App() {
                           <span className="font-mono text-xs font-bold text-emerald-400">{lintSettings.maxLinesLimit} linhas</span>
                         </div>
                         <p className="text-[11px] text-slate-400 leading-relaxed">Alertará se o arquivo enviado ultrapassar este limite de tamanho.</p>
-                        <input 
-                          type="range" 
-                          min="10" 
-                          max="250" 
+                        <input
+                          type="range"
+                          min="10"
+                          max="250"
                           value={lintSettings.maxLinesLimit}
                           onChange={(e) => setLintSettings({ ...lintSettings, maxLinesLimit: parseInt(e.target.value) })}
                           className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 mt-1"
@@ -4771,8 +4784,8 @@ export default function App() {
                       <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-3 shadow-sm">
                         <div className="flex items-center justify-between">
                           <label className="flex items-center gap-2 cursor-pointer">
-                            <input 
-                              type="checkbox" 
+                            <input
+                              type="checkbox"
                               checked={lintSettings.checkCyclomaticComplexity !== false}
                               onChange={(e) => setLintSettings({ ...lintSettings, checkCyclomaticComplexity: e.target.checked })}
                               className="w-4 h-4 rounded text-emerald-500 bg-[#030712] border-slate-700 focus:ring-emerald-500/20"
@@ -4783,10 +4796,10 @@ export default function App() {
                         </div>
                         <p className="text-[11px] text-slate-400 leading-relaxed">Calcula pontos de decisão (if, loops, operadores lógicos) e emite aviso se a complexidade for alta.</p>
                         {lintSettings.checkCyclomaticComplexity !== false && (
-                          <input 
-                            type="range" 
-                            min="3" 
-                            max="25" 
+                          <input
+                            type="range"
+                            min="3"
+                            max="25"
                             value={lintSettings.maxComplexity || 10}
                             onChange={(e) => setLintSettings({ ...lintSettings, maxComplexity: parseInt(e.target.value) })}
                             className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 mt-1"
@@ -4822,7 +4835,7 @@ export default function App() {
                       {/* Turma Selection */}
                       <div className="flex flex-col gap-2">
                         <label className="text-xs font-bold text-slate-300">Selecionar Turma Alvo</label>
-                        <select 
+                        <select
                           value={slaSettings.selectedClass}
                           onChange={(e) => setSlaSettings({ ...slaSettings, selectedClass: e.target.value })}
                           className="w-full bg-[#030712] border border-[#1e295b]/40 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 shadow-sm"
@@ -4845,7 +4858,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Ativar Alertas de Estouro de SLA</span>
                           <span className="text-[11px] text-slate-400 leading-relaxed">Envia notificação ao professor quando discentes ultrapassam o tempo limite.</span>
                         </div>
-                        <input 
+                        <input
                           type="checkbox"
                           checked={slaSettings.enableAlerts}
                           onChange={(e) => setSlaSettings({ ...slaSettings, enableAlerts: e.target.checked })}
@@ -4888,7 +4901,7 @@ export default function App() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
                           <span className="text-[11px] font-bold text-emerald-400">Fácil (Easy) - Minutos</span>
-                          <input 
+                          <input
                             type="number"
                             min="5"
                             max="120"
@@ -4900,7 +4913,7 @@ export default function App() {
 
                         <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
                           <span className="text-[11px] font-bold text-blue-400">Médio (Medium) - Minutos</span>
-                          <input 
+                          <input
                             type="number"
                             min="10"
                             max="240"
@@ -4912,7 +4925,7 @@ export default function App() {
 
                         <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
                           <span className="text-[11px] font-bold text-amber-400">Difícil (Hard) - Minutos</span>
-                          <input 
+                          <input
                             type="number"
                             min="15"
                             max="480"
@@ -4924,7 +4937,7 @@ export default function App() {
 
                         <div className="p-4 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-2 shadow-sm">
                           <span className="text-[11px] font-bold text-rose-400">Avançado (Advanced) - Minutos</span>
-                          <input 
+                          <input
                             type="number"
                             min="30"
                             max="720"
@@ -4944,7 +4957,7 @@ export default function App() {
                              </span>
                              <p className="text-[10px] text-slate-400 mt-0.5">Visualize e filtre tags com SLA configurado ou pendente de definição.</p>
                            </div>
-                           
+
                            {/* Filter Pills */}
                            <div className="flex items-center gap-1.5 bg-[#030712] p-1 rounded-xl border border-slate-800">
                              <button
@@ -5097,7 +5110,7 @@ export default function App() {
                             <span className="text-xs font-bold text-slate-200">Alertas por E-mail</span>
                             <span className="text-[10px] text-slate-400">Disparo automático para o e-mail cadastrado.</span>
                           </div>
-                          <input 
+                          <input
                             type="checkbox"
                             checked={slaSettings.notifyEmail}
                             onChange={(e) => setSlaSettings({ ...slaSettings, notifyEmail: e.target.checked })}
@@ -5110,7 +5123,7 @@ export default function App() {
                             <span className="text-xs font-bold text-slate-200">Notificações In-App</span>
                             <span className="text-[10px] text-slate-400">Avisos em tempo real no dashboard.</span>
                           </div>
-                          <input 
+                          <input
                             type="checkbox"
                             checked={slaSettings.notifyInApp}
                             onChange={(e) => setSlaSettings({ ...slaSettings, notifyInApp: e.target.checked })}
@@ -5127,7 +5140,7 @@ export default function App() {
                           </span>
                           <span className="text-[10px] text-slate-400">Envia alerta por e-mail automaticamente caso uma tarefa de backup programado (BACKUP_CRON_SCHEDULE) falhe.</span>
                         </div>
-                        <input 
+                        <input
                           type="checkbox"
                           checked={slaSettings.notifyBackupFailure !== false}
                           onChange={(e) => setSlaSettings({ ...slaSettings, notifyBackupFailure: e.target.checked })}
@@ -5139,7 +5152,7 @@ export default function App() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#1e295b]/20">
                         <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1">
                           <span className="text-[11px] font-bold text-amber-400">Início do Horário de Silêncio</span>
-                          <input 
+                          <input
                             type="time"
                             value={slaSettings.quietHoursStart}
                             onChange={(e) => setSlaSettings({ ...slaSettings, quietHoursStart: e.target.value })}
@@ -5149,7 +5162,7 @@ export default function App() {
 
                         <div className="p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1">
                           <span className="text-[11px] font-bold text-cyan-400">Fim do Horário de Silêncio</span>
-                          <input 
+                          <input
                             type="time"
                             value={slaSettings.quietHoursEnd}
                             onChange={(e) => setSlaSettings({ ...slaSettings, quietHoursEnd: e.target.value })}
@@ -5160,9 +5173,9 @@ export default function App() {
 
                       {/* SLA Automated Reminders & Scheduled Email Dispatcher */}
                       <div className="pt-2 border-t border-[#1e295b]/20">
-                        <SlaRemindersSchedulerCard 
-                          classes={correctorClasses || []} 
-                          teacherEmail={slaSettings.notificationEmail || "professor.docente@senai.br"} 
+                        <SlaRemindersSchedulerCard
+                          classes={correctorClasses || []}
+                          teacherEmail={slaSettings.notificationEmail || "professor.docente@senai.br"}
                         />
                       </div>
 
@@ -5227,8 +5240,8 @@ export default function App() {
                          <p className="text-xs text-slate-400 mt-1">Configure frequência, horário de execução e destino de armazenamento para os backups definidos no .env.</p>
                        </div>
                        <label className="relative inline-flex items-center cursor-pointer">
-                         <input 
-                           type="checkbox" 
+                         <input
+                           type="checkbox"
                            checked={backupSettings.enabled}
                            onChange={(e) => setBackupSettings({ ...backupSettings, enabled: e.target.checked })}
                            className="sr-only peer"
@@ -5267,7 +5280,7 @@ export default function App() {
                          <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
                            <label className="text-xs font-bold text-slate-300">Horário de Execução / Cron</label>
                            <div className="flex gap-2">
-                             <input 
+                             <input
                                type="time"
                                value={backupSettings.time}
                                onChange={(e) => {
@@ -5278,7 +5291,7 @@ export default function App() {
                                }}
                                className="bg-[#030712] border border-slate-800 rounded-lg px-2.5 py-2 text-xs text-white font-mono w-28"
                              />
-                             <input 
+                             <input
                                type="text"
                                value={backupSettings.cronSchedule}
                                onChange={(e) => setBackupSettings({ ...backupSettings, cronSchedule: e.target.value })}
@@ -5295,7 +5308,7 @@ export default function App() {
                          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                            <Cloud className="w-4 h-4 text-cyan-400" /> Destino de Armazenamento dos Dumps
                          </span>
-                         
+
                          <div className="grid grid-cols-2 gap-3">
                            <button
                              type="button"
@@ -5324,7 +5337,7 @@ export default function App() {
                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 animate-fade-in">
                              <div className="flex flex-col gap-1">
                                <label className="text-[11px] font-bold text-slate-300">Nome do Bucket S3 (BACKUP_S3_BUCKET)</label>
-                               <input 
+                               <input
                                  type="text"
                                  value={backupSettings.s3Bucket}
                                  onChange={(e) => setBackupSettings({ ...backupSettings, s3Bucket: e.target.value })}
@@ -5334,7 +5347,7 @@ export default function App() {
                              </div>
                              <div className="flex flex-col gap-1">
                                <label className="text-[11px] font-bold text-slate-300">Região AWS (AWS_REGION)</label>
-                               <input 
+                               <input
                                  type="text"
                                  value={backupSettings.s3Region}
                                  onChange={(e) => setBackupSettings({ ...backupSettings, s3Region: e.target.value })}
@@ -5374,7 +5387,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Módulo de Rubricas (Pedagogia)</span>
                           <span className="text-[10px] text-slate-400">Scorecard detalhado estruturado em 7 critérios didáticos.</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_RUBRIC_CORRECTION", !featureFlags.ENABLE_RUBRIC_CORRECTION)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_RUBRIC_CORRECTION ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5388,7 +5401,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Feedback de IA Construtivo</span>
                           <span className="text-[10px] text-slate-400">Geração inteligente de resumos, pontos fortes e fracos de estudo.</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_AI_FEEDBACK", !featureFlags.ENABLE_AI_FEEDBACK)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_AI_FEEDBACK ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5402,7 +5415,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Painel de Erros da Turma</span>
                           <span className="text-[10px] text-slate-400">Mapeamento dinâmico de compile errors e alunos sob risco.</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_CLASS_ERROR_DASHBOARD", !featureFlags.ENABLE_CLASS_ERROR_DASHBOARD)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_CLASS_ERROR_DASHBOARD ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5416,7 +5429,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Evolução do Estudante</span>
                           <span className="text-[10px] text-slate-400">Linha do tempo individual por discente para acompanhamento pedagógico.</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_STUDENT_EVOLUTION", !featureFlags.ENABLE_STUDENT_EVOLUTION)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_STUDENT_EVOLUTION ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5432,7 +5445,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Gerador Inteligente de Atividades</span>
                           <span className="text-[10px] text-slate-400">Permite criação de testes automatizados via AI LLMs.</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_ACTIVITY_GENERATOR", !featureFlags.ENABLE_ACTIVITY_GENERATOR)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_ACTIVITY_GENERATOR ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5446,7 +5459,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Banco de Atividades</span>
                           <span className="text-[10px] text-slate-400">Repositório de atividades reutilizáveis para o professor.</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_ACTIVITY_BANK", !featureFlags.ENABLE_ACTIVITY_BANK)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_ACTIVITY_BANK ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5462,7 +5475,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Avaliador Sandbox Isolado</span>
                           <span className="text-[10px] text-slate-400">Usa executor em ambiente virtual isolado para não afetar servidor (Docker Mode).</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_SANDBOX_EXECUTOR", !featureFlags.ENABLE_SANDBOX_EXECUTOR)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_SANDBOX_EXECUTOR ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5476,7 +5489,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-200">Grader Multilíngue (Polyglot)</span>
                           <span className="text-[10px] text-slate-400">Ativa suporte experimental a múltiplas linguagens (Py, Js, C, etc).</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleToggleFeature("ENABLE_MULTILANGUAGE_GRADING", !featureFlags.ENABLE_MULTILANGUAGE_GRADING)}
                           className={`w-11 h-6 rounded-full transition-all duration-300 relative p-1 ${featureFlags.ENABLE_MULTILANGUAGE_GRADING ? "bg-emerald-500" : "bg-slate-700"}`}
                         >
@@ -5495,7 +5508,7 @@ export default function App() {
                           <div className={`w-4 h-4 bg-white rounded-full transition-all duration-300 transform ${featureFlags.ENABLE_QUESTION_BANK ? "translate-x-5" : "translate-x-0"}`} />
                         </button>
                       </div>
-                      
+
                       <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-bold text-slate-200">Tags e Competências</span>
@@ -5537,8 +5550,8 @@ export default function App() {
                           <p className="text-xs text-slate-400 mt-1">Configure os dias da semana e o horário para o modelo processar e enviar o resumo executivo das turmas por e-mail.</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={pedagogicalSummarySettings.enabled}
                             onChange={(e) => setPedagogicalSummarySettings({ ...pedagogicalSummarySettings, enabled: e.target.checked })}
                             className="sr-only peer"
@@ -5585,7 +5598,7 @@ export default function App() {
                           {/* Send Time */}
                           <div className="p-3.5 rounded-xl bg-[#030712]/50 border border-slate-800/40 flex flex-col gap-1.5">
                             <label className="text-xs font-bold text-slate-300">Horário de Envio (E-mail Docente)</label>
-                            <input 
+                            <input
                               type="time"
                               value={pedagogicalSummarySettings.sendTime}
                               onChange={(e) => setPedagogicalSummarySettings({ ...pedagogicalSummarySettings, sendTime: e.target.value })}
@@ -5627,7 +5640,7 @@ export default function App() {
                        Módulo 05: Relatórios e Intervenção
                     </h3>
                     <div className="flex flex-col gap-3">
-                      
+
                       <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-bold text-slate-200">Relatório de Professor</span>
@@ -5700,7 +5713,7 @@ export default function App() {
                        Módulo 06: Assistente Pedagógico IA
                     </h3>
                     <div className="flex flex-col gap-3">
-                      
+
                       <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-bold text-slate-200">Assistente IA Global</span>
@@ -5753,7 +5766,7 @@ export default function App() {
                        Módulo 07: Automação e Notificações
                     </h3>
                     <div className="flex flex-col gap-3">
-                      
+
                       <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-bold text-slate-200">Automação Pedagógica Global</span>
@@ -5798,7 +5811,7 @@ export default function App() {
                        Módulo 08: Central de Operações & Produtividade
                     </h3>
                     <div className="flex flex-col gap-3">
-                      
+
                       <div className="flex items-center justify-between p-3 rounded-lg bg-[#030712]/50 border border-slate-800/40">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-bold text-slate-200">Central de Comando (Visão Global)</span>
@@ -5844,7 +5857,7 @@ export default function App() {
 
                 {/* Right column: DB, Security, and Audit Logs */}
                 <div className="lg:col-span-5 flex flex-col gap-6">
-                  
+
                   {/* Card: Connection Details */}
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
                     <div className="border-b border-[#1e295b]/20 pb-3">
@@ -5875,7 +5888,7 @@ export default function App() {
                   <div className="rounded-2xl border border-[#1e295b]/30 bg-[#0f172a] p-6 flex flex-col gap-4">
                     <div className="border-b border-[#1e295b]/20 pb-2 flex items-center justify-between">
                       <h3 className="text-sm font-bold text-amber-400 font-mono uppercase tracking-wider">Auditoria do Sistema</h3>
-                      <button 
+                      <button
                         onClick={fetchAuditLogs}
                         className="text-[10px] font-mono text-slate-400 hover:text-white transition-all underline shrink-0 cursor-pointer"
                       >
@@ -5888,8 +5901,8 @@ export default function App() {
                       {auditLogs.length > 0 ? (
                         auditLogs.map((log: any, index: number) => {
                           const dateObj = new Date(log.created_at);
-                          const formattedTime = isNaN(dateObj.getTime()) 
-                            ? "Hoje" 
+                          const formattedTime = isNaN(dateObj.getTime())
+                            ? "Hoje"
                             : dateObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
                           return (
                             <div key={index} className="p-2.5 rounded bg-[#030712]/60 border border-slate-800/40 text-[10px] font-mono leading-relaxed transition-all hover:border-[#1e295b]/30">
@@ -5976,7 +5989,7 @@ export default function App() {
             <StudentPortfolioExportModal submissions={submissions} onClose={() => setShowStudentPortfolioModal(false)} />
           )}
 
-          <CommandPaletteModal 
+          <CommandPaletteModal
             isOpen={showCommandPalette}
             onClose={() => setShowCommandPalette(false)}
             onNavigate={(tab) => setTab(tab)}
@@ -5984,7 +5997,7 @@ export default function App() {
           />
 
           {showAdvancedVisionModal && (
-            <AdvancedVisionAssessmentModal 
+            <AdvancedVisionAssessmentModal
               onClose={() => setShowAdvancedVisionModal(false)}
               onApplyAnalysis={(res) => {
                 setCode(res.extractedText);

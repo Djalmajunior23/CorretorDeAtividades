@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "db:up": "node scripts/local-postgres.mjs",
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "NODE_ENV=production node dist/server.cjs",
@@ -17,7 +18,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@types/multer": "^2.1.0",
     "@types/pdfkit": "^0.17.6",
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.6.1",
     "axios": "^1.17.0",
     "cors": "^2.8.6",
     "d3": "^7.9.0",
@@ -27,7 +28,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.378.0",
-    "mermaid": "^11.17.2",
+    "mermaid": "^12.2.0",
     "motion": "^11.11.17",
     "multer": "^2.1.1",
     "node-cron": "^4.3.0",
@@ -35,12 +36,12 @@
     "pg": "^8.11.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.23.1",
+    "react-router-dom": "^7.18.4",
     "recharts": "^2.12.7",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tesseract.js": "^7.0.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
@@ -50,14 +51,20 @@
     "@types/pg": "^8.11.6",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.4.19",
-    "esbuild": "^0.20.2",
+    "esbuild": "^0.28.2",
     "postcss": "^8.4.38",
     "tailwindcss": "3.4.3",
     "tsx": "^4.10.1",
     "typescript": "^5.4.5",
-    "vite": "^5.2.11",
+    "vite": "^8.3.5",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "dompurify": "^3.4.17"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

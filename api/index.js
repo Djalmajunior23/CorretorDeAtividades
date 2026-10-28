@@ -1,27 +1,16 @@
 import server from '../dist/server.cjs';
 
-let isDbInitialized = false;
-
 export default async function handler(req, res) {
-  const activePool = (server.getCorePool ? server.getCorePool() : server.pool) || null;
-  const activeVault = (server.getVaultPool ? server.getVaultPool() : server.vaultPool) || null;
-
-  if (!isDbInitialized && activePool) {
-    try {
-      if (typeof server.initializeDatabase === "function") {
-        await server.initializeDatabase(activePool, activeVault);
-      }
-      if (typeof server.initDatabase === "function") {
-        await server.initDatabase();
-      }
-      isDbInitialized = true;
-    } catch (e) {
-      console.warn("[Vercel Serverless] DB initialization warning:", e);
-    }
+  try {
+    // Shared promise prevents simultaneous cold-start requests racing migrations.
+    await server.initializeApplicationDatabase();
+  } catch (error) {
+    console.error("[Vercel Serverless] Database initialization failed:", error);
+    res.statusCode = 503;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    return res.end(JSON.stringify({ success: false, error: "Banco de dados indisponível. Tente novamente." }));
   }
 
   // Pass the request to the compiled Express app
-  const app = server.default || server;
-  return app(req, res);
+  return server.default(req, res);
 }
-

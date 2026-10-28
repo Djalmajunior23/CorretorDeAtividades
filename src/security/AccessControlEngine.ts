@@ -69,6 +69,7 @@ export class AccessControlEngine {
 
   // Admin-Only Routes: Require role 'ADMIN' or 'SUPER_ADMIN'
   private static readonly ADMIN_ONLY_PATTERNS: RegExp[] = [
+    /^\/api\/classes\/reset-all\/?$/i,
     /^\/api\/cloud-sync\//i,
     /^\/api\/security\/unban-ip\/?$/i,
     /^\/api\/security\/threat-logs\/?$/i,
@@ -110,18 +111,6 @@ export class AccessControlEngine {
       // 2. Allow static SPA assets and frontend pages on GET requests
       if (req.method === "GET" && !reqPath.startsWith("/api") && !reqPath.startsWith("/auth")) {
         return next();
-      }
-
-      // 3. Allow public GET for UI bootstrap and class catalogues
-      if (req.method === "GET") {
-        const isPublicGet = [
-          /^\/api\/classes\/?$/i,
-          /^\/api\/classes\/[^\/]+\/?$/i,
-          /^\/api\/questions\/?$/i,
-        ].some((pattern) => pattern.test(reqPath));
-        if (isPublicGet) {
-          return next();
-        }
       }
 
       // 4. Check Public Whitelist
@@ -166,7 +155,7 @@ export class AccessControlEngine {
 
       const user = verification.payload;
       let rawRole = (user.role || "ALUNO").toUpperCase();
-      
+
       // Role normalization
       if (rawRole === "TEACHER") rawRole = "PROFESSOR";
       if (rawRole === "STUDENT") rawRole = "ALUNO";
@@ -223,6 +212,15 @@ export class AccessControlEngine {
             code: "DEMO_MUTATION_BLOCKED"
           });
         }
+      }
+
+      if (rawRole === "ALUNO" && !["GET", "HEAD"].includes(req.method) &&
+          /^\/api\/(classes|students|questions|question-bank|grades)(\/|$)/i.test(reqPath)) {
+        return res.status(403).json({
+          success: false,
+          error: "Apenas professores e administradores podem alterar cadastros acadêmicos.",
+          code: "INSUFFICIENT_PRIVILEGES"
+        });
       }
 
       next();
@@ -311,7 +309,7 @@ export class AccessControlEngine {
     const user = (req as AuthenticatedRequest).user;
     if (!user) return "anonymous";
     if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
-      return (req.query.teacher_id as string) || (req.body.teacher_id as string) || user.id || "admin_root";
+      return (req.query.teacher_id as string) || (req.body?.teacher_id as string) || user.id || "admin_root";
     }
     return user.id || "teacher_portal";
   }
@@ -324,7 +322,7 @@ export class AccessControlEngine {
     const user = (req as AuthenticatedRequest).user;
     if (!user) return "anonymous";
     if (user.role === "PROFESSOR" || user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "COORDENADOR") {
-      return (req.query.student_id as string) || (req.body.student_id as string) || user.id;
+      return (req.query.student_id as string) || (req.body?.student_id as string) || user.id;
     }
     return user.id;
   }

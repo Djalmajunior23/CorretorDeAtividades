@@ -269,25 +269,7 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
         });
       }
 
-      if (res.status === 403) {
-        // Fallback for demo role or forbidden mutations
-        const localStudents = getLocalDemoStudents();
-        if (editId) {
-          const updated = localStudents.map(s => s.id === editId ? { ...s, ...formData, status: "active" } : s);
-          saveLocalDemoStudents(updated);
-          toast.success("Aluno atualizado na sessão local!");
-        } else {
-          const newStudent = {
-            id: `demo-std-${Date.now()}`,
-            ...formData,
-            status: "active",
-            isDemo: true,
-            created_at: new Date().toISOString()
-          };
-          saveLocalDemoStudents([newStudent, ...localStudents]);
-          toast.success("Aluno cadastrado na sessão local!");
-        }
-      } else if (!res.ok) {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || "Erro ao salvar aluno.");
         return;
@@ -377,11 +359,7 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
       }
 
       const res = await fetch(apiUrl(`/api/students/${id}`), { method: "DELETE" });
-      if (res.status === 403) {
-        const local = getLocalDemoStudents().filter(s => s.id !== id);
-        saveLocalDemoStudents(local);
-        toast.success("Aluno removido na sessão local.");
-      } else if (!res.ok) {
+      if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         toast.error(`Erro ao excluir aluno: ${errorData.error || "Erro desconhecido"}`);
       } else {
@@ -410,9 +388,9 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...currentData, status: nextStatus })
-      });
+      }).then(safeJsonResponse);
       fetchData();
-    } catch (e) {}
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Falha ao atualizar aluno."); }
   };
 
   return (
@@ -487,7 +465,7 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
                 {students.map(s => (
                   <tr key={s.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
                     <td className="py-3 px-4 font-medium text-white">
-                      <button 
+                      <button
                         onClick={() => setProfileStudentId(s.id)}
                         className="text-left font-display font-semibold text-emerald-400 hover:text-emerald-300 hover:underline transition-all cursor-pointer"
                         title="Ver Perfil do Aluno"
@@ -504,8 +482,8 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button 
-                        onClick={() => setProfileStudentId(s.id)} 
+                      <button
+                        onClick={() => setProfileStudentId(s.id)}
                         className="text-sky-400/80 hover:text-sky-400 p-1 mr-1.5 transition-all"
                         title="Visualizar Perfil Completo"
                       >
@@ -517,8 +495,8 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
                       <button onClick={() => handleArchive(s.id, s)} className="text-amber-400/70 hover:text-amber-400 p-1 mr-1">
                         <Archive className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={() => { setDeleteConfirmId(s.id); setDeleteConfirmName(s.name); }} 
+                      <button
+                        onClick={() => { setDeleteConfirmId(s.id); setDeleteConfirmName(s.name); }}
                         className="text-rose-400/70 hover:text-rose-400 p-1"
                         title="Excluir Aluno"
                       >
@@ -545,7 +523,7 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
           <div className="bg-[#0f172a] rounded-2xl w-full max-w-xl border border-slate-800 shadow-2xl p-6 flex flex-col gap-4">
             <h3 className="text-xl font-bold text-white">Importação Massiva (CSV)</h3>
             <p className="text-xs text-slate-400">Insira os dados separados por vírgula no padrão: <code>nome,matricula,email</code></p>
-            
+
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-400 font-medium">Turma Destino</label>
               <select value={importClass} onChange={e => setImportClass(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white">
@@ -553,11 +531,11 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            
+
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-400 font-medium">Selecionar Arquivo CSV do Computador</label>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 accept=".csv,.txt,.tsv"
                 onChange={handleFileSelect}
                 className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-500 file:text-slate-900 hover:file:bg-emerald-600 cursor-pointer"
@@ -566,15 +544,15 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
 
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-400 font-medium">Ou cole o conteúdo CSV abaixo</label>
-              <textarea 
-                rows={6} 
+              <textarea
+                rows={6}
                 className="bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm font-mono text-slate-300"
                 placeholder="nome,matricula,email\nJoão Silva,2025001,joao@email.com\nMaria Souza,2025002,maria@email.com"
                 value={importText}
                 onChange={e => setImportText(e.target.value)}
               />
             </div>
-            
+
             <div className="flex justify-end gap-3 mt-2 pt-4 border-t border-slate-800">
               <button onClick={() => setShowImport(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-white">Cancelar</button>
               <button onClick={handleImport} className="px-5 py-2 text-sm font-bold bg-emerald-500 text-slate-900 rounded-lg hover:bg-emerald-600">Importar Dados</button>
@@ -623,10 +601,10 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
       )}
 
       {profileStudentId && (
-        <StudentProfileModal 
-          studentId={profileStudentId} 
-          isOpen={!!profileStudentId} 
-          onClose={() => setProfileStudentId(null)} 
+        <StudentProfileModal
+          studentId={profileStudentId}
+          isOpen={!!profileStudentId}
+          onClose={() => setProfileStudentId(null)}
         />
       )}
 
@@ -643,16 +621,16 @@ export function StudentsManagerView({ initialClassId, onNavigateTab }: StudentsM
               </p>
             </div>
             <div className="flex justify-center gap-3 mt-4 pt-4 border-t border-slate-800">
-              <button 
+              <button
                 type="button"
-                onClick={() => { setDeleteConfirmId(null); setDeleteConfirmName(""); }} 
+                onClick={() => { setDeleteConfirmId(null); setDeleteConfirmName(""); }}
                 className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer font-medium"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 type="button"
-                onClick={() => handleDelete(deleteConfirmId)} 
+                onClick={() => handleDelete(deleteConfirmId)}
                 className="px-5 py-2 text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 rounded-lg transition-colors cursor-pointer shadow-lg shadow-rose-500/20"
               >
                 Excluir

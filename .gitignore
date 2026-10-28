@@ -22,3 +22,5 @@ replace_*.js
 /backups/
 *.traineddata
 tmp_sandbox/
+
+/work/

@@ -1,6 +1,10 @@
+import "dotenv/config";
 import crypto from "crypto";
+import { serverSecret } from "./serverSecrets";
 
-const JWT_SECRET = process.env.JWT_SECRET || "codecheck_secure_academic_salt_key_2026_senai";
+// An unconfigured instance must never accept tokens signed with a public key.
+// Configure JWT_SECRET to retain sessions across restarts and multiple replicas.
+const JWT_SECRET = serverSecret("JWT_SECRET");
 
 export interface UserSessionPayload {
   id: string;
@@ -76,6 +80,10 @@ export function verifyJwtToken(token: string): { valid: boolean; payload?: UserS
   const [headerB64, payloadB64, signatureB64] = parts;
 
   try {
+    const header = JSON.parse(base64urlDecode(headerB64));
+    if (header?.alg !== "HS256" || header?.typ !== "JWT") {
+      return { valid: false, error: "Cabeçalho do token inválido." };
+    }
     const expectedSig = base64url(
       crypto
         .createHmac("sha256", JWT_SECRET)
@@ -94,7 +102,13 @@ export function verifyJwtToken(token: string): { valid: boolean; payload?: UserS
     const payloadJson = base64urlDecode(payloadB64);
     const payload: UserSessionPayload = JSON.parse(payloadJson);
 
-    if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+    if (!payload || typeof payload.id !== "string" || !payload.id ||
+        typeof payload.role !== "string" || !payload.role ||
+        !Number.isFinite(payload.exp) || !Number.isFinite(payload.iat)) {
+      return { valid: false, error: "Dados de sessão inválidos." };
+    }
+
+    if (Math.floor(Date.now() / 1000) >= payload.exp!) {
       return { valid: false, error: "Sessão expirada. Por favor, faça login novamente." };
     }
 
@@ -117,7 +131,7 @@ export function hashPassword(password: string): string {
  * Validates a plaintext password against a stored salt:hash string using constant-time comparison.
  */
 export function verifyPassword(password: string, storedHash: string): boolean {
-  if (!storedHash || !password) return false;
+  if (typeof storedHash !== "string" || typeof password !== "string" || !storedHash || !password) return false;
 
   // Support salt:hash format
   if (storedHash.includes(":")) {
@@ -201,4 +215,3 @@ export function blockDemoMutation(req: any, res: any, next: any) {
 
   next();
 }
-

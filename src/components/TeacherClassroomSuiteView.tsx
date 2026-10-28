@@ -157,7 +157,10 @@ export const TeacherClassroomSuiteView: React.FC = () => {
     try {
       const res = await fetch(apiUrl("/api/classes"));
       const data = await safeJsonResponse(res).catch(() => null);
-      const list = Array.isArray(data) ? data : (data?.classes || []);
+      const candidates: unknown = Array.isArray(data) ? data : data?.classes;
+      const list: { id: string; name?: string; [key: string]: unknown }[] =
+        Array.isArray(candidates) ? candidates.filter((item): item is { id: string; name?: string } =>
+          item !== null && typeof item === "object" && typeof item.id === "string") : [];
       setRegisteredClasses(list);
       if (list.length > 0) {
         setSelectedClassId((prev) => (prev && list.some((c: any) => c.id === prev)) ? prev : list[0].id);
@@ -322,7 +325,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
       const vIndex = idx % variants.length;
       const v = variants[vIndex];
       const marked: Record<number, string> = {};
-      
+
       // Simulação realista com distribuição de desempenho (média ~76% aprovação)
       const basePerformance = 0.6 + ((idx * 17) % 35) / 100; // 60% a 95%
       for (let i = 1; i <= qTotal; i++) {

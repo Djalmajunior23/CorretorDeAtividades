@@ -7,100 +7,69 @@ export const API_BASE_URL =
 
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const finalUrl = API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
-  
-  // --- FETCH DIAGNOSTIC LOGGER --- 
-  // Utility requested to map and log endpoint behavior
-  console.log(`[Diagnostic] Endpoint solicitado: ${path} -> URL Resolvida: ${finalUrl}`);
-  
-  return finalUrl;
+  // Support both an origin and an origin ending in /api without duplicating it.
+  const suffix = API_BASE_URL.endsWith("/api") && (normalizedPath === "/api" || normalizedPath.startsWith("/api/"))
+    ? normalizedPath.slice(4) : normalizedPath;
+  return API_BASE_URL ? `${API_BASE_URL}${suffix}` : normalizedPath;
 };
 
-// --- GLOBAL AUTOMATIC BEARER JWT INJECTION ---
+export function isTrustedApiUrl(input: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const target = new URL(input, window.location.href);
+    const base = new URL(API_BASE_URL || "/", window.location.href);
+    const basePath = base.pathname.replace(/\/$/, "");
+    if (target.origin !== base.origin || !["http:", "https:"].includes(target.protocol)) return false;
+    const relative = basePath && target.pathname.startsWith(`${basePath}/`)
+      ? target.pathname.slice(basePath.length) : target.pathname;
+    return /^\/(api|auth)(\/|$)/.test(relative) ||
+      (basePath.endsWith("/api") && target.pathname.startsWith(`${basePath}/`));
+  } catch {
+    return false;
+  }
+}
+
+function sessionToken(): string | null {
+  try {
+    return typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+  } catch {
+    // Browsers may block storage in private sessions or embedded pages.
+    return null;
+  }
+}
+
+// Scope automatic credentials to this application's API, including Request inputs.
 if (typeof window !== "undefined" && typeof window.fetch === "function") {
   const nativeFetch = window.fetch.bind(window);
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
-    try {
-      let url = "";
-      if (typeof input === "string") {
-        url = input;
-      } else if (input instanceof URL) {
-        url = input.toString();
-      } else if (input && typeof input === "object" && "url" in input) {
-        url = (input as Request).url;
-      }
-
-      const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
-      
-      // If user is authenticated and requesting an API/auth route, ensure Authorization header is present
-      if (token && (url.includes("/api/") || url.includes("/auth/"))) {
-        const headers = new Headers(
-          init?.headers || (typeof input === "object" && "headers" in input ? (input as Request).headers : {})
-        );
-
-        if (!headers.has("Authorization") && !headers.has("authorization")) {
-          headers.set("Authorization", `Bearer ${token}`);
-        }
-
-        init = {
-          ...init,
-          headers
-        };
-      }
-    } catch (e) {
-      if (import.meta.env?.DEV) {
-        console.warn("[Fetch Interceptor Warning]", e);
-      }
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const token = sessionToken();
+    if (token && isTrustedApiUrl(url)) {
+      const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+      if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+      init = { ...init, headers };
     }
-
     return nativeFetch(input, init);
   };
 }
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
-  try {
-    const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
-    const authHeaders: Record<string, string> = {};
-    if (token) {
-      authHeaders["Authorization"] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(apiUrl(path), {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders,
-        ...(options.headers || {})
-      },
-      credentials: options.credentials || "same-origin"
-    });
-    const contentType = response.headers.get("content-type") || "";
-    
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(`HTTP ${response.status}: ${text.slice(0, 300)}`);
-    }
-    
-    if (!contentType.includes("application/json")) {
-      const text = await response.text().catch(() => "");
-      throw new Error(`Resposta não JSON recebida: ${text.slice(0, 300)}`);
-    }
-    
-    return response.json();
-  } catch (error: any) {
-    const message = String(error?.message || error);
-    if (import.meta.env?.DEV) {
-      console.warn("[apiFetch error]", error);
-    }
-    if (
-      message.includes("chrome-extension://") ||
-      message.includes("aistudio.google.com") ||
-      message.includes("invalid extension")
-    ) {
-      throw new Error("Erro externo do navegador ou ambiente de preview.");
-    }
-    throw error;
+  const url = apiUrl(path);
+  const headers = new Headers(options.headers);
+  const token = sessionToken();
+  if (token && isTrustedApiUrl(url) && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
   }
+  // Let the browser generate multipart boundaries for FormData uploads.
+  if (!headers.has("Content-Type") && !(typeof FormData !== "undefined" && options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    credentials: options.credentials || "same-origin"
+  });
+  return safeJsonResponse(response);
 }
 
 export async function safeJson(response: Response) {
