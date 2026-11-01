@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
-import { DatabaseModelAssessmentService } from "../services/databaseModelAssessmentService";
+import { buildStudentConsolidatedReport, collectStudentCorrections, generateStudentConsolidatedPdf } from "../services/studentConsolidatedReport";
 
 interface StudentProfileModalProps {
   studentId: string;
@@ -47,6 +47,7 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"corrections" | "evidences" | "reports">("corrections");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "code" | "diagrams">("all");
+  const [exportingConsolidated, setExportingConsolidated] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
 
   const fetchReports = async (stId: string) => {
@@ -66,44 +67,60 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
 
   useEffect(() => {
     if (!isOpen || !studentId) return;
-
+    const controller = new AbortController();
     setLoading(true);
-
-    fetch(apiUrl(`/api/students/${studentId}/profile`))
-      .then(res => {
-        if (!res.ok) throw new Error("Não foi possível carregar o perfil do aluno.");
-        return res.json();
-      })
-      .then(async (data) => {
-        const student = data?.student;
-        const studentKey = student?.id ?? student?.student_id ?? student?.studentId ?? student?.enrollment_code ?? student?.matricula ?? student?.registration ?? studentId ?? null;
-
+    setSubmissions([]);
+    setProfileData(null);
+    setError(null);
+    const loadProfile = async () => {
+      try {
+        const response = await fetch(apiUrl(`/api/students/${encodeURIComponent(studentId)}/profile`), { signal: controller.signal });
+        const data = await safeJsonResponse(response);
+        const student = { ...data.student, id: String(data.student?.id || studentId) };
+        let vaultCorrections: any[] = [];
         try {
-          const vaultRes = await fetch(apiUrl(`/api/correction-vault/student/${studentKey}`));
-          if (vaultRes.ok) {
-            const correctionsData = await vaultRes.json();
-            const fetchedSubmissions = normalizeCorrectionVault(correctionsData);
-            setSubmissions(fetchedSubmissions);
-          } else {
-            setSubmissions(data.corrections || []);
-          }
-        } catch (vaultErr) {
-          console.error("Erro ao buscar correction_vault, usando dados do perfil:", vaultErr);
-          setSubmissions(data.corrections || []);
+          const vaultResponse = await fetch(apiUrl(`/api/correction-vault/student/${encodeURIComponent(student.id)}`), { signal: controller.signal });
+          vaultCorrections = normalizeCorrectionVault(await safeJsonResponse(vaultResponse));
+        } catch (e) {
+          if (controller.signal.aborted) return;
+          console.warn("Histórico do cofre indisponível; usando as correções retornadas pelo perfil.");
         }
-
-        setProfileData(data);
-        setError(null);
-        fetchReports(studentId);
-      })
-      .catch(err => {
-        console.error(err);
-        setError(err.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+        if (controller.signal.aborted) return;
+        setSubmissions(collectStudentCorrections(student, vaultCorrections, data.corrections));
+        setProfileData({ ...data, student });
+        void fetchReports(studentId);
+      } catch (err: any) {
+        if (!controller.signal.aborted) setError(err.message);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    void loadProfile();
+    return () => controller.abort();
   }, [studentId, isOpen]);
+
+  const handleDownloadConsolidated = async () => {
+    if (!profileData?.student || loading || exportingConsolidated) return;
+    setExportingConsolidated(true);
+    const toastId = toast.loading("Gerando relatório individual consolidado...");
+    try {
+      const report = buildStudentConsolidatedReport(profileData.student, submissions, profileData.corrections);
+      const bytes = generateStudentConsolidatedPdf(report);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Relatorio_Consolidado_${profileData.student.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success(`Relatório gerado com ${report.corrections.length} correções e parecer individual.`, { id: toastId });
+    } catch (err: any) {
+      toast.error("Não foi possível gerar o relatório consolidado: " + err.message, { id: toastId });
+    } finally {
+      setExportingConsolidated(false);
+    }
+  };
 
   const isDiagramCorrection = (c: any) => {
     const lang = (c.language || "").toLowerCase();
@@ -616,6 +633,15 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                 </div>
               )}
 
+              {activeTab === "corrections" && submissions.length > 0 && (
+                <div className="px-6 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-400">Histórico completo do aluno, incluindo código e diagramas, com parecer pedagógico.</p>
+                  <button onClick={handleDownloadConsolidated} disabled={exportingConsolidated || loading}
+                    className="shrink-0 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold disabled:opacity-50">
+                    {exportingConsolidated ? "Gerando..." : "Baixar relatório consolidado"}
+                  </button>
+                </div>
+              )}
               {/* Tab Panels */}
               <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
                 
@@ -680,6 +706,15 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
                                   <span className="text-base font-bold font-mono text-emerald-400">{corr.score} <span className="text-[10px] text-slate-500 font-normal">/100</span></span>
                                 </div>
 
+                                <button
+                                  onClick={handleDownloadConsolidated}
+                                  disabled={exportingConsolidated || loading}
+                                  className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-200 text-[10px] font-mono font-bold flex items-center gap-1 border border-indigo-500/30 disabled:opacity-50"
+                                  title="Baixar todas as correções deste aluno e o parecer pedagógico em um único PDF"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  {exportingConsolidated ? "Gerando..." : "Relatório individual consolidado"}
+                                </button>
                                 {isDiagram && (
                                   <button
                                     onClick={() => handleDownloadPdf(corr)}
