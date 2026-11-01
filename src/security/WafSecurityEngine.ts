@@ -314,6 +314,11 @@ export class WafSecurityEngine {
             obj.forEach((item, idx) => extractStrings(item, `${prefix}[${idx}]`));
           } else if (typeof obj === "object") {
             for (const [k, v] of Object.entries(obj)) {
+              // PDF assessments are rendered as text, never interpolated into SQL.
+              // Keep inspecting URLs, queries and the remaining metadata fields.
+              const isAssessmentPdf = req.method === "POST" &&
+                /^\/api\/(?:database-models|diagrams)\/export-pdf\/?$/.test(req.path || "");
+              if (isAssessmentPdf && prefix === "body" && k === "assessment") continue;
               extractStrings(v, `${prefix}.${k}`);
             }
           }

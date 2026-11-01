@@ -1,3 +1,4 @@
+import { exportModelAssessmentPdf } from "../services/modelAssessmentPdfExport";
 import React, { useState, useEffect } from "react";
 import { apiUrl, safeJsonResponse } from "../config/api";
 import { 
@@ -372,32 +373,7 @@ export function StudentProfileModal({ studentId, isOpen, onClose }: StudentProfi
         evaluatedAt: corr.created_at || new Date().toISOString()
       };
 
-      let pdfBlob: Blob | null = null;
-      try {
-        const res = await fetch(apiUrl("/api/database-models/export-pdf"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            assessment,
-            studentName,
-            className
-          })
-        });
-        if (res.ok) {
-          pdfBlob = await res.blob();
-        }
-      } catch (err) {
-        console.warn("Backend PDF export failed, fallback to client-side:", err);
-      }
-
-      if (!pdfBlob) {
-        const buffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(
-          assessment,
-          studentName,
-          className
-        );
-        pdfBlob = new Blob([buffer as any], { type: "application/pdf" });
-      }
+      const pdfBlob = await exportModelAssessmentPdf("/api/database-models/export-pdf", assessment, studentName, className);
 
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");

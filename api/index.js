@@ -1,19 +1,19 @@
 import server from '../dist/server.cjs';
 
-let isDbInitialized = false;
+let initialization;
 
 export default async function handler(req, res) {
-  if (!isDbInitialized && server.pool) {
+  if (server.pool) {
     try {
-      if (typeof server.initDatabase === "function") {
+      initialization ||= (async () => {
         await server.initDatabase();
-      }
-      if (typeof server.initializeDatabase === "function") {
         await server.initializeDatabase(server.pool, server.vaultPool);
-      }
-      isDbInitialized = true;
+      })();
+      await initialization;
     } catch (e) {
+      initialization = undefined;
       console.warn("[Vercel Serverless] DB initialization warning:", e);
+      return res.status(503).json({ error: "Banco de dados temporariamente indisponível. Tente novamente." });
     }
   }
 

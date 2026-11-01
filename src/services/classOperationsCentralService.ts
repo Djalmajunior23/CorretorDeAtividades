@@ -25,12 +25,12 @@ export interface ClassOperationsSummary {
   className: string;
   institutionId: string;
   queryTimestampIso: string;
-  dataSource: "POSTGRESQL_PRODUCTION" | "REACTIVE_CACHE_MIRROR";
+  dataSource: "LOCAL_MEMORY";
   status: "DISPONIVEL" | "ZERO_REGISTROS" | "INDISPONIVEL";
   metrics: {
     ongoingActivitiesCount: number;
     receivedSubmissionsCount: number;
-    unsubmittedStudentsCount: number;
+    unsubmittedStudentsCount: number | null;
     pendingAsyncJobsCount: number;
     technicalFailuresCount: number;
     awaitingTeacherReviewCount: number;
@@ -44,14 +44,18 @@ export interface ClassOperationsSummary {
     technicalFailures: ManagedSubmission[];
     refactorings: ManagedSubmission[];
     published: ManagedSubmission[];
+    processing: ManagedSubmission[];
   };
 }
 
 export class ClassOperationsCentralService {
-  public static getOperationsSummary(classId = "turma-ds-a"): ClassOperationsSummary {
+  public static getOperationsSummary(classId = "turma-ds-a", enrolledStudentIds?: string[]): ClassOperationsSummary {
     const activities = UnifiedLifecycleEngineService.getActivities(classId);
     const submissions = UnifiedLifecycleEngineService.getSubmissions({ classId });
-    const pendingJobs = ReliableAsyncJobQueueService.getJobs("PENDENTE");
+    const submissionIds = new Set(submissions.map(s => s.id));
+    const pendingJobs = ReliableAsyncJobQueueService.getJobs("PENDENTE").filter(job =>
+      job.payload.classId === classId || submissionIds.has(job.payload.submissionId)
+    );
 
     const ongoingActivities = activities.filter(a => a.currentState === "PUBLICADA");
     const receivedSubmissions = submissions.filter(s => s.currentState === "RECEBIDA" || s.currentState === "NA_FILA");
@@ -60,21 +64,21 @@ export class ClassOperationsCentralService {
     const refactorings = submissions.filter(s => s.currentState === "REFACAO_SOLICITADA");
     const published = submissions.filter(s => s.currentState === "RESULTADO_PUBLICADO");
 
-    // Theoretical total enrolled students
-    const totalEnrolled = 28;
-    const submittedStudentIds = new Set(submissions.map(s => s.studentId));
-    const unsubmittedCount = Math.max(0, totalEnrolled - submittedStudentIds.size);
+    const submittedStudentIds = new Set(submissions.filter(s => s.currentState !== "RASCUNHO").map(s => s.studentId));
+    const unsubmittedCount = enrolledStudentIds
+      ? [...new Set(enrolledStudentIds)].filter(id => !submittedStudentIds.has(id)).length
+      : null;
 
     return {
       classId,
-      className: activities[0]?.className || "Desenvolvimento de Sistemas - Turma A",
-      institutionId: "inst-fiemg-01",
+      className: activities[0]?.className || "Turma sem atividades",
+      institutionId: activities[0]?.institutionId || "",
       queryTimestampIso: new Date().toISOString(),
-      dataSource: "POSTGRESQL_PRODUCTION",
-      status: "DISPONIVEL",
+      dataSource: "LOCAL_MEMORY",
+      status: activities.length || submissions.length ? "DISPONIVEL" : "ZERO_REGISTROS",
       metrics: {
         ongoingActivitiesCount: ongoingActivities.length,
-        receivedSubmissionsCount: submissions.length,
+        receivedSubmissionsCount: submissions.filter(s => s.currentState !== "RASCUNHO").length,
         unsubmittedStudentsCount: unsubmittedCount,
         pendingAsyncJobsCount: pendingJobs.length,
         technicalFailuresCount: technicalFailures.length,
@@ -88,7 +92,8 @@ export class ClassOperationsCentralService {
         awaitingReview,
         technicalFailures,
         refactorings,
-        published
+        published,
+        processing: submissions.filter(s => s.currentState === "PROCESSANDO"),
       }
     };
   }
@@ -96,7 +101,7 @@ export class ClassOperationsCentralService {
   public static getTurmaOperationsCockpit(classId = "turma-ds-a"): {
     atividadesEmAndamento: number;
     entregasRecebidas: number;
-    alunosSemEntrega: number;
+    alunosSemEntrega: number | null;
     processamentosPendentes: number;
     falhasTecnicas: number;
     correcoesAguardandoRevisao: number;

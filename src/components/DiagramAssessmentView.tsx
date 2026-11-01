@@ -1,3 +1,4 @@
+import { exportModelAssessmentPdf } from "../services/modelAssessmentPdfExport";
 import React, { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import mermaid from "mermaid";
@@ -843,32 +844,7 @@ CREATE TABLE tb_item_pedido (
       const studentName = studentObj?.name || "Estudante";
       const className = classObj?.name || "Turma de Banco de Dados";
 
-      let pdfBlob: Blob | null = null;
-      try {
-        const res = await fetch(apiUrl("/api/diagrams/export-pdf"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            assessment,
-            studentName,
-            className
-          })
-        });
-        if (res.ok) {
-          pdfBlob = await res.blob();
-        }
-      } catch (backendErr) {
-        console.warn("Backend PDF export failed, fallback to client-side", backendErr);
-      }
-
-      if (!pdfBlob) {
-        const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(
-          assessment,
-          studentName,
-          className
-        );
-        pdfBlob = new Blob([pdfBuffer as any], { type: "application/pdf" });
-      }
+      const pdfBlob = await exportModelAssessmentPdf("/api/diagrams/export-pdf", assessment, studentName, className);
 
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");

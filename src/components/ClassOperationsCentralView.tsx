@@ -46,7 +46,7 @@ export default function ClassOperationsCentralView({ onNavigate }: ClassOperatio
 
   const refreshData = () => {
     setSummary(ClassOperationsCentralService.getOperationsSummary());
-    toast.success("Dados operacionais atualizados com o banco de dados.");
+    toast.success("Dados da sessão local atualizados.");
   };
 
   const handleRetryTechnicalFailure = (subId: string) => {
@@ -93,6 +93,7 @@ export default function ClassOperationsCentralView({ onNavigate }: ClassOperatio
     ...summary.submissionsByState.received,
     ...summary.submissionsByState.technicalFailures,
     ...summary.submissionsByState.refactorings,
+    ...summary.submissionsByState.processing,
     ...summary.submissionsByState.published
   ];
 
@@ -125,7 +126,7 @@ export default function ClassOperationsCentralView({ onNavigate }: ClassOperatio
             <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 font-mono">
               <span className="flex items-center gap-1 text-emerald-400">
                 <Database className="w-3.5 h-3.5" />
-                {summary.dataSource}
+                Dados locais da sessão (sem sincronização com o banco)
               </span>
               <span>•</span>
               <span>Consulta: {new Date(summary.queryTimestampIso).toLocaleTimeString("pt-BR")}</span>
@@ -169,7 +170,7 @@ export default function ClassOperationsCentralView({ onNavigate }: ClassOperatio
         >
           <span className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Entregas Recebidas</span>
           <span className="text-2xl font-bold text-emerald-400 font-mono">{summary.metrics.receivedSubmissionsCount}</span>
-          <span className="text-[10px] text-slate-400 font-mono block">{summary.metrics.unsubmittedStudentsCount} não entregaram</span>
+          <span className="text-[10px] text-slate-400 font-mono block">{summary.metrics.unsubmittedStudentsCount === null ? "Matrículas não carregadas" : `${summary.metrics.unsubmittedStudentsCount} não entregaram`}</span>
         </div>
 
         <div

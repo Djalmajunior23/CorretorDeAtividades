@@ -51,6 +51,22 @@ import { OmrWebcamScannerModal } from "./OmrWebcamScannerModal";
 import { PrintableAnswerSheetModal } from "./PrintableAnswerSheetModal";
 import { apiUrl, safeJsonResponse } from "../config/api";
 
+interface RegisteredClass {
+  id: string;
+  name: string;
+  course?: string;
+  shift?: string;
+  semester?: string;
+  year?: string | number;
+}
+
+interface RegisteredStudent {
+  id: string;
+  name: string;
+  enrollment_code?: string;
+  class_name?: string;
+}
+
 const MULTI_SUBJECT_PRESETS = [
   {
     name: "Simulado Geral SENAI / SAEP (40 Questões)",
@@ -94,9 +110,11 @@ export const TeacherClassroomSuiteView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"EXAMS" | "OMR" | "LABS" | "LESSON_PLAN">("EXAMS");
 
   // State: Real Classes and Real Students
-  const [registeredClasses, setRegisteredClasses] = useState<any[]>([]);
+  const [registeredClasses, setRegisteredClasses] = useState<RegisteredClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [classStudents, setClassStudents] = useState<any[]>([]);
+  const [classStudents, setClassStudents] = useState<RegisteredStudent[]>([]);
+  const [classesError, setClassesError] = useState<string | null>(null);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
 
@@ -124,13 +142,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
   const [omrStudentName, setOmrStudentName] = useState("");
   const [omrStudentId, setOmrStudentId] = useState("");
   const [omrSelectedVariant, setOmrSelectedVariant] = useState("A");
-  const [omrMarkedAnswers, setOmrMarkedAnswers] = useState<Record<number, string>>(() => {
-    const initial: Record<number, string> = {};
-    for (let i = 1; i <= 40; i++) {
-      initial[i] = ["A", "B", "C", "D"][(i * 3 + 1) % 4];
-    }
-    return initial;
-  });
+  const [omrMarkedAnswers, setOmrMarkedAnswers] = useState<Record<number, string>>({});
   const [singleOmrResult, setSingleOmrResult] = useState<StudentOmrGradingResult | null>(null);
   const [batchOmrReport, setBatchOmrReport] = useState<ClassOmrBatchReport | null>(null);
   const [isGradingOmr, setIsGradingOmr] = useState(false);
@@ -154,10 +166,11 @@ export const TeacherClassroomSuiteView: React.FC = () => {
 
   const fetchClasses = async () => {
     setIsLoadingClasses(true);
+    setClassesError(null);
     try {
       const res = await fetch(apiUrl("/api/classes"));
-      const data = await safeJsonResponse(res).catch(() => null);
-      const list = Array.isArray(data) ? data : (data?.classes || []);
+      const data = await safeJsonResponse(res);
+      const list: RegisteredClass[] = Array.isArray(data) ? data : (Array.isArray(data?.classes) ? data.classes : []);
       setRegisteredClasses(list);
       if (list.length > 0) {
         setSelectedClassId((prev) => (prev && list.some(c => c.id === prev)) ? prev : list[0].id);
@@ -166,6 +179,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
       }
     } catch (e) {
       console.error("Erro ao carregar turmas reais:", e);
+      setClassesError("Não foi possível carregar as turmas. Tente atualizar a lista.");
       setRegisteredClasses([]);
       setSelectedClassId("");
     } finally {
@@ -173,37 +187,48 @@ export const TeacherClassroomSuiteView: React.FC = () => {
     }
   };
 
-  // Load Real Students when selected class changes
+  // Cancel obsolete requests so a previous class cannot replace the selected roster.
   useEffect(() => {
-    if (!selectedClassId) return;
+    const controller = new AbortController();
+    setClassStudents([]);
+    setStudentsError(null);
+    setOmrStudentName("");
+    setOmrStudentId("");
+    setOmrMarkedAnswers({});
+    setSingleOmrResult(null);
+    setBatchOmrReport(null);
+    if (!selectedClassId) {
+      setIsLoadingStudents(false);
+      return;
+    }
     const currClass = registeredClasses.find((c) => c.id === selectedClassId);
     if (currClass) {
-      const formattedCourse = currClass.course ? `${currClass.course} (${currClass.name})` : currClass.name;
-      setExamCourse(formattedCourse);
+      setExamCourse(currClass.course ? `${currClass.course} (${currClass.name})` : currClass.name);
     }
-    fetchStudentsForClass(selectedClassId);
-  }, [selectedClassId, registeredClasses]);
-
-  const fetchStudentsForClass = async (classId: string) => {
     setIsLoadingStudents(true);
-    try {
-      const res = await fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(classId)}`));
-      const data = await safeJsonResponse(res);
-      const list = Array.isArray(data) ? data : [];
-      setClassStudents(list);
-      if (list.length > 0) {
-        setOmrStudentName(list[0].name);
-        setOmrStudentId(list[0].enrollment_code || list[0].id);
-      } else {
-        setOmrStudentName("Estudante Cadastrado");
-        setOmrStudentId("MAT-2026");
+    const loadStudents = async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/students?class_id=${encodeURIComponent(selectedClassId)}`), {
+          signal: controller.signal,
+        });
+        const data = await safeJsonResponse(res);
+        if (controller.signal.aborted) return;
+        const list: RegisteredStudent[] = Array.isArray(data) ? data : [];
+        setClassStudents(list);
+        setOmrStudentName(list[0]?.name || "");
+        setOmrStudentId(list[0]?.enrollment_code || list[0]?.id || "");
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          console.error("Erro ao carregar alunos da turma:", e);
+          setStudentsError("Não foi possível carregar os alunos desta turma. Tente atualizar a lista.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsLoadingStudents(false);
       }
-    } catch (e) {
-      console.error("Erro ao carregar alunos da turma:", e);
-    } finally {
-      setIsLoadingStudents(false);
-    }
-  };
+    };
+    void loadStudents();
+    return () => controller.abort();
+  }, [selectedClassId, registeredClasses]);
 
   // Apply Preset
   const handleApplyPreset = (preset: typeof MULTI_SUBJECT_PRESETS[0]) => {
@@ -283,6 +308,10 @@ export const TeacherClassroomSuiteView: React.FC = () => {
   const handleGradeSingleOmr = () => {
     if (!generatedExamSuite) {
       alert("Gere uma avaliação primeiro para ter o gabarito oficial de referência.");
+      return;
+    }
+    if (!omrStudentId.trim() || !omrStudentName.trim()) {
+      alert("Selecione ou informe o aluno antes de corrigir o cartão.");
       return;
     }
     setIsGradingOmr(true);
@@ -455,8 +484,11 @@ export const TeacherClassroomSuiteView: React.FC = () => {
             <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider font-mono">
               Turma Conectada do Sistema (Dados Reais Cadastrados)
             </span>
+            {(classesError || studentsError) && <p role="alert" className="text-sm text-rose-400">{classesError || studentsError}</p>}
             <div className="flex items-center gap-2 mt-0.5">
               <select
+                aria-label="Turma selecionada"
+                disabled={isLoadingClasses}
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
                 className="bg-slate-950 border border-slate-700 text-white font-bold text-sm rounded-lg px-3 py-1.5 outline-none focus:border-blue-500"
@@ -482,6 +514,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
           </div>
           <button
             onClick={fetchClasses}
+            disabled={isLoadingClasses || isLoadingStudents}
             title="Recarregar turmas e alunos"
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
           >
@@ -1041,7 +1074,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
                 onClick={handleSimulateClassBatchOmr}
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all text-xs cursor-pointer"
               >
-                <Users className="w-4 h-4" /> Executar Correção em Lote ({classStudents.length > 0 ? `${classStudents.length} Alunos Reais` : "6 Alunos"})
+                <Users className="w-4 h-4" /> Simular Correção em Lote (respostas fictícias)
               </button>
             </div>
           </div>
@@ -1550,7 +1583,7 @@ export const TeacherClassroomSuiteView: React.FC = () => {
         examTitle={generatedExamSuite?.title || examTopic}
         variantCode={selectedVariantTab !== "MASTER_KEY" ? selectedVariantTab : "A"}
         totalQuestions={generatedExamSuite?.masterQuestions.length || questionCount || 40}
-        studentsList={classStudents}
+        studentsList={classStudents.map(student => ({ name: student.name, enrollmentCode: student.enrollment_code || student.id }))}
       />
     </div>
   );

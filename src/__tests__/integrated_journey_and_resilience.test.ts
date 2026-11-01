@@ -345,7 +345,8 @@ describe('Jornada Pedagógica Integrada e Resiliência do Sistema (E2E)', () => 
       expect(metrics).toBeDefined();
       expect(typeof metrics.atividadesEmAndamento).toBe('number');
       expect(typeof metrics.entregasRecebidas).toBe('number');
-      expect(typeof metrics.alunosSemEntrega).toBe('number');
+      // Without an enrollment roster, absence counts are unknown.
+      expect(metrics.alunosSemEntrega).toBeNull();
       expect(typeof metrics.processamentosPendentes).toBe('number');
       expect(typeof metrics.falhasTecnicas).toBe('number');
       expect(typeof metrics.correcoesAguardandoRevisao).toBe('number');

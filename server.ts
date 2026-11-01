@@ -7,6 +7,7 @@ function isValidUuid(value: unknown): value is string {
 // import { registerAddonEndpoints } from './server-addon';
 import { setupTeacherAPIs, initializeDatabase } from './server-apis-addon';
 import express from "express";
+import { ensureTeacherPanelSchema } from "./server/teacherPanelSchema";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
@@ -554,6 +555,7 @@ async function initDatabase() {
     console.log("No PostgreSQL connected, running in cache mode.");
     return;
   }
+  await ensureTeacherPanelSchema(pool);
   try {
 
     // Módulo de Usuários e Acessos do Sistema
@@ -10801,7 +10803,10 @@ app.get("/api/settings/linting", async (req, res) => {
         return res.json({
           success: true,
           requireComments: q.rows[0].require_comments,
-          // ...
+          requireIndentation: q.rows[0].require_indentation,
+          maxLinesLimit: q.rows[0].max_lines_limit,
+          requireNoSingleLetterVars: q.rows[0].require_no_single_letter_vars,
+          requireFunctions: q.rows[0].require_functions,
         });
       }
       return res.json({
@@ -10817,14 +10822,7 @@ app.get("/api/settings/linting", async (req, res) => {
       return res.status(500).json({ success: false, error: "Database error" });
     }
   }
-  return res.json({
-    success: true,
-    requireComments: false,
-    requireIndentation: true,
-    maxLinesLimit: 0,
-    requireNoSingleLetterVars: false,
-    requireFunctions: false
-  });
+  return res.json({ success: true, ...currentLintingSettings });
 });
 
 app.post("/api/settings/linting", async (req, res) => {

@@ -1538,7 +1538,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
     result: DatabaseModelAssessmentResult,
     studentName?: string,
     className?: string
-  ): Promise<Buffer> {
+  ): Promise<ArrayBuffer> {
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
@@ -1915,7 +1915,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido correspondente ao seguinte schema:
     }
 
     const arrayBuffer = doc.output("arraybuffer");
-    return Buffer.from(arrayBuffer);
+    return arrayBuffer;
   }
 
   /**

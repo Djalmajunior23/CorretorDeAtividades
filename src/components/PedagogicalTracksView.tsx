@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { PedagogicalTrack, InterventionPlan } from "../types";
 import { apiUrl, safeJsonResponse } from "../config/api";
+import { loadPedagogicalDashboard } from "../services/pedagogicalDashboardApi";
 
 export default function PedagogicalTracksView() {
   const [tracks, setTracks] = useState<PedagogicalTrack[]>([]);
@@ -37,7 +38,8 @@ export default function PedagogicalTracksView() {
   const [activeView, setActiveView] = useState<"tracks" | "plans">("tracks");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentClass, setCurrentClass] = useState("Turma Principal SENAI");
+  const [currentClass, setCurrentClass] = useState("");
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -46,21 +48,15 @@ export default function PedagogicalTracksView() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [tracksRes, plansRes, classesRes] = await Promise.all([
-        fetch(apiUrl("/api/pedagogical-tracks")),
-        fetch(apiUrl("/api/intervention-plans")),
-        fetch(apiUrl("/api/classes")),
-      ]);
-      setTracks(await tracksRes.json());
-      setPlans(await plansRes.json());
-      const classData = await safeJsonResponse(classesRes);
-      const classList = Array.isArray(classData) ? classData : (classData?.classes || []);
-      setClasses(classList);
-      if (classList.length > 0) {
-        setCurrentClass(classList[0].name);
-      }
+      const data = await loadPedagogicalDashboard();
+      setTracks(data.tracks);
+      setPlans(data.plans);
+      setClasses(data.classes);
+      setLoadErrors(data.errors);
+      setCurrentClass(previous => data.classes.some(cls => cls.name === previous)
+        ? previous : data.classes[0]?.name || "");
     } catch (e) {
-      toast.error("Erro ao carregar dados.");
+      setLoadErrors(["Não foi possível carregar os dados. Tente novamente."]);
     } finally {
       setLoading(false);
     }
@@ -76,7 +72,7 @@ export default function PedagogicalTracksView() {
           body: JSON.stringify({ type }),
         },
       );
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       if (data.success) {
         toast.success("Trilha gerada com sucesso!");
         fetchData();
@@ -91,13 +87,27 @@ export default function PedagogicalTracksView() {
   };
 
   const exportPDF = async (id: string) => {
-    window.open(`/api/pedagogical-tracks/${id}/export/pdf`, "_blank");
+    try {
+      const response = await fetch(apiUrl(`/api/pedagogical-tracks/${encodeURIComponent(id)}/export/pdf`));
+      if (!response.ok || !response.headers.get("Content-Type")?.includes("application/pdf")) {
+        throw new Error("Falha ao exportar PDF.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `trilha_${id}.pdf`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast.error("Não foi possível exportar a trilha.");
+    }
   };
 
   const deleteTrack = async (id: string) => {
     if (!confirm("Deseja realmente excluir esta trilha?")) return;
     try {
-      await fetch(apiUrl(`/api/pedagogical-tracks/${id}`), { method: "DELETE" });
+      const response = await fetch(apiUrl(`/api/pedagogical-tracks/${encodeURIComponent(id)}`), { method: "DELETE" });
+      await safeJsonResponse(response);
       toast.success("Trilha excluída.");
       fetchData();
     } catch (e) {
@@ -142,6 +152,12 @@ export default function PedagogicalTracksView() {
         </div>
       </div>
 
+      {loadErrors.length > 0 && (
+        <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-200">
+          <p>{loadErrors.join(" ")} Os dados indisponíveis não representam uma lista vazia.</p>
+          <button onClick={fetchData} disabled={loading} className="mt-2 underline disabled:opacity-50">Tentar novamente</button>
+        </div>
+      )}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar Controls */}
         <div className="lg:w-64 space-y-6">
@@ -169,7 +185,7 @@ export default function PedagogicalTracksView() {
                   </option>
                 ))}
                 {classes.length === 0 && (
-                  <option value="Turma Geral SENAI">Turma Geral SENAI</option>
+                  <option value="">Nenhuma turma disponível</option>
                 )}
               </select>
             </div>
@@ -185,7 +201,7 @@ export default function PedagogicalTracksView() {
             <div className="space-y-2">
               <button
                 onClick={() => generateTrackIA("reforço")}
-                disabled={isGenerating}
+                disabled={isGenerating || loading || !currentClass}
                 className="w-full flex items-center justify-between px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-lg text-sm text-blue-100 transition-all font-medium disabled:opacity-50"
               >
                 <span>Gerar Trilha de Reforço</span>
@@ -193,7 +209,7 @@ export default function PedagogicalTracksView() {
               </button>
               <button
                 onClick={() => generateTrackIA("recuperação")}
-                disabled={isGenerating}
+                disabled={isGenerating || loading || !currentClass}
                 className="w-full flex items-center justify-between px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-lg text-sm text-indigo-100 transition-all font-medium disabled:opacity-50"
               >
                 <span>Gerar Trilha de Recuperação</span>
@@ -201,7 +217,7 @@ export default function PedagogicalTracksView() {
               </button>
               <button
                 onClick={() => generateTrackIA("aprofundamento")}
-                disabled={isGenerating}
+                disabled={isGenerating || loading || !currentClass}
                 className="w-full flex items-center justify-between px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-lg text-sm text-emerald-100 transition-all font-medium disabled:opacity-50"
               >
                 <span>Gerar Aprofundamento</span>

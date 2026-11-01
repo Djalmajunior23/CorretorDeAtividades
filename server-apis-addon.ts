@@ -567,7 +567,10 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
   app.get("/api/classes", async (req, res) => {
     try {
       if (!pool) {
-        return res.json(inMemoryClasses.filter((c) => c.status !== "deleted"));
+        return res.json(inMemoryClasses.filter((c) => c.status !== "deleted").map(c => ({
+          ...c,
+          students_count: inMemoryStudents.filter(student => student.status !== "deleted" && student.class_id === c.id).length,
+        })));
       }
       let rows: any[] = [];
       try {
@@ -593,22 +596,23 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
           `);
           rows = fallbackRes.rows;
         } catch (fbErr) {
-          console.warn("[/api/classes fallback query failed]:", fbErr);
+          throw fbErr;
         }
       }
 
       res.json(rows && rows.length > 0 ? rows : inMemoryClasses.filter((c) => c.status !== "deleted"));
     } catch (e: any) {
-      console.warn("[/api/classes error, returning empty or inMemoryClasses]:", e?.message || e);
-      res.json(inMemoryClasses.filter((c) => c.status !== "deleted"));
+      console.warn("[/api/classes database unavailable]:", e?.message || e);
+      res.status(503).json({ error: "Não foi possível carregar as turmas. Tente novamente." });
     }
   });
 
   app.post("/api/classes", async (req, res) => {
     try {
       const id = uuidv4();
-      const { name, course, module, semester, shift, year, description } =
-        req.body;
+      const { course, module, semester, shift, year, description } = req.body;
+      const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+      if (!name) return res.status(400).json({ error: "Informe o nome da turma." });
       if (!pool) {
         const newClass = {
           id,
@@ -778,7 +782,7 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
           const fbResult = await pool.query(fbQuery, fbValues);
           rows = fbResult.rows;
         } catch (fbErr) {
-          console.warn("[/api/students fallback query error]:", fbErr);
+          throw fbErr;
         }
       }
 
@@ -795,21 +799,16 @@ export function setupTeacherAPIs(app: express.Application, pool: Pool | null, va
       res.json(rows);
     } catch (e: any) {
       console.warn("[/api/students unexpected error]:", e);
-      let students = inMemoryStudents.filter((s) => s.status !== "deleted");
-      if (req.query.class_id) {
-        const cId = String(req.query.class_id).trim();
-        students = students.filter(
-          (s) => s.class_id === cId || s.class_name === cId
-        );
-      }
-      res.json(students);
+      res.status(503).json({ error: "Não foi possível carregar os alunos. Tente novamente." });
     }
   });
 
   app.post("/api/students", async (req, res) => {
     try {
       const id = uuidv4();
-      const { class_id, name, enrollment_code, email, notes } = req.body;
+      const { class_id, enrollment_code, email, notes } = req.body;
+      const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+      if (!name) return res.status(400).json({ error: "Informe o nome do aluno." });
       if (!pool) {
         const cls = inMemoryClasses.find((c) => c.id === class_id);
         const newStu = {
@@ -1231,69 +1230,7 @@ Retorne um relatório estruturado em Markdown e um array JSON contendo as turmas
     }
   });
 
-  app.get("/api/questions", async (req, res) => {
-    try {
-      if (!pool) return res.json([]);
-      const result = await pool.query(`
-        SELECT a.*, c.name as class_name 
-        FROM d_activities a 
-        LEFT JOIN d_class_group c ON a.class_id = c.id
-        WHERE a.status != 'deleted' 
-        ORDER BY a.created_at DESC
-      `);
-      res.json(result.rows);
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/questions", async (req, res) => {
-    try {
-      if (!pool) return res.json({ success: true, id: uuidv4() });
-      const id = uuidv4();
-      const {
-        title,
-        description,
-        problem_description,
-        language,
-        rubric,
-        rubric_suggested,
-        class_id,
-        deadline,
-        attachment_filename,
-        constraints,
-        test_cases
-      } = req.body;
-      const desc = description || problem_description || "";
-      const rub = rubric || rubric_suggested || "";
-      const fullDesc = `${desc}${constraints ? `\n\nRestrições:\n${constraints}` : ""}${test_cases ? `\n\nCasos de Teste:\n${JSON.stringify(test_cases)}` : ""}`;
-      
-      await pool.query(
-        `INSERT INTO d_activities (id, teacher_id, title, problem_description, language, rubric_suggested, class_id, deadline, attachment_filename, status) 
-         VALUES ($1, 'teacher_1', $2, $3, $4, $5, $6, $7, $8, 'active')`,
-        [
-          id,
-          title || "Nova Questão Visionária",
-          fullDesc,
-          language || "python",
-          rub,
-          class_id || null,
-          deadline || null,
-          attachment_filename || null,
-        ],
-      );
-      res.json({
-        success: true,
-        id,
-        title,
-        problem_description: fullDesc,
-        language,
-        status: "active"
-      });
-    } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
-    }
-  });
+  // Question-bank routes are registered in server.ts against the questions table.
 
   app.post("/api/activities", async (req, res) => {
     try {
@@ -4493,7 +4430,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
       const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(assessment, studentName, className);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename=laudo_modelagem_banco_${assessment.assessmentId}.pdf`);
-      res.send(pdfBuffer);
+      res.send(Buffer.from(pdfBuffer));
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -4506,7 +4443,7 @@ ${structuralFeedback.next_steps.length > 0 ? structuralFeedback.next_steps.map((
         const pdfBuffer = await DatabaseModelAssessmentService.generateModelAssessmentPdf(assessment, studentName, className);
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename=parecer_modelagem_${Date.now()}.pdf`);
-        return res.send(pdfBuffer);
+        return res.send(Buffer.from(pdfBuffer));
       }
       const doc = new PDFDocument({ margin: 40 });
 

@@ -8,13 +8,21 @@ export const API_BASE_URL =
 export const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const finalUrl = API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
-  
-  // --- FETCH DIAGNOSTIC LOGGER --- 
-  // Utility requested to map and log endpoint behavior
-  console.log(`[Diagnostic] Endpoint solicitado: ${path} -> URL Resolvida: ${finalUrl}`);
-  
+
   return finalUrl;
 };
+
+// Only send the session token to this application's configured API origin.
+export function isTrustedApiRequest(input: string): boolean {
+  try {
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const target = new URL(input, origin);
+    const api = new URL(API_BASE_URL || origin, origin);
+    return target.origin === api.origin && /^\/(?:api|auth)(?:\/|$)/.test(target.pathname);
+  } catch {
+    return false;
+  }
+}
 
 // --- GLOBAL AUTOMATIC BEARER JWT INJECTION ---
 if (typeof window !== "undefined" && typeof window.fetch === "function") {
@@ -33,7 +41,7 @@ if (typeof window !== "undefined" && typeof window.fetch === "function") {
       const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
       
       // If user is authenticated and requesting an API/auth route, ensure Authorization header is present
-      if (token && (url.includes("/api/") || url.includes("/auth/"))) {
+      if (token && isTrustedApiRequest(url)) {
         const headers = new Headers(
           init?.headers || (typeof input === "object" && "headers" in input ? (input as Request).headers : {})
         );
@@ -61,17 +69,20 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   try {
     const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
     const authHeaders: Record<string, string> = {};
-    if (token) {
+    if (token && isTrustedApiRequest(apiUrl(path))) {
       authHeaders["Authorization"] = `Bearer ${token}`;
+    }
+    const headers = new Headers(options.headers);
+    if (!(options.body instanceof FormData) && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    if (authHeaders.Authorization && !headers.has("Authorization")) {
+      headers.set("Authorization", authHeaders.Authorization);
     }
 
     const response = await fetch(apiUrl(path), {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders,
-        ...(options.headers || {})
-      },
+      headers,
       credentials: options.credentials || "same-origin"
     });
     const contentType = response.headers.get("content-type") || "";
